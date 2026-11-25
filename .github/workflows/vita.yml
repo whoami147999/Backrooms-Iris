@@ -1,0 +1,33 @@
+# Builds the PS Vita .vpk on every push. Download it from the run's "Artifacts" section.
+name: Vita VPK
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  vpk:
+    runs-on: ubuntu-latest
+    container: vitasdk/vitasdk:latest
+    steps:
+      - name: Tools
+        run: apk add --no-cache cmake make git bash python3 || true
+
+      - uses: actions/checkout@v4
+
+      - name: Vita libraries (vitaGL, SDL2, ...)
+        run: |
+          # the image usually ships these already; install any that are missing
+          for p in vitaGL vitaShaRK SceShaccCgExt taihen sdl2 math-neon; do
+            vdpm "$p" || echo "vdpm: $p not installed (may already be present)"
+          done
+
+      - name: Build
+        run: |
+          cmake -S . -B build-vita -DCMAKE_TOOLCHAIN_FILE=$VITASDK/share/vita.toolchain.cmake -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-vita -j"$(nproc)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BackroomsIris-vpk
+          path: build-vita/BackroomsIris.vpk
