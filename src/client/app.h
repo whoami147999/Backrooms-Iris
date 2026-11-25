@@ -1,4 +1,4 @@
-// Backrooms Iris - the client application: menus, HUD, and the frame loop.
+// Backrooms Iris - the client application: menus, HUD, sandbox tools, and the frame loop.
 #pragma once
 #include <functional>
 #include <memory>
@@ -17,7 +17,7 @@ namespace iris {
 struct DevOptions {          // command-line switches used for testing / screenshots
     std::string shot_path;   // save one screenshot and quit
     float shot_after = 0;    // seconds of normal play before the screenshot
-    int level = -1;
+    int level = -1;          // LevelId index
     uint32_t seed = 0;
     bool has_pos = false;
     float pos_x = 0, pos_z = 0, yaw_deg = 0, pitch_deg = 0;
@@ -31,6 +31,13 @@ struct DevOptions {          // command-line switches used for testing / screens
     bool autowalk = false;
     std::string name;
     bool hud = true;
+    bool sandbox = false;
+    bool sandbox_menu = false;
+    bool light = false;      // start with the flashlight on
+    bool give_all = false;   // fill the inventory
+    int select = -1;         // select this item type in the hotbar
+    int flare = -1;          // drop a burning firesalt this far ahead
+    bool stun = false;       // the dev entity starts knocked down
 };
 
 class App {
@@ -40,7 +47,7 @@ public:
     void shutdown();
 
 private:
-    enum class Screen { Title, Single, Multi, Host, Join, Settings, Controls, Connecting, Playing };
+    enum class Screen { Title, Single, Sandbox, Multi, Host, Join, Settings, Controls, Connecting, Playing };
 
     struct Item {
         enum Kind { Button, Choice, Slider, Toggle, Text, Label, Spacer } kind = Button;
@@ -78,16 +85,19 @@ private:
     bool editing_ = false;       // a text field is being edited
     size_t cursor_ = 0;
     std::string error_;          // modal message
-    double error_t_ = 0;
 
-    // game state on the client side
+    // client-side game state
     InputCmd cmd_;
     bool crouch_toggle_ = false;
+    ItemType selected_ = ItemType::None;
     uint32_t epoch_ = 0xFFFFFFFF;
     bool needs_load_ = false;
     double level_title_t_ = -100;
     struct Feed { std::string text; double t; };
     std::vector<Feed> feed_;
+    std::string toast_;
+    double toast_t_ = -100;
+    uint32_t toast_seq_ = 0;
     double escaped_t_ = -100;
     double now_ = 0, frame_dt_ = 0;
     float fps_ = 0;
@@ -96,29 +106,37 @@ private:
     bool debug_ = false;
     int single_level_ = 0;
     std::string single_seed_;
+    int sandbox_level_ = 0;
     int host_level_ = 0;
     std::string join_ip_;
     World menu_world_{LevelId::L0, 7777};
-    bool menu_world_loaded_ = false;
+
+    // sandbox spawn menu
+    bool sb_open_ = false;
+    int sb_tab_ = 0, sb_sel_ = 0;
 
     Screen screen() const { return stack_.back(); }
+    bool in_game() const;
     void go(Screen s);
     void back();
     void build_menu();
     void menu_input();
     void draw_menu();
     void draw_menu_background();
-    void start_single();
+    void start_session(std::unique_ptr<Session> s);
+    void start_single(bool sandbox);
     void start_host();
     void start_join(const std::string& addr);
     void leave_game();
     void game_input();
-    void draw_game();
-    void draw_hud(const GameView& v, const ScreenFx& fx);
+    void sandbox_input();
+    void draw_sandbox_menu();
+    void draw_game(bool overlay_menu);
+    void draw_hud(const struct GameView& v, const ScreenFx& fx);
     void draw_fx_overlays(const ScreenFx& fx);
-    void draw_pause();
     void apply_display_settings();
     void dev_setup();
+    std::vector<ItemType> owned() const;
     float ui() const;  // UI scale (pixels per font pixel)
     std::string key_hint(const char* kb, const char* pad) const;
     void save_settings() { cfg_.save(data_dir_ + "settings.cfg"); }

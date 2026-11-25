@@ -35,16 +35,7 @@ void log_line(const char* line) {
     std::fflush(stdout);
 }
 
-bool parse_level(const std::string& v, LevelId& out) {
-    std::string s;
-    for (char c : v) if (c >= '0' && c <= '9') s += c;
-    int n = std::atoi(s.c_str());
-    for (int i = 0; i < (int)LevelId::COUNT; i++) {
-        const char* code = level_info((LevelId)i).code; // "LEVEL 9"
-        if (!s.empty() && std::atoi(code + 6) == n) { out = (LevelId)i; return true; }
-    }
-    return false;
-}
+bool parse_level(const std::string& v, LevelId& out) { return level_from_number(v.c_str(), out); }
 
 // key = value, '#' comments
 bool load_config(const std::string& path, ServerConfig& c) {
@@ -106,7 +97,7 @@ void usage() {
         "  --config FILE     config file\n"
         "  --port N          UDP port (default %d)\n"
         "  --seed N          world seed (0 = random)\n"
-        "  --level N         starting level: 0, 1, 5, 8, 9 or 11\n"
+        "  --level N         starting level: 0 1 2 4 5 6 8 9 11 37 fun\n"
         "  --name TEXT       server name\n"
         "  --query HOST[:P]  ask a running server for its status and exit\n"
         "  --version         print the version\n",
@@ -137,7 +128,7 @@ int main(int argc, char** argv) {
         else if (a == "--seed") cfg.seed = (uint32_t)std::strtoul(next().c_str(), nullptr, 10);
         else if (a == "--name") cfg.name = next();
         else if (a == "--level") {
-            if (!parse_level(next(), cfg.level)) { std::fprintf(stderr, "levels: 0, 1, 5, 8, 9, 11\n"); return 2; }
+            if (!parse_level(next(), cfg.level)) { std::fprintf(stderr, "levels: 0 1 2 4 5 6 8 9 11 37 fun\n"); return 2; }
         } else { std::fprintf(stderr, "unknown option %s (try --help)\n", a.c_str()); return 2; }
     }
 

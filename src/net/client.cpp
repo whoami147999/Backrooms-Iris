@@ -127,10 +127,22 @@ void NetClient::handle(const uint8_t* data, int len, double now) {
             e.speed = r.u8() / 20.0f;
             if ((int)e.type < (int)EntityType::COUNT) s.ents.push_back(e);
         }
+        int npr = r.u8();
+        for (int k = 0; k < npr && !r.bad; k++) {
+            PropSnap p;
+            p.id = r.u16();
+            p.kind = (PropKind)r.u8();
+            p.item = (ItemType)r.u8();
+            p.pos.x = r.f32();
+            p.pos.z = r.f32();
+            p.life = r.f32();
+            if ((int)p.item < ITEM_COUNT) s.props.push_back(p);
+        }
         if (s.epoch != picked_epoch) { picked.clear(); picked_epoch = s.epoch; }
-        r.u16(); // total picked (informational)
         int k = r.u8();
         for (int j = 0; j < k && !r.bad; j++) picked.insert(r.u32());
+        s.toast_seq = r.u32();
+        s.toast = r.str();
         int nev = r.u8();
         for (int j = 0; j < nev && !r.bad; j++) {
             SimEvent ev;

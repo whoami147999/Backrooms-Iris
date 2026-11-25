@@ -101,8 +101,12 @@ void platform_poll(InputState& in) {
                 if (e.motion.xrel || e.motion.yrel) in.using_gamepad = false;
                 break;
             case SDL_MOUSEBUTTONDOWN:
-                if (e.button.button == SDL_BUTTON_LEFT) in.click = true;
+                if (e.button.button == SDL_BUTTON_LEFT) { in.click = true; if (g_captured) in.use_item = true; }
                 in.using_gamepad = false;
+                break;
+            case SDL_MOUSEWHEEL:
+                if (e.wheel.y > 0) in.slot_prev = true;
+                if (e.wheel.y < 0) in.slot_next = true;
                 break;
             case SDL_WINDOWEVENT:
                 if (e.window.event == SDL_WINDOWEVENT_FOCUS_LOST && g_captured) in.pause = true;
@@ -131,13 +135,15 @@ void platform_poll(InputState& in) {
                         else in.accept = true;
                         break;
                     case SDLK_e: in.interact = true; break;
-                    case SDLK_1: in.use[0] = true; break;
-                    case SDLK_2: in.use[1] = true; break;
-                    case SDLK_3: in.use[2] = true; break;
+                    case SDLK_f: in.light = true; break;
+                    case SDLK_q: in.use_item = true; break;
+                    case SDLK_TAB: in.sandbox_menu = true; break;
                     case SDLK_F11: in.toggle_fullscreen = true; break;
                     case SDLK_F12: in.screenshot = true; break;
                     case SDLK_F3: in.toggle_debug = true; break;
-                    default: break;
+                    default:
+                        if (k >= SDLK_1 && k <= SDLK_9) in.slot_num = (int)(k - SDLK_1);
+                        break;
                 }
                 break;
             }

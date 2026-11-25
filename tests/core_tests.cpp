@@ -159,33 +159,87 @@ static void test_all_levels() {
 }
 
 // Items do what they say. Memory juice kills on schedule.
+static void use(GameSim& sim, int p, InputCmd& cmd, ItemType t) {
+    cmd.use_item = (uint8_t)t;
+    cmd.use_ctr++;
+    sim.apply_input(p, cmd);
+}
+
 static void test_items() {
     GameSim sim(7);
     sim.start_level(LevelId::L11, 7); // safe level: nothing else interferes
     int p = sim.add_player("TEST");
     PlayerState& st = sim.players[p].st;
     InputCmd cmd;
-    st.inv[0] = 1; st.inv[1] = 1; st.inv[2] = 1;
+    sim.apply_input(p, cmd); // baseline
+    for (int i = 1; i < ITEM_COUNT; i++) st.inv[i] = 2;
     st.stamina = 0.1f; st.sanity = 40;
-    cmd.use_ctr[0]++;
-    sim.apply_input(p, cmd);
+    use(sim, p, cmd, ItemType::AlmondWater);
     CHECK(st.stamina == 1.0f && st.sanity >= 70, "almond water: stamina %.2f sanity %.1f", st.stamina, st.sanity);
-    cmd.use_ctr[1]++;
+    st.health = 40;
+    use(sim, p, cmd, ItemType::RoyalRation);
+    CHECK(st.health >= 84, "royal ration should heal (%.0f)", st.health);
+    st.sanity = 20; st.health = 100;
+    use(sim, p, cmd, ItemType::LiquidPain);
+    CHECK(st.health <= 66 && st.sanity >= 74, "liquid pain: hp %.0f sanity %.0f", st.health, st.sanity);
+    use(sim, p, cmd, ItemType::LuckyMilk);
+    CHECK(st.lucky > 30, "lucky o' milk timer");
+    use(sim, p, cmd, ItemType::Firesalt);
+    CHECK(!sim.props.empty() && sim.props.back().kind == PropKind::Flare, "firesalt should start a flare");
+    // flashlight toggles only if you own it
+    cmd.light_ctr++;
     sim.apply_input(p, cmd);
+    CHECK(st.light_on, "flashlight should turn on");
+    cmd.light_ctr++;
+    sim.apply_input(p, cmd);
+    CHECK(!st.light_on, "flashlight should turn off");
+    // memory juice, then cashew water cures it
+    use(sim, p, cmd, ItemType::MemoryJuice);
+    for (int t = 0; t < 60 * 10; t++) { sim.apply_input(p, cmd); sim.tick(1.0f / 60); }
+    use(sim, p, cmd, ItemType::CashewWater);
+    CHECK(st.juice < 0 && st.slow > 0, "cashew water should cure memory juice (juice %.1f)", st.juice);
+    use(sim, p, cmd, ItemType::EnergyDrink);
     CHECK(st.boost > 0, "energy drink should boost");
+    st.slow = 0;
     cmd.move_z = 1;
     for (int t = 0; t < 60; t++) { sim.apply_input(p, cmd); sim.tick(1.0f / 60); }
     CHECK(st.speed > WALK_SPEED * 1.3f, "boosted walk speed %.2f", st.speed);
     cmd.move_z = 0;
-    cmd.use_ctr[2]++;
-    sim.apply_input(p, cmd);
-    CHECK(st.juice >= 0, "memory juice should start");
+    use(sim, p, cmd, ItemType::MemoryJuice);
     for (int t = 0; t < 60 * 47; t++) { sim.apply_input(p, cmd); sim.tick(1.0f / 60); }
     CHECK(st.alive, "still alive at 47 s");
     for (int t = 0; t < 60 * 2; t++) { sim.apply_input(p, cmd); sim.tick(1.0f / 60); }
     CHECK(!st.alive && st.cause == DeathCause::MemoryJuice, "memory juice should kill at %.0f s", JUICE_TIME);
+    CHECK(!sim.props.empty(), "dying should drop your items");
 }
 
+// Picking things up: counters from an old game must not trigger anything; full stacks refuse.
+static void test_pickup() {
+    GameSim sim(3);
+    sim.start_level(LevelId::L11, 3);
+    int p = sim.add_player("P");
+    PlayerState& st = sim.players[p].st;
+    InputCmd stale;
+    stale.pickup_ctr = 17; stale.use_ctr = 9; stale.use_item = (uint8_t)ItemType::AlmondWater;
+    sim.apply_input(p, stale); // first command: only a baseline
+    CHECK(st.inv[(int)ItemType::AlmondWater] == 1, "stale counters used an item at game start");
+    sim.spawn_item(ItemType::Crowbar, {st.pos.x + 1.0f, st.pos.z});
+    stale.pickup_ctr++;
+    sim.apply_input(p, stale);
+    CHECK(st.has(ItemType::Crowbar), "should pick up the crowbar 1 m away");
+    sim.spawn_item(ItemType::Crowbar, {st.pos.x + 1.0f, st.pos.z});
+    stale.pickup_ctr++;
+    sim.apply_input(p, stale);
+    CHECK(st.inv[(int)ItemType::Crowbar] == 1 && sim.players[p].toast.find("CAN'T") != std::string::npos, "tools don't stack");
+    // crowbar stuns what's in front of you
+    Entity& e = sim.spawn_entity(EntityType::Bacteria, {st.pos.x, st.pos.z - 1.5f}, 0);
+    uint16_t id = e.id;
+    stale.yaw = 0; stale.attack_ctr++;
+    sim.apply_input(p, stale);
+    bool stunned = false;
+    for (auto& x : sim.ents) if (x.id == id) stunned = x.state == EntState::Stunned;
+    CHECK(stunned, "crowbar should stun the bacteria");
+}
 // Run every level for a few simulated minutes with wandering players: entities spawn,
 // chase, nobody crashes, nothing ends up inside walls.
 static void test_sim_soak() {
@@ -208,9 +262,9 @@ static void test_sim_soak() {
             max_ents = std::max(max_ents, (int)sim.ents.size());
             for (int i : {a, b}) deaths += !sim.players[i].st.alive && sim.players[i].respawn_t > 9.98f;
         }
-        bool expect = (LevelId)li != LevelId::L11;
+        bool expect = (LevelId)li != LevelId::L11 && (LevelId)li != LevelId::L37; // the two safe levels
         CHECK(!expect || max_ents > 0, "%s: no entities ever spawned", level_info((LevelId)li).code);
-        CHECK(expect || max_ents == 0, "Level 11 should be safe");
+        CHECK(expect || max_ents == 0, "%s should be safe", level_info((LevelId)li).code);
         std::printf("  %-9s max entities %d, deaths in 3 min of random walking: %d\n", level_info((LevelId)li).code, max_ents, deaths);
     }
 }
@@ -260,6 +314,7 @@ int main() {
     test_stamina();
     test_all_levels();
     test_items();
+    test_pickup();
     test_sim_soak();
     test_network();
     if (g_fail) { std::printf("%d check(s) failed\n", g_fail); return 1; }

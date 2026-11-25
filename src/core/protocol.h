@@ -67,7 +67,10 @@ inline void write_cmd(Writer& w, uint32_t seq, const InputCmd& c) {
     w.f32(c.pitch);
     w.u8(c.buttons);
     w.u8(c.pickup_ctr);
-    w.u8(c.use_ctr[0]); w.u8(c.use_ctr[1]); w.u8(c.use_ctr[2]);
+    w.u8(c.use_ctr);
+    w.u8(c.use_item);
+    w.u8(c.light_ctr);
+    w.u8(c.attack_ctr);
 }
 
 inline InputCmd read_cmd(Reader& r, uint32_t& seq) {
@@ -79,7 +82,10 @@ inline InputCmd read_cmd(Reader& r, uint32_t& seq) {
     c.pitch = r.f32();
     c.buttons = r.u8();
     c.pickup_ctr = r.u8();
-    c.use_ctr[0] = r.u8(); c.use_ctr[1] = r.u8(); c.use_ctr[2] = r.u8();
+    c.use_ctr = r.u8();
+    c.use_item = r.u8();
+    c.light_ctr = r.u8();
+    c.attack_ctr = r.u8();
     return c;
 }
 
@@ -89,9 +95,11 @@ inline void write_player(Writer& w, const PlayerState& s) {
     w.f32(s.yaw); w.f32(s.pitch);
     w.u8((uint8_t)(s.crouch * 255)); w.f32(s.stamina); w.u8(s.exhausted);
     w.f32(s.bob); w.f32(s.speed);
-    w.f32(s.health); w.f32(s.sanity); w.f32(s.boost); w.f32(s.juice); w.f32(s.hurt);
-    w.u8(s.inv[0]); w.u8(s.inv[1]); w.u8(s.inv[2]);
-    w.u8(s.alive); w.u8((uint8_t)s.cause);
+    w.f32(s.health); w.f32(s.sanity); w.f32(s.boost); w.f32(s.slow); w.f32(s.lucky);
+    w.f32(s.juice); w.f32(s.hurt); w.f32(s.swing); w.f32(s.battery);
+    w.u8((uint8_t)((s.light_on ? 1 : 0) | (s.noclip ? 2 : 0) | (s.alive ? 4 : 0)));
+    for (int i = 0; i < ITEM_COUNT; i++) w.u8(s.inv[i]);
+    w.u8((uint8_t)s.cause);
 }
 
 inline void read_player(Reader& r, PlayerState& s) {
@@ -99,9 +107,12 @@ inline void read_player(Reader& r, PlayerState& s) {
     s.yaw = r.f32(); s.pitch = r.f32();
     s.crouch = r.u8() / 255.0f; s.stamina = r.f32(); s.exhausted = r.u8() != 0;
     s.bob = r.f32(); s.speed = r.f32();
-    s.health = r.f32(); s.sanity = r.f32(); s.boost = r.f32(); s.juice = r.f32(); s.hurt = r.f32();
-    s.inv[0] = r.u8(); s.inv[1] = r.u8(); s.inv[2] = r.u8();
-    s.alive = r.u8() != 0; s.cause = (DeathCause)r.u8();
+    s.health = r.f32(); s.sanity = r.f32(); s.boost = r.f32(); s.slow = r.f32(); s.lucky = r.f32();
+    s.juice = r.f32(); s.hurt = r.f32(); s.swing = r.f32(); s.battery = r.f32();
+    uint8_t f = r.u8();
+    s.light_on = f & 1; s.noclip = (f & 2) != 0; s.alive = (f & 4) != 0;
+    for (int i = 0; i < ITEM_COUNT; i++) s.inv[i] = r.u8();
+    s.cause = (DeathCause)r.u8();
 }
 
 } // namespace iris

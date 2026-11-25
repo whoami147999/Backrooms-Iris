@@ -42,6 +42,10 @@ void collide_circle(const World& W, Vec2& pos, float r) {
                 if (W.wall_z(gx, gz)) push_out(pos, r, {x, z - hw, x + CELL, z + hw});
                 if (W.post(gx, gz)) push_out(pos, r, {x - hp, z - hp, x + hp, z + hp});
                 else if (W.pillar(gx, gz)) push_out(pos, r, {x - hl, z - hl, x + hl, z + hl});
+                if (W.pole(gx, gz)) { // streetlight pole in the middle of the cell
+                    float mx = x + CELL * 0.5f, mz = z + CELL * 0.5f;
+                    push_out(pos, r, {mx - 0.09f, mz - 0.09f, mx + 0.09f, mz + 0.09f});
+                }
                 if (W.exit_cell(gx, gz)) { // the exit door is a thin slab in the cell centre
                     float mx = x + CELL * 0.5f, mz = z + CELL * 0.5f;
                     push_out(pos, r, {mx - 0.7f, mz - 0.12f, mx + 0.7f, mz + 0.12f});

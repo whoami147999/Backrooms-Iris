@@ -1,7 +1,12 @@
 // Backrooms Iris - renderer: level textures, chunk streaming, entities, items, effects, 2D.
 #pragma once
+#include <cmath>
+#include <condition_variable>
 #include <cstdint>
+#include <deque>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -41,6 +46,15 @@ struct DrawPlayer {
     float yaw, crouch, anim;
     bool alive;
     std::string name;
+    bool light_on = false;
+};
+
+struct DrawProp {
+    uint16_t id;
+    PropKind kind;
+    ItemType item;
+    Vec2 pos;
+    float life;
 };
 
 // hallucinations
@@ -58,7 +72,9 @@ public:
 
     bool init(const RenderSettings& s);
     void shutdown();
-    void set_level(const World& w);   // regenerate this level's textures, drop chunks
+    // Make sure textures + chunks belong to this world. Cheap when nothing changed; when the
+    // level changes the textures are regenerated, when only the seed changes chunks are dropped.
+    void set_world(const World& w);
     LevelId level() const { return level_; }
 
     // Streams chunks around `eye`. budget < 0 = build everything needed right now.
@@ -69,7 +85,10 @@ public:
     void begin_frame(int w, int h);
     void draw_world(const World& w, const Camera& cam, float time, float fog_mult,
                     const std::unordered_set<uint32_t>& picked, const std::vector<DrawEntity>& ents,
-                    const std::vector<DrawPlayer>& players, const std::vector<Phantom>& phantoms);
+                    const std::vector<DrawPlayer>& players, const std::vector<DrawProp>& props,
+                    const std::vector<Phantom>& phantoms);
+    // Flashlight: brightens the middle of the screen (multiplicative, keeps the dark dark).
+    void flashlight_overlay(float strength, float flicker);
     // Full-screen distortion of what was just drawn. amount 0 = off.
     void post_warp(float wobble, float ghost, float time);
 
@@ -80,6 +99,7 @@ public:
     float text(float x, float y, float px, const std::string& s, uint32_t rgba, int align = 0); // align: 0 left, 1 centre, 2 right
     void tiled(Sprite s, float x, float y, float w, float h, uint32_t rgba, float tile_px, float ox, float oy); // repeating texture
     float text_w(float px, const std::string& s) const { return text_width_px_f(s) * px; }
+    float text_raw(float x, float y, float px, const std::string& s, uint32_t rgba, int align = 0);
     void end_2d();
     bool project(Vec3 p, float& sx, float& sy) const;
 
@@ -90,7 +110,24 @@ private:
         int kx = 0, kz = 0;
         std::vector<Vec3> exits;
         std::vector<uint32_t> items;
+        std::vector<Vec3> balloons;
     };
+    // background chunk building: the worker thread turns (world, chunk) into a ChunkMesh,
+    // the main thread uploads it to the GPU
+    struct Job { int kx, kz; uint32_t gen; World world; };
+    struct Done { int kx, kz; uint32_t gen; ChunkMesh mesh; };
+    std::thread worker_;
+    std::mutex mu_;
+    std::condition_variable cv_;
+    bool stop_ = false;
+    std::deque<Job> jobs_;
+    std::deque<Done> done_;
+    std::unordered_map<uint64_t, bool> inflight_;
+    uint32_t gen_ = 1;
+    uint32_t seed_ = 0;
+    float fog_density_ = 0.05f;
+    void worker_loop();
+    float fog_factor(float dist) const { float f = fog_density_ * dist; return std::exp(-f * f); }
     RenderSettings s_;
     LevelId level_ = LevelId::COUNT;
     uint32_t tex_[MAT_COUNT] = {};

@@ -2,8 +2,8 @@
 // together with IRIS_PROTOCOL_VERSION).
 #pragma once
 
-#define IRIS_VERSION "0.2.0"
-#define IRIS_PROTOCOL_VERSION 2
+#define IRIS_VERSION "0.3.0"
+#define IRIS_PROTOCOL_VERSION 3
 #define IRIS_DEFAULT_PORT 27315
 #define IRIS_MAX_PLAYERS 4
 
@@ -26,7 +26,7 @@ constexpr float CROUCH_SPEED = 1.2f;
 constexpr float BOOST_MULT = 1.45f;       // energy drink
 constexpr float STAMINA_DRAIN = 1.0f / 7.0f;  // full bar lasts ~7 s of sprinting
 constexpr float STAMINA_REGEN = 1.0f / 9.0f;
-constexpr float PICKUP_RANGE = 1.7f;
+constexpr float PICKUP_RANGE = 2.0f;
 
 // Items
 constexpr float ENERGY_TIME = 14.0f;      // seconds of speed boost

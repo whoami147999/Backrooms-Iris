@@ -58,12 +58,15 @@ void gamepad_event(const SDL_Event& e, InputState& in) {
             switch (e.cbutton.button) {
                 case SDL_CONTROLLER_BUTTON_A: in.accept = true; in.interact = true; break;          // Cross
                 case SDL_CONTROLLER_BUTTON_B: in.back = true; in.crouch_toggle = true; break;       // Circle
+                case SDL_CONTROLLER_BUTTON_X: in.use_item = true; break;                            // Square
+                case SDL_CONTROLLER_BUTTON_Y: in.light = true; break;                               // Triangle
                 case SDL_CONTROLLER_BUTTON_START: in.pause = true; break;
-                case SDL_CONTROLLER_BUTTON_BACK: in.toggle_debug = true; break;                    // Select
-                case SDL_CONTROLLER_BUTTON_DPAD_UP: in.up = true; in.use[1] = true; break;
+                case SDL_CONTROLLER_BUTTON_BACK: in.sandbox_menu = true; break;                     // Select
+                case SDL_CONTROLLER_BUTTON_LEFTSHOULDER: in.use_item = true; break;                 // L
+                case SDL_CONTROLLER_BUTTON_DPAD_UP: in.up = true; in.use_item = true; break;
                 case SDL_CONTROLLER_BUTTON_DPAD_DOWN: in.down = true; break;
-                case SDL_CONTROLLER_BUTTON_DPAD_LEFT: in.left = true; in.use[0] = true; break;
-                case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: in.right = true; in.use[2] = true; break;
+                case SDL_CONTROLLER_BUTTON_DPAD_LEFT: in.left = true; in.slot_prev = true; break;
+                case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: in.right = true; in.slot_next = true; break;
                 default: break;
             }
             break;

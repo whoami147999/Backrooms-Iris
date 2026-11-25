@@ -158,14 +158,14 @@ void Server::send_snapshot(Client& c) {
     // the entities nearest this player
     Vec2 me{s.players[c.pid].st.pos.x, s.players[c.pid].st.pos.z};
     int ne = 0;
-    const Entity* near[20];
+    const Entity* close_ents[16];
     for (const Entity& e : s.ents) {
-        if ((e.pos - me).len() > 60.0f || ne >= 20) continue;
-        near[ne++] = &e;
+        if ((e.pos - me).len() > 60.0f || ne >= 16) continue;
+        close_ents[ne++] = &e;
     }
     w.u8((uint8_t)ne);
     for (int k = 0; k < ne; k++) {
-        const Entity& e = *near[k];
+        const Entity& e = *close_ents[k];
         w.u16(e.id);
         w.u8((uint8_t)e.type);
         w.u8((uint8_t)e.state);
@@ -175,14 +175,35 @@ void Server::send_snapshot(Client& c) {
         w.f32(e.anim);
         w.u8((uint8_t)std::min(255.0f, e.speed * 20.0f));
     }
-    // picked-up items, sent in a rolling window so late joiners still learn all of them
+    // props near this player (dropped items, burning firesalt)
+    int np2 = 0;
+    const Prop* pr[16];
+    for (const Prop& p : s.props) {
+        if ((p.pos - me).len() > 50.0f || np2 >= 16) continue;
+        pr[np2++] = &p;
+    }
+    w.u8((uint8_t)np2);
+    for (int k = 0; k < np2; k++) {
+        w.u16(pr[k]->id);
+        w.u8((uint8_t)pr[k]->kind);
+        w.u8((uint8_t)pr[k]->item);
+        w.f32(pr[k]->pos.x);
+        w.f32(pr[k]->pos.z);
+        w.f32(pr[k]->life);
+    }
+    // picked-up level items: always the newest few (so nobody sees an item that's gone),
+    // plus a rolling window over the rest so late joiners learn all of them
     uint32_t total = (uint32_t)s.picked_order.size();
-    w.u16((uint16_t)std::min<uint32_t>(total, 65535));
-    uint32_t k = std::min<uint32_t>(total, 24);
-    uint32_t start = total > 24 ? (c.picked_cursor % total) : 0;
-    w.u8((uint8_t)k);
-    for (uint32_t j = 0; j < k; j++) w.u32(s.picked_order[(start + j) % total]);
-    c.picked_cursor = total > 24 ? (start + 12) % total : 0;
+    uint32_t newest = std::min<uint32_t>(total, 8);
+    uint32_t window = total > newest ? std::min<uint32_t>(total - newest, 12) : 0;
+    w.u8((uint8_t)(newest + window));
+    for (uint32_t j = 0; j < newest; j++) w.u32(s.picked_order[total - 1 - j]);
+    uint32_t older = total - newest;
+    for (uint32_t j = 0; j < window; j++) w.u32(s.picked_order[(c.picked_cursor + j) % older]);
+    if (older) c.picked_cursor = (c.picked_cursor + window) % older;
+    // this player's own message
+    w.u32(s.players[c.pid].toast_seq);
+    w.str(s.players[c.pid].toast);
     // newest events (the client drops ones it has already shown)
     int nev = (int)std::min<size_t>(s.events.size(), 3);
     w.u8((uint8_t)nev);

@@ -53,8 +53,12 @@ enum Sprite : int {
     SPR_NOISE,
     SPR_GLOW,          // soft round glow
     SPR_BALLOON,       // party balloon (white, tinted)
+    SPR_ROYAL, SPR_PAIN, SPR_CASHEW, SPR_LUCKY, SPR_FIRESALT, SPR_FLASHLIGHT, SPR_CROWBAR, // more items
+    SPR_BEAM,          // flashlight cookie
+    SPR_FLAME,         // burning firesalt
     SPR_COUNT
 };
 Image make_sprite(Sprite s);
+Sprite item_sprite(ItemType t);
 
 } // namespace iris

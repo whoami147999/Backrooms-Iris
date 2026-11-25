@@ -19,6 +19,14 @@ struct EntSnap {
     float yaw, anim, speed;
 };
 
+struct PropSnap {
+    uint16_t id;
+    PropKind kind;
+    ItemType item;
+    Vec2 pos;
+    float life;
+};
+
 struct Snapshot {
     uint32_t tick = 0;
     LevelId level = LevelId::L0;
@@ -29,6 +37,9 @@ struct Snapshot {
     uint32_t ack = 0;
     struct P { bool active = false; std::string name; PlayerState st; float respawn_t = 0; } players[IRIS_MAX_PLAYERS];
     std::vector<EntSnap> ents;
+    std::vector<PropSnap> props;
+    uint32_t toast_seq = 0;
+    std::string toast;
 };
 
 struct FoundServer {

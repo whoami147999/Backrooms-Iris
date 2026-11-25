@@ -178,8 +178,8 @@ validate_settings() {
 		echo "Seed must be a number from 0 to 4294967295 (0 = random world each start)."; return 1
 	fi
 	case "$S_LEVEL" in
-		0|1|5|8|9|11) ;;
-		*) echo "Start level must be 0, 1, 5, 8, 9 or 11."; return 1 ;;
+		0|1|2|4|5|6|8|9|11|37|fun|FUN) ;;
+		*) echo "Start level must be one of: 0 1 2 4 5 6 8 9 11 37 fun"; return 1 ;;
 	esac
 	return 0
 }
@@ -189,12 +189,12 @@ ask_settings() {
 	while :; do
 		if [ -n "$DIALOG" ]; then
 			_out=$($DIALOG --backtitle "$IRIS_TITLE" --title " Server settings " \
-				--form "Tab / arrows to move, Enter to confirm.\nSeed 0 = a fresh random world every start.\nLevels: 0 lobby, 1 warehouse, 5 hotel, 8 caves, 9 suburbs, 11 city." 17 70 6 \
+				--form "Tab / arrows to move, Enter to confirm.\nSeed 0 = a fresh random world every start.\nLevels: 0 1 2 4 5 6 8 9 11 37 fun (see the README)." 17 70 6 \
 				"Server name:"        1 2 "$S_NAME" 1 22 34 48 \
 				"UDP port:"           2 2 "$S_PORT" 2 22 8 5 \
 				"Max players (1-4):"  3 2 "$S_MAX"  3 22 3 1 \
 				"World seed:"         4 2 "$S_SEED" 4 22 12 10 \
-				"Start level:"        5 2 "$S_LEVEL" 5 22 3 2 \
+				"Start level:"        5 2 "$S_LEVEL" 5 22 4 3 \
 				3>&1 1>&2 2>&3) || return 1
 			# one value per line, in field order
 			S_NAME=$(printf '%s\n' "$_out" | sed -n 1p)
@@ -208,7 +208,7 @@ ask_settings() {
 			printf 'UDP port [%s]: ' "$S_PORT"; read -r _v </dev/tty; [ -n "$_v" ] && S_PORT="$_v"
 			printf 'Max players 1-4 [%s]: ' "$S_MAX"; read -r _v </dev/tty; [ -n "$_v" ] && S_MAX="$_v"
 			printf 'World seed, 0 = random [%s]: ' "$S_SEED"; read -r _v </dev/tty; [ -n "$_v" ] && S_SEED="$_v"
-			printf 'Start level 0/1/5/8/9/11 [%s]: ' "$S_LEVEL"; read -r _v </dev/tty; [ -n "$_v" ] && S_LEVEL="$_v"
+			printf 'Start level 0 1 2 4 5 6 8 9 11 37 fun [%s]: ' "$S_LEVEL"; read -r _v </dev/tty; [ -n "$_v" ] && S_LEVEL="$_v"
 		fi
 		_problem=$(validate_settings) && break
 		ui_msg "Check your settings" "$_problem"
@@ -232,7 +232,7 @@ bind = 0.0.0.0
 port = $S_PORT
 max_players = $S_MAX
 seed = $S_SEED          # 0 = new random world every start
-start_level = $S_LEVEL   # 0, 1, 5, 8, 9 or 11
+start_level = $S_LEVEL   # 0 1 2 4 5 6 8 9 11 37 fun
 EOF
 	mv "$CONF.tmp" "$CONF" && chmod 644 "$CONF"
 }

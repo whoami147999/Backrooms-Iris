@@ -20,7 +20,11 @@ struct InputState {
     bool pause = false;                 // Esc / Start
     bool interact = false;              // E / A(Cross)
     bool crouch_toggle = false;         // B(Circle) on a gamepad
-    bool use[3] = {false, false, false}; // 1 2 3 / D-pad left up right
+    bool use_item = false;              // left click / Square / D-pad up: use the selected item (or swing)
+    bool light = false;                 // F / Triangle: flashlight
+    bool slot_prev = false, slot_next = false; // mouse wheel / D-pad left right
+    int slot_num = -1;                  // 1-9 keys: pick a hotbar slot directly
+    bool sandbox_menu = false;          // Tab / Select
     bool backspace = false;
     bool click = false;                 // left mouse button (menus)
     bool screenshot = false, toggle_fullscreen = false, toggle_debug = false, quit = false;

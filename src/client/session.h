@@ -23,6 +23,7 @@ struct GameView {
     float alpha = 0;
     std::vector<DrawPlayer> others;
     std::vector<DrawEntity> ents;
+    std::vector<DrawProp> props;
     const std::unordered_set<uint32_t>* picked = nullptr;
     float level_time = 0;
     bool escaped = false;
@@ -31,6 +32,8 @@ struct GameView {
     int my_id = 0;
     float ping_ms = 0;
     std::vector<std::string> roster;
+    std::string toast;           // your own last message ("PICKED UP ...")
+    uint32_t toast_seq = 0;
 };
 
 class Session {
@@ -44,10 +47,11 @@ public:
     virtual bool ready() const { return true; }        // multiplayer: connected + first snapshot
     virtual void request_respawn() {}                  // single player: retry after death
     virtual void clear_escaped() {}
-    virtual GameSim* debug_sim() { return nullptr; }  // single player only (dev tools)
+    virtual GameSim* sim() { return nullptr; }  // single player / sandbox only (sandbox tools, dev hooks)
+    virtual void resync() {}                    // after poking the sim directly
 };
 
-std::unique_ptr<Session> make_single_player(LevelId level, uint32_t seed, const std::string& name);
+std::unique_ptr<Session> make_single_player(LevelId level, uint32_t seed, const std::string& name, bool sandbox = false);
 // host = true starts a server on this machine (own thread) and joins it.
 std::unique_ptr<Session> make_multiplayer(const std::string& host, uint16_t port, const std::string& name,
                                           bool start_server, LevelId level, double now, std::string* error);

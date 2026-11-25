@@ -13,10 +13,18 @@ std::vector<DrawEntity> ents_from_sim(const GameSim& s) {
     return out;
 }
 
+std::vector<DrawProp> props_from_sim(const GameSim& s) {
+    std::vector<DrawProp> out;
+    for (const Prop& p : s.props) out.push_back({p.id, p.kind, p.item, p.pos, p.life});
+    return out;
+}
+
 // ======================================================================== single player
 class SingleSession : public Session {
 public:
-    SingleSession(LevelId level, uint32_t seed, const std::string& name) : sim_(seed) {
+    SingleSession(LevelId level, uint32_t seed, const std::string& name, bool sandbox) : sim_(seed) {
+        sim_.sandbox = sandbox;
+        sim_.auto_spawn = !sandbox;
         sim_.start_level(level, seed);
         sim_.add_player(name);
         v_.picked = &sim_.picked;
@@ -52,8 +60,8 @@ public:
         }
     }
     void clear_escaped() override { sim_.escaped = false; }
-    GameSim* debug_sim() override { return &sim_; }
-    void resync() { refresh(); v_.me_prev = v_.me; }
+    GameSim* sim() override { return &sim_; }
+    void resync() override { refresh(); v_.me_prev = v_.me; }
 
 private:
     GameSim sim_;
@@ -65,6 +73,9 @@ private:
         v_.epoch = sim_.epoch;
         v_.me = sim_.players[0].st;
         v_.ents = ents_from_sim(sim_);
+        v_.props = props_from_sim(sim_);
+        v_.toast = sim_.players[0].toast;
+        v_.toast_seq = sim_.players[0].toast_seq;
         v_.level_time = sim_.level_time;
         v_.escaped = sim_.escaped;
         v_.multiplayer = false;
@@ -158,7 +169,7 @@ public:
             const PlayerState& pa = a.players[i].active ? a.players[i].st : pb;
             Vec3 pos = pa.pos + (pb.pos - pa.pos) * t;
             float yaw = pa.yaw + std::remainder(pb.yaw - pa.yaw, 2 * PI) * t;
-            v_.others.push_back({i, pos, yaw, pb.crouch, lerpf(pa.bob, pb.bob, t), pb.alive, b.players[i].name});
+            v_.others.push_back({i, pos, yaw, pb.crouch, lerpf(pa.bob, pb.bob, t), pb.alive, b.players[i].name, pb.light_on});
         }
         v_.ents.clear();
         for (const EntSnap& eb : b.ents) {
@@ -168,6 +179,8 @@ public:
             float yaw = ea.yaw + std::remainder(eb.yaw - ea.yaw, 2 * PI) * t;
             v_.ents.push_back({eb.id, eb.type, eb.state, p, yaw, lerpf(ea.anim, eb.anim, t), eb.speed});
         }
+        v_.props.clear();
+        for (const PropSnap& p : b.props) v_.props.push_back({p.id, p.kind, p.item, p.pos, p.life});
         v_.me_prev = prev_;
         v_.me = pred_;
         v_.alpha = acc_ / dt;
@@ -232,14 +245,16 @@ private:
         v_.level_time = s.level_time;
         v_.escaped = s.escaped;
         v_.respawn_t = s.players[net_.my_id].respawn_t;
+        v_.toast = s.toast;
+        v_.toast_seq = s.toast_seq;
         v_.my_id = net_.my_id;
     }
 };
 
 } // namespace
 
-std::unique_ptr<Session> make_single_player(LevelId level, uint32_t seed, const std::string& name) {
-    return std::unique_ptr<Session>(new SingleSession(level, seed, name));
+std::unique_ptr<Session> make_single_player(LevelId level, uint32_t seed, const std::string& name, bool sandbox) {
+    return std::unique_ptr<Session>(new SingleSession(level, seed, name, sandbox));
 }
 
 std::unique_ptr<Session> make_multiplayer(const std::string& host, uint16_t port, const std::string& name,

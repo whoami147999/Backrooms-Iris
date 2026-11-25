@@ -91,10 +91,37 @@ bool Renderer::init(const RenderSettings& s) {
     glFogi(GL_FOG_MODE, GL_EXP2);
     glHint(GL_FOG_HINT, GL_NICEST);
     glAlphaFunc(GL_GREATER, 0.02f);
+    worker_ = std::thread(&Renderer::worker_loop, this);
     return true;
 }
 
+void Renderer::worker_loop() {
+    for (;;) {
+        Job job;
+        {
+            std::unique_lock<std::mutex> lk(mu_);
+            cv_.wait(lk, [&] { return stop_ || !jobs_.empty(); });
+            if (stop_) return;
+            job = jobs_.front();
+            jobs_.pop_front();
+        }
+        Done d;
+        d.kx = job.kx;
+        d.kz = job.kz;
+        d.gen = job.gen;
+        build_chunk_mesh(job.world, job.kx, job.kz, d.mesh);
+        std::lock_guard<std::mutex> lk(mu_);
+        done_.push_back(std::move(d));
+    }
+}
+
 void Renderer::shutdown() {
+    {
+        std::lock_guard<std::mutex> lk(mu_);
+        stop_ = true;
+    }
+    cv_.notify_all();
+    if (worker_.joinable()) worker_.join();
     for (auto& kv : chunks_) {
         glDeleteBuffers(1, &kv.second.vbo);
         glDeleteBuffers(1, &kv.second.ibo);
@@ -105,19 +132,28 @@ void Renderer::shutdown() {
     if (grab_tex_) glDeleteTextures(1, &grab_tex_);
 }
 
-void Renderer::set_level(const World& w) {
+void Renderer::set_world(const World& w) {
+    if (level_ == w.id() && seed_ == w.seed()) return;
     for (auto& kv : chunks_) {
         glDeleteBuffers(1, &kv.second.vbo);
         glDeleteBuffers(1, &kv.second.ibo);
     }
     chunks_.clear();
+    {
+        std::lock_guard<std::mutex> lk(mu_);
+        jobs_.clear();
+        done_.clear();
+        gen_++;
+    }
+    inflight_.clear();
     if (level_ != w.id()) {
         if (tex_[0]) glDeleteTextures(MAT_COUNT, tex_);
         Image imgs[MAT_COUNT];
         make_level_textures(w.id(), s_.texture_size, imgs);
         for (int i = 0; i < MAT_COUNT; i++) tex_[i] = upload_texture(imgs[i], true, false, true);
-        level_ = w.id();
     }
+    level_ = w.id();
+    seed_ = w.seed();
     pending_ = 1;
 }
 
@@ -133,6 +169,7 @@ void Renderer::upload(GpuChunk& g, const ChunkMesh& m) {
     for (int i = 0; i < MAT_COUNT; i++) { g.first[i] = m.first[i]; g.count[i] = m.count[i]; }
     g.exits = m.exits;
     g.items = m.items;
+    g.balloons = m.balloons;
 }
 
 void Renderer::update_chunks(const World& w, Vec3 eye, int budget) {
@@ -160,18 +197,53 @@ void Renderer::update_chunks(const World& w, Vec3 eye, int budget) {
             if (d <= load && !chunks_.count(key(kx, kz))) want.push_back({d, kx, kz});
         }
     std::sort(want.begin(), want.end(), [](const Want& a, const Want& b) { return a.d < b.d; });
-    int built = 0;
-    for (const Want& wn : want) {
-        if (budget >= 0 && built >= budget) break;
-        build_chunk_mesh(w, wn.kx, wn.kz, scratch_);
-        GpuChunk g;
-        g.kx = wn.kx;
-        g.kz = wn.kz;
-        upload(g, scratch_);
-        chunks_[key(wn.kx, wn.kz)] = std::move(g);
-        built++;
+    if (budget < 0) {
+        // build everything right now on this thread (level load, screenshots)
+        for (const Want& wn : want) {
+            build_chunk_mesh(w, wn.kx, wn.kz, scratch_);
+            GpuChunk g;
+            g.kx = wn.kx;
+            g.kz = wn.kz;
+            upload(g, scratch_);
+            chunks_[key(wn.kx, wn.kz)] = std::move(g);
+        }
+        pending_ = 0;
+        return;
     }
-    pending_ = (int)want.size() - built;
+    // hand the closest missing chunks to the worker (a few at a time so it stays responsive)
+    {
+        std::lock_guard<std::mutex> lk(mu_);
+        for (const Want& wn : want) {
+            if (inflight_.size() >= 3) break;
+            uint64_t k = key(wn.kx, wn.kz);
+            if (inflight_.count(k)) continue;
+            inflight_[k] = true;
+            jobs_.push_back({wn.kx, wn.kz, gen_, w});
+        }
+    }
+    cv_.notify_one();
+    // upload what's finished
+    int uploaded = 0;
+    for (;;) {
+        Done d;
+        {
+            std::lock_guard<std::mutex> lk(mu_);
+            if (done_.empty() || uploaded >= std::max(1, budget)) break;
+            d = std::move(done_.front());
+            done_.pop_front();
+        }
+        uint64_t k = key(d.kx, d.kz);
+        if (d.gen != gen_) continue;
+        inflight_.erase(k);
+        if (chunks_.count(k)) continue;
+        GpuChunk g;
+        g.kx = d.kx;
+        g.kz = d.kz;
+        upload(g, d.mesh);
+        chunks_[k] = std::move(g);
+        uploaded++;
+    }
+    pending_ = (int)want.size();
 }
 
 // =================================================================== dynamic geometry
@@ -306,6 +378,8 @@ void Renderer::draw_entity(const World& w, const DrawEntity& e, float time) {
         case EntityType::Smiler: break;
         default: break;
     }
+    if (e.state == EntState::Stunned) // knocked down: everything slumps toward the floor
+        for (Part& p : parts) { p.y *= 0.35f; p.h *= 0.55f; p.swing = 0.6f; }
     if (!parts.empty()) {
         for (const Part& p : parts) add_part(dyn_, p, e.pos, e.yaw, light);
         flush_dyn(spr_[SPR_WHITE]);
@@ -393,14 +467,15 @@ bool Renderer::project(Vec3 p, float& sx, float& sy) const {
 
 void Renderer::draw_world(const World& w, const Camera& cam, float time, float fog_mult,
                           const std::unordered_set<uint32_t>& picked, const std::vector<DrawEntity>& ents,
-                          const std::vector<DrawPlayer>& players, const std::vector<Phantom>& phantoms) {
+                          const std::vector<DrawPlayer>& players, const std::vector<DrawProp>& props,
+                          const std::vector<Phantom>& phantoms) {
     cam_ = cam;
     const LevelInfo& li = w.info();
     glClearColor(li.fog[0], li.fog[1], li.fog[2], 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     float far_z = li.outdoor ? s_.view_dist + 60.0f : s_.view_dist + 20.0f;
-    Mat4 proj = Mat4::perspective(cam.fov_deg * PI / 180.0f, (float)width / (float)height, 0.05f, far_z);
+    Mat4 proj = Mat4::perspective(cam.fov_deg * PI / 180.0f, (float)width / (float)height, 0.08f, far_z);
     Mat4 view = Mat4::fps_view(cam.eye, cam.yaw, cam.pitch);
     if (cam.roll != 0) { // tilt the horizon (sanity effects): rotate around the view axis
         float c = std::cos(cam.roll), s = std::sin(cam.roll);
@@ -427,10 +502,11 @@ void Renderer::draw_world(const World& w, const Camera& cam, float time, float f
     glEnable(GL_FOG);
     glFogfv(GL_FOG_COLOR, li.fog);
 #if defined(IRIS_GL_VITA)
-    glFogf(GL_FOG_DENSITY, li.fog_density_vita * fog_mult);
+    fog_density_ = li.fog_density_vita * fog_mult;
 #else
-    glFogf(GL_FOG_DENSITY, li.fog_density * fog_mult);
+    fog_density_ = li.fog_density * fog_mult;
 #endif
+    glFogf(GL_FOG_DENSITY, fog_density_);
     glEnable(GL_TEXTURE_2D);
     glDisable(GL_BLEND);
     glEnableClientState(GL_VERTEX_ARRAY);
@@ -452,7 +528,7 @@ void Renderer::draw_world(const World& w, const Camera& cam, float time, float f
     for (int mat = 0; mat < MAT_COUNT; mat++) {
         glBindTexture(GL_TEXTURE_2D, tex_[mat]);
         bool emissive = mat == MAT_LIGHT;
-        if (emissive) glDisable(GL_FOG); // lights shine through the haze
+        if (emissive) glFogf(GL_FOG_DENSITY, fog_density_ * 0.45f); // lights cut through the haze a bit
         for (const GpuChunk* g : visible) {
             if (!g->count[mat]) continue;
             glBindBuffer(GL_ARRAY_BUFFER, g->vbo);
@@ -461,7 +537,7 @@ void Renderer::draw_world(const World& w, const Camera& cam, float time, float f
             glDrawElements(GL_TRIANGLES, (GLsizei)g->count[mat], GL_UNSIGNED_SHORT,
                            (const void*)(uintptr_t)(g->first[mat] * sizeof(uint16_t)));
         }
-        if (emissive) glEnable(GL_FOG);
+        if (emissive) glFogf(GL_FOG_DENSITY, fog_density_);
     }
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
@@ -472,6 +548,19 @@ void Renderer::draw_world(const World& w, const Camera& cam, float time, float f
         if (e.type != EntityType::Smiler) draw_entity(w, e, time);
     for (const DrawPlayer& p : players) draw_player(w, p, time);
     glEnable(GL_CULL_FACE);
+    glEnable(GL_BLEND);
+    for (const DrawPlayer& p : players) {
+        if (!p.light_on || !p.alive) continue;
+        Vec2 f = yaw_forward(p.yaw), r = yaw_right(p.yaw);
+        Vec3 hand{p.pos.x + f.x * 0.35f + r.x * 0.25f, 1.25f, p.pos.z + f.z * 0.35f + r.z * 0.25f};
+        billboard(hand, 0.25f, 0.25f, rgba(1, 0.97f, 0.85f, 0.9f));
+        flush_dyn(spr_[SPR_GLOW], true, false);
+        Vec3 tip{hand.x + f.x * 7, 1.0f, hand.z + f.z * 7}; // (not "far": that is a macro on Windows)
+        Vec3 sx{r.x * 0.15f, 0, r.z * 0.15f}, sx2{r.x * 1.6f, 0, r.z * 1.6f};
+        push_quad(hand - sx, hand + sx, tip + sx2, tip - sx2, rgba(1, 0.95f, 0.8f, 0.10f));
+        flush_dyn(spr_[SPR_GLOW], true, true);
+    }
+    glDisable(GL_BLEND);
 
     // ----- transparent stuff
     glEnable(GL_BLEND);
@@ -479,23 +568,49 @@ void Renderer::draw_world(const World& w, const Camera& cam, float time, float f
     glEnable(GL_ALPHA_TEST);
     glDisable(GL_CULL_FACE);
 
-    // items: little bobbing billboards with a faint glow so you can spot them
+    // items: little bobbing billboards with a faint glow so you can spot them nearby
+    auto item_billboard = [&](ItemType t, Vec2 p, uint32_t id) {
+        float bob = std::sin(time * 2.2f + (float)(id & 255)) * 0.04f;
+        float l = clampf(w.light_level({p.x, 0.5f, p.z}) * 0.8f + 0.35f, 0.3f, 1.2f);
+        billboard({p.x, 0.26f + bob, p.z}, 0.36f, 0.36f, rgba(l, l, l));
+        flush_dyn(spr_[item_sprite(t)]);
+        float d = (Vec2{cam.eye.x, cam.eye.z} - p).len();
+        float pulse = (0.22f + 0.08f * std::sin(time * 3 + (float)(id & 63))) * fog_factor(d);
+        if (pulse < 0.01f) return;
+        billboard({p.x, 0.25f, p.z}, 0.9f, 0.9f, t == ItemType::MemoryJuice ? rgba(0.8f, 0.3f, 1, pulse) : rgba(1, 0.95f, 0.7f, pulse));
+        flush_dyn(spr_[SPR_GLOW], true, false);
+    };
     for (const GpuChunk* g : visible) {
         for (uint32_t id : g->items) {
             if (picked.count(id)) continue;
             int cx, cz;
             World::item_cell(id, cx, cz);
-            ItemType t = w.item(cx, cz);
-            Vec2 p = w.item_pos(cx, cz);
-            float bob = std::sin(time * 2.2f + (float)(id & 255)) * 0.04f;
-            float l = clampf(w.light_level({p.x, 0.5f, p.z}) * 0.8f + 0.35f, 0.3f, 1.2f);
-            billboard({p.x, 0.26f + bob, p.z}, 0.36f, 0.36f, rgba(l, l, l));
-            Sprite s = t == ItemType::AlmondWater ? SPR_ALMOND : (t == ItemType::EnergyDrink ? SPR_ENERGY : SPR_JUICE);
-            flush_dyn(spr_[s]);
-            float pulse = 0.25f + 0.1f * std::sin(time * 3 + (float)(id & 63));
-            billboard({p.x, 0.25f, p.z}, 0.9f, 0.9f, t == ItemType::MemoryJuice ? rgba(0.8f, 0.3f, 1, pulse) : rgba(1, 0.95f, 0.7f, pulse));
-            flush_dyn(spr_[SPR_GLOW], true, false);
+            item_billboard(w.item(cx, cz), w.item_pos(cx, cz), id);
         }
+        for (const Vec3& b : g->balloons) { // Level Fun: balloons drifting under the ceiling
+            static const float BC[5][3] = {{0.95f, 0.2f, 0.3f}, {0.2f, 0.55f, 0.95f}, {0.98f, 0.8f, 0.1f}, {0.3f, 0.85f, 0.4f}, {0.8f, 0.3f, 0.9f}};
+            int k = (int)(std::fabs(b.x * 7 + b.z * 13)) % 5;
+            float sway = std::sin(time * 0.8f + b.x) * 0.05f;
+            billboard({b.x + sway, b.y + std::sin(time * 1.1f + b.z) * 0.06f, b.z}, 0.38f, 0.46f, rgba(BC[k][0], BC[k][1], BC[k][2]));
+            flush_dyn(spr_[SPR_BALLOON]);
+        }
+    }
+    // props: dropped items and burning firesalt
+    for (const DrawProp& p : props) {
+        float d = (Vec2{cam.eye.x, cam.eye.z} - p.pos).len();
+        if (d > s_.view_dist) continue;
+        if (p.kind == PropKind::Item) { item_billboard(p.item, p.pos, p.id); continue; }
+        float fl = 0.85f + 0.15f * std::sin(time * 17 + p.id) * std::sin(time * 7.3f);
+        float fade = clampf(p.life / 3.0f, 0, 1); // dies down at the end
+        billboard({p.pos.x, 0.22f, p.pos.z}, 0.35f * fl, 0.5f * fl, rgba(1, 1, 1, fade));
+        flush_dyn(spr_[SPR_FLAME], true, false);
+        // a pool of orange light on the floor around it
+        float r = FLARE_RADIUS * 0.8f * fl;
+        push_quad({p.pos.x - r, 0.03f, p.pos.z + r}, {p.pos.x + r, 0.03f, p.pos.z + r}, {p.pos.x + r, 0.03f, p.pos.z - r}, {p.pos.x - r, 0.03f, p.pos.z - r},
+                  rgba(1, 0.45f, 0.12f, 0.45f * fade));
+        flush_dyn(spr_[SPR_GLOW], true, false);
+        billboard({p.pos.x, 1.0f, p.pos.z}, 3.0f * fl, 3.0f * fl, rgba(1, 0.5f, 0.15f, 0.25f * fade));
+        flush_dyn(spr_[SPR_GLOW], true, false);
     }
     // exit signs: glowing green, visible through the fog: the one thing to follow
     glDepthMask(GL_FALSE);
@@ -508,7 +623,8 @@ void Renderer::draw_world(const World& w, const Camera& cam, float time, float f
                 push_quad(a, b, c, d, rgba(1, 1, 1));
             }
             flush_dyn(spr_[SPR_EXIT_SIGN], false, false);
-            billboard({ex.x, 2.53f, ex.z}, 2.2f, 1.2f, rgba(0.3f, 1, 0.4f, 0.22f));
+            float ed = (Vec2{cam.eye.x, cam.eye.z} - Vec2{ex.x, ex.z}).len();
+            billboard({ex.x, 2.53f, ex.z}, 2.2f, 1.2f, rgba(0.3f, 1, 0.4f, 0.22f * std::max(0.35f, fog_factor(ed))));
             flush_dyn(spr_[SPR_GLOW], true, false);
         }
     // smilers last: their faces float in the dark
@@ -621,6 +737,29 @@ void Renderer::post_warp(float wobble, float ghost, float time) {
 #endif
 }
 
+void Renderer::flashlight_overlay(float strength, float flicker) {
+    if (strength <= 0.01f) return;
+    begin_2d();
+    // dst * (1 + src) per pass: brightens what's in the beam without lifting pure black.
+    // Stacking passes lets the beam pull real detail out of a nearly black level.
+    glBlendFunc(GL_DST_COLOR, GL_ONE);
+    glBindTexture(GL_TEXTURE_2D, spr_[SPR_BEAM]);
+    float sz = (float)std::max(width, height) * 0.95f;
+    int passes = strength > 1.2f ? 3 : (strength > 1.0f ? 2 : 1);
+    float k = clampf((strength > 1.0f ? 1.0f : strength) * flicker, 0, 1);
+    for (int i = 0; i < passes; i++) {
+        float grow = 1.0f - i * 0.18f; // each pass a bit tighter: a hot centre, soft edges
+        float w2 = sz * grow / 2;
+        push_quad({width * 0.5f - w2, height * 0.52f + w2, 0}, {width * 0.5f + w2, height * 0.52f + w2, 0},
+                  {width * 0.5f + w2, height * 0.52f - w2, 0}, {width * 0.5f - w2, height * 0.52f - w2, 0}, rgba(k, k, k, 1));
+        set_pointers(dyn_.data());
+        glDrawArrays(GL_TRIANGLES, 0, (GLsizei)dyn_.size());
+        dyn_.clear();
+    }
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    end_2d();
+}
+
 // =================================================================== 2D
 void Renderer::begin_2d() {
     glMatrixMode(GL_PROJECTION);
@@ -666,6 +805,13 @@ void Renderer::sprite(Sprite s, float x, float y, float w, float h, uint32_t c, 
 }
 
 float Renderer::text(float x, float y, float px, const std::string& s, uint32_t c, int align) {
+    // a soft drop shadow keeps text readable on bright levels (pool tiles, the city)
+    uint8_t ca = (uint8_t)c;
+    if (ca > 40 && (c >> 8) != 0) text_raw(x + std::max(1.0f, px * 0.5f), y + std::max(1.0f, px * 0.5f), px, s, (uint32_t)(ca * 0.55f), align);
+    return text_raw(x, y, px, s, c, align);
+}
+
+float Renderer::text_raw(float x, float y, float px, const std::string& s, uint32_t c, int align) {
     float w = text_width_px_f(s) * px;
     if (align == 1) x -= w * 0.5f;
     else if (align == 2) x -= w;

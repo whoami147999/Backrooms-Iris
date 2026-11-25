@@ -24,6 +24,7 @@ struct ChunkMesh {
     uint32_t count[MAT_COUNT] = {};
     std::vector<Vec3> exits;          // exit door positions (centre of the door, floor level)
     std::vector<uint32_t> items;      // item ids lying in this chunk
+    std::vector<Vec3> balloons;       // Level Fun decorations
 };
 
 // Builds chunk (kx, kz): cells [kx*CHUNK_CELLS, (kx+1)*CHUNK_CELLS) on each axis.

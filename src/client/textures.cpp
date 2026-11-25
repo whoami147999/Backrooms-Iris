@@ -206,7 +206,7 @@ Image concrete(int W, int H, float base, uint32_t seed, bool walls) {
             if (hash01(seed, x / 6, y / 6, 33) < 0.004f) { r = 0.42f; g = 0.24f; b = 0.14f; return; } // rust bleed
         } else {
             float crack = vnoise(u * 9, v * 9, 9, 9, seed + 7);
-            if (crack > 0.495f && crack < 0.505f) l -= 0.10f;
+            l -= std::max(0.0f, 0.012f - std::fabs(crack - 0.5f)) * 5.0f; // hairline cracks
         }
         r = l; g = l * 1.0f; b = l * 0.97f;
     });
@@ -214,24 +214,25 @@ Image concrete(int W, int H, float base, uint32_t seed, bool walls) {
 
 Image wet_concrete(int N) {
     return paint(N, N, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
+        // concrete with standing water: darker, smoother, with a soft reflection
         float blot = fbm(u, v, 4, 4, 5, 141) - 0.5f;
-        float sheen = std::pow(fbm(u, v, 8, 8, 3, 142), 3.0f) * 0.5f;
-        float l = 0.24f + blot * 0.10f + sheen + grain(x, y, 143) * 0.03f;
-        r = l * 0.95f; g = l; b = l * 1.08f;
+        float sheen = std::pow(fbm(u, v, 4, 4, 3, 142), 2.5f) * 0.28f;
+        float l = 0.30f + blot * 0.08f + sheen + grain(x, y, 143) * 0.015f;
+        r = l * 0.97f; g = l; b = l * 1.02f;
     });
 }
 
 Image crate(int N) {
     return paint(N, N, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
-        int plank = y / (N / 6);
-        float edge = (y % (N / 6) < 2 || x < 4 || x > N - 5) ? -0.25f : 0.0f;
-        float grainw = (vnoise(u * 3, v * 60 + plank * 7.0f, 3, 60, 151 + plank) - 0.5f) * 0.25f;
-        bool brace = std::fabs((float)x - (float)y) < N * 0.04f || x < N * 0.08f || x > N * 0.92f;
-        float l = 0.62f + grainw + edge + (brace ? -0.08f : 0.0f) + grain(x, y, 152) * 0.04f;
-        if (((x % (N / 4)) == N / 8) && ((y % (N / 6)) == N / 12)) l = 0.25f; // nails
+        int P = N / 8;                    // 8 planks: divides the texture, no seam
+        int plank = y / P;
+        float edge = (y % P < 2) ? -0.22f : ((y % P == 2) ? 0.06f : 0.0f);
+        float frame = (x < N / 16 || x >= N - N / 16) ? -0.07f : 0.0f;
+        float grainw = (vnoise(u * 2, v * 64 + plank * 5.0f, 2, 64, 151 + (uint32_t)plank) - 0.5f) * 0.22f;
+        float tone = (hash01(152, plank, 0, 2) - 0.5f) * 0.10f;
+        float l = 0.62f + grainw + edge + frame + tone + grain(x, y, 152) * 0.035f;
+        if ((x == N / 32 || x == N - N / 32) && (y % P) == P / 2) l = 0.22f; // nails
         r = l * 0.86f; g = l * 0.66f; b = l * 0.40f;
-        // faded stencil
-        if (v > 0.42f && v < 0.58f && u > 0.25f && u < 0.75f && hash01(153, x / 3, y / 3, 1) < 0.5f) { r *= 0.8f; g *= 0.8f; b *= 0.8f; }
     });
 }
 
@@ -318,10 +319,9 @@ Image plaster(int N) {
 Image rock(int N, float base, uint32_t seed) {
     return paint(N, N, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
         float n = fbm(u, v, 4, 4, 6, seed);
-        float strata = std::sin((v + n * 0.3f) * 30.0f) * 0.04f;
-        float crack = vnoise(u * 6, v * 6, 6, 6, seed + 3);
-        float c = (crack > 0.49f && crack < 0.51f) ? -0.12f : 0.0f;
-        float l = base + (n - 0.5f) * 0.35f + strata + c + grain(x, y, seed) * 0.06f;
+        float strata = std::sin((v + (n - 0.5f) * 0.08f) * 2 * PI * 5) * 0.035f; // 5 whole bands: tiles cleanly
+        float crev = std::max(0.0f, 0.06f - std::fabs(vnoise(u * 6, v * 6, 6, 6, seed + 3) - 0.5f)) * 1.2f; // soft crevices
+        float l = base + (n - 0.5f) * 0.32f + strata - crev + grain(x, y, seed) * 0.05f;
         r = l * 1.0f; g = l * 0.9f; b = l * 0.78f;
     });
 }
@@ -368,10 +368,10 @@ Image siding(int N) {
 
 Image shingles(int N) {
     return paint(N, N, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
-        int row = y / (N / 10);
+        int row = y / (N / 8);
         int off = (row & 1) * (N / 16);
-        int tab = ((x + off) / (N / 8));
-        float gap = ((x + off) % (N / 8) < 2 || y % (N / 10) < 2) ? -0.12f : 0.0f;
+        int tab = ((x + off) % N) / (N / 8);
+        float gap = (((x + off) % N) % (N / 8) < 2 || y % (N / 8) < 2) ? -0.12f : 0.0f;
         float l = 0.30f + gap + (hash01(221, tab, row, 1) - 0.5f) * 0.08f + grain(x, y, 222) * 0.08f +
                   (fbm(u, v, 4, 4, 3, 223) - 0.5f) * 0.1f;
         r = l * 1.0f; g = l * 0.92f; b = l * 0.86f;
@@ -412,7 +412,7 @@ Image sidewalk(int N) {
 Image facade(int N) {
     const int W = N / 2, H = N;
     return paint(W, H, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
-        int cw = W / 3, ch = H / 6;
+        int cw = W / 4, ch = H / 8;   // periods divide the texture: windows line up across faces
         int lx = x % cw, ly = y % ch;
         bool window = lx > cw * 0.15f && lx < cw * 0.85f && ly > ch * 0.2f && ly < ch * 0.85f;
         float stone = 0.80f + (fbm(u, v, 3, 6, 3, 261) - 0.5f) * 0.1f + grain(x, y, 262) * 0.03f;
@@ -443,6 +443,139 @@ Image exit_door(int N) {
     im.rect(W * 12 / 100, H * 52 / 100, W * 88 / 100, H * 56 / 100, 0.75f, 0.75f, 0.72f); // push bar
     im.rect(W * 30 / 100, H * 14 / 100, W * 70 / 100, H * 30 / 100, 0.08f, 0.1f, 0.1f);   // little window
     im.rect(W * 32 / 100, H * 15 / 100, W * 68 / 100, H * 29 / 100, 0.02f, 0.03f, 0.03f);
+    return im;
+}
+
+// ------------------------------------------------------------------ Level 2
+Image tunnel_wall(int N) {
+    return paint(N / 2, N, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
+        float blot = fbm(u, v, 3, 6, 5, 401) - 0.5f;
+        float rust = std::max(0.0f, fbm(u, v * 0.25f, 16, 2, 3, 402) - 0.55f) * 2.0f * (1.0f - v * 0.6f);
+        float band = (v > 0.86f) ? -0.08f : 0.0f;                    // grime line along the floor
+        float seam = (x % (N / 8) < 2) ? -0.05f : 0.0f;               // panel seams
+        float l = 0.34f + blot * 0.18f + band + seam + grain(x, y, 403) * 0.04f;
+        r = l * 1.02f + rust * 0.20f; g = l * 0.96f + rust * 0.06f; b = l * 0.88f - rust * 0.04f;
+    });
+}
+Image grate(int N) {
+    return paint(N, N, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
+        int c = N / 16;
+        int lx = x % c, ly = y % c;
+        bool hole = lx > c / 4 && lx < c * 3 / 4 && ly > c / 4 && ly < c * 3 / 4;
+        float rust = fbm(u, v, 4, 4, 4, 411);
+        float l = hole ? 0.04f : 0.36f + (rust - 0.5f) * 0.2f + grain(x, y, 412) * 0.05f;
+        r = l * 1.05f + (hole ? 0 : std::max(0.0f, rust - 0.55f) * 0.25f); g = l * 0.95f; b = l * 0.85f;
+    });
+}
+Image rusty_pipe(int N) {
+    return paint(N / 4, N / 4, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
+        float band = (y % (N / 16) < 2) ? -0.10f : 0.0f;
+        float rust = fbm(u, v, 4, 4, 4, 421);
+        float shade = 0.75f + 0.25f * std::sin(u * PI);               // round-ish
+        float l = (0.38f + band + grain(x, y, 422) * 0.05f) * shade;
+        r = l * 1.1f + std::max(0.0f, rust - 0.5f) * 0.35f; g = l * 0.9f + std::max(0.0f, rust - 0.5f) * 0.1f; b = l * 0.75f;
+    });
+}
+Image caged_bulb(int N) {
+    return paint(N / 8, N / 8, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
+        float d = std::sqrt((u - 0.5f) * (u - 0.5f) + (v - 0.5f) * (v - 0.5f));
+        bool cage = (x % (N / 32) == 0) || (y % (N / 32) == 0);
+        float glow = clampf(1.2f - d * 2.2f, 0, 1);
+        r = cage ? 0.2f : 0.5f + glow * 0.5f; g = cage ? 0.18f : 0.35f + glow * 0.55f; b = cage ? 0.15f : 0.15f + glow * 0.4f;
+    });
+}
+
+// ------------------------------------------------------------------ Level 4
+Image cubicle_fabric(int N) {
+    return paint(N / 2, N / 2, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
+        float weave = ((x + y) % 2 == 0 ? 0.02f : -0.02f) + (vnoise(u * 64, v * 64, 64, 64, 431) - 0.5f) * 0.06f;
+        float trim = (v > 0.93f || v < 0.03f) ? -0.18f : 0.0f;        // aluminium top/bottom trim
+        float dirt = (fbm(u, v, 3, 3, 3, 432) - 0.5f) * 0.08f;
+        float l = 0.52f + weave + dirt + trim;
+        r = l * 0.80f; g = l * 0.86f; b = l * 0.98f;
+        if (trim < 0) { r = g = b = 0.55f + weave; }
+    });
+}
+Image office_carpet(int N) {
+    return paint(N, N, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
+        int T = N / 4;
+        int tx = x / T, ty = y / T;
+        bool turn = ((tx + ty) & 1) != 0;                              // carpet tiles laid at 90 degrees
+        float rib = std::sin(((turn ? x : y) % 8) * PI / 4) * 0.03f;
+        float seam = (x % T == 0 || y % T == 0) ? -0.05f : 0.0f;
+        float tile = (hash01(441, tx, ty, 1) - 0.5f) * 0.05f;
+        float stain = std::max(0.0f, fbm(u, v, 4, 4, 4, 442) - 0.62f) * 0.7f;
+        float l = 0.40f + rib + seam + tile + grain(x, y, 443) * 0.08f - stain;
+        r = l * 0.78f; g = l * 0.84f; b = l * 0.96f;
+    });
+}
+Image desk_side(int N) {
+    return paint(N / 2, N / 2, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
+        float l = 0.55f + (vnoise(u * 2, v * 32, 2, 32, 451) - 0.5f) * 0.04f + grain(x, y, 452) * 0.02f;
+        if (v < 0.08f) l = 0.42f;                                      // desktop edge
+        r = l * 0.92f; g = l * 0.92f; b = l * 0.90f;
+    });
+}
+Image desk_top(int N) {
+    Image im = paint(N / 2, N / 2, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
+        float gr = (vnoise(u * 3, v * 40, 3, 40, 461) - 0.5f) * 0.12f;
+        float l = 0.52f + gr + grain(x, y, 462) * 0.02f;
+        r = l * 0.80f; g = l * 0.62f; b = l * 0.42f;
+    });
+    Rng rng(463); // scattered papers
+    for (int i = 0; i < 5; i++) {
+        int px = (int)rng.range(0, N / 2 - N / 8.0f), py = (int)rng.range(0, N / 2 - N / 6.0f);
+        im.rect(px, py, px + N / 10, py + N / 7, 0.9f, 0.9f, 0.86f, 0.95f);
+        for (int l = 0; l < 6; l++) im.rect(px + 3, py + 5 + l * 5, px + N / 10 - 3, py + 6 + l * 5, 0.4f, 0.4f, 0.45f, 0.6f);
+    }
+    return im;
+}
+
+// ------------------------------------------------------------------ Level 37
+Image pool_tiles(int N, float r0, float g0, float b0, float water) {
+    return paint(N, N, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
+        int T = N / 16;
+        bool grout = (x % T) < 2 || (y % T) < 2;
+        float tile = (hash01(471, x / T, y / T, 1) - 0.5f) * 0.03f;
+        float l = grout ? 0.72f : 0.92f + tile + grain(x, y, 472) * 0.015f;
+        r = l * r0; g = l * g0; b = l * b0;
+        if (water > 0) { // rippled light from the water above it
+            float c1 = vnoise(u * 8 + 0.3f, v * 8, 8, 8, 473), c2 = vnoise(u * 8, v * 8 + 0.7f, 8, 8, 474);
+            float caustic = std::pow(clampf(1.0f - std::fabs(c1 - c2) * 6.0f, 0, 1), 3.0f);
+            r = lerpf(r, 0.55f, water * 0.45f) + caustic * 0.18f * water;
+            g = lerpf(g, 0.85f, water * 0.45f) + caustic * 0.20f * water;
+            b = lerpf(b, 0.95f, water * 0.45f) + caustic * 0.22f * water;
+        }
+    });
+}
+
+// ------------------------------------------------------------------ Level Fun
+Image party_wall(int N) {
+    Image im = paint(N / 2, N, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
+        int st = (x / (N / 16)) % 4;
+        static const float C[4][3] = {{0.98f, 0.80f, 0.85f}, {0.98f, 0.93f, 0.70f}, {0.75f, 0.90f, 0.98f}, {0.85f, 0.95f, 0.78f}};
+        float l = 0.95f + grain(x, y, 481) * 0.03f + (fbm(u, v, 3, 6, 3, 482) - 0.5f) * 0.06f;
+        if (v > 0.93f) l *= 0.6f; // baseboard
+        r = C[st][0] * l; g = C[st][1] * l; b = C[st][2] * l;
+    });
+    Rng rng(483);
+    for (int i = 0; i < N / 4; i++) { // confetti
+        float x = rng.range(0, (float)N / 2), y = rng.range(0, N * 0.9f);
+        static const float C[5][3] = {{0.95f, 0.2f, 0.3f}, {0.2f, 0.6f, 0.95f}, {0.98f, 0.8f, 0.1f}, {0.3f, 0.85f, 0.4f}, {0.8f, 0.3f, 0.9f}};
+        const float* c = C[i % 5];
+        im.disc(x, y, 1.4f + rng.f01(), c[0], c[1], c[2], 0.9f, 0.8f);
+    }
+    return im;
+}
+Image confetti_carpet(int N) {
+    Image im = carpet(N);
+    Rng rng(491);
+    static const float C[5][3] = {{0.95f, 0.2f, 0.3f}, {0.2f, 0.6f, 0.95f}, {0.98f, 0.8f, 0.1f}, {0.3f, 0.85f, 0.4f}, {0.8f, 0.3f, 0.9f}};
+    for (int i = 0; i < N; i++) {
+        const float* c = C[i % 5];
+        float x = rng.range(2, N - 2.0f), y = rng.range(2, N - 2.0f);
+        im.rect((int)x, (int)y, (int)x + 2 + (i % 2), (int)y + 3 - (i % 2), c[0], c[1], c[2], 0.95f);
+    }
     return im;
 }
 
@@ -507,6 +640,53 @@ void make_level_textures(LevelId level, int N, Image out[MAT_COUNT]) {
             out[MAT_WALL] = out[MAT_PROP];
             out[MAT_LIGHT] = light_panel(N / 8, N / 8, 0);
             break;
+        case LevelId::L2:
+            out[MAT_WALL] = tunnel_wall(N);
+            out[MAT_BLOCK] = out[MAT_WALL];
+            out[MAT_FLOOR] = concrete(N, N, 0.30f, 404, false);
+            out[MAT_FLOOR2] = grate(N);
+            out[MAT_CEIL] = concrete(N / 2, N / 2, 0.24f, 405, false);
+            out[MAT_LIGHT] = caged_bulb(N);
+            out[MAT_PROP] = rusty_pipe(N);
+            break;
+        case LevelId::L4:
+            out[MAT_WALL] = cubicle_fabric(N);
+            out[MAT_FLOOR] = office_carpet(N);
+            out[MAT_CEIL] = ceiling_tiles(N);
+            out[MAT_LIGHT] = light_panel(N / 4, N / 8, 0);
+            out[MAT_BLOCK] = desk_side(N);
+            out[MAT_ROOF] = desk_top(N);
+            out[MAT_PROP] = concrete(N / 2, N, 0.80f, 406, true);
+            break;
+        case LevelId::L6: {
+            // the lobby with the lights cut: same rooms, colour drained out of everything
+            out[MAT_WALL] = wallpaper(N);
+            for (size_t i = 0; i < out[MAT_WALL].rgba.size(); i += 4) {
+                uint8_t* p = &out[MAT_WALL].rgba[i];
+                int l = (p[0] * 3 + p[1] * 5 + p[2] * 2) / 10;
+                p[0] = (uint8_t)(l * 0.55f); p[1] = (uint8_t)(l * 0.55f); p[2] = (uint8_t)(l * 0.6f);
+            }
+            out[MAT_FLOOR] = concrete(N, N, 0.22f, 407, false);
+            out[MAT_CEIL] = ceiling_tiles(N);
+            out[MAT_LIGHT] = light_panel(N / 4, N / 8, 0);
+            out[MAT_PROP] = out[MAT_WALL];
+            break;
+        }
+        case LevelId::L37:
+            out[MAT_WALL] = pool_tiles(N, 0.97f, 0.99f, 1.0f, 0);
+            out[MAT_FLOOR] = pool_tiles(N, 0.92f, 0.97f, 1.0f, 0.5f);
+            out[MAT_FLOOR2] = pool_tiles(N, 0.55f, 0.80f, 0.95f, 1.0f);
+            out[MAT_CEIL] = pool_tiles(N / 2, 0.98f, 0.98f, 0.98f, 0);
+            out[MAT_LIGHT] = light_panel(N / 4, N / 8, 0);
+            out[MAT_PROP] = out[MAT_WALL];
+            break;
+        case LevelId::LFun:
+            out[MAT_WALL] = party_wall(N);
+            out[MAT_FLOOR] = confetti_carpet(N);
+            out[MAT_CEIL] = ceiling_tiles(N);
+            out[MAT_LIGHT] = light_panel(N / 4, N / 8, 0.4f);
+            out[MAT_PROP] = out[MAT_WALL];
+            break;
         default: break;
     }
     // anything a level doesn't use still gets a valid texture
@@ -515,6 +695,22 @@ void make_level_textures(LevelId level, int N, Image out[MAT_COUNT]) {
 }
 
 // =================================================================== sprites
+Sprite item_sprite(ItemType t) {
+    switch (t) {
+        case ItemType::AlmondWater: return SPR_ALMOND;
+        case ItemType::EnergyDrink: return SPR_ENERGY;
+        case ItemType::MemoryJuice: return SPR_JUICE;
+        case ItemType::RoyalRation: return SPR_ROYAL;
+        case ItemType::LiquidPain: return SPR_PAIN;
+        case ItemType::CashewWater: return SPR_CASHEW;
+        case ItemType::LuckyMilk: return SPR_LUCKY;
+        case ItemType::Firesalt: return SPR_FIRESALT;
+        case ItemType::Flashlight: return SPR_FLASHLIGHT;
+        case ItemType::Crowbar: return SPR_CROWBAR;
+        default: return SPR_WHITE;
+    }
+}
+
 Image make_sprite(Sprite s) {
     switch (s) {
         case SPR_WHITE: return Image(4, 4, 0xffffffffu);
@@ -667,6 +863,92 @@ Image make_sprite(Sprite s) {
                 for (int x = 0; x < 64; x++) {
                     float d = std::sqrt((x - 31.5f) * (x - 31.5f) + (y - 31.5f) * (y - 31.5f)) / 32;
                     im.set(x, y, 1, 1, 1, clampf(1 - d, 0, 1) * clampf(1 - d, 0, 1));
+                }
+            return im;
+        }
+        case SPR_ROYAL: { // a ration tin with a crown on the label
+            Image im(64, 64, 0);
+            im.rect(14, 22, 50, 54, 0.62f, 0.62f, 0.6f, 1);
+            im.rect(14, 22, 50, 26, 0.8f, 0.8f, 0.78f, 1);
+            im.rect(16, 30, 48, 46, 0.55f, 0.12f, 0.15f, 1);
+            im.line(24, 42, 26, 34, 2, 0.95f, 0.8f, 0.2f, 1); im.line(26, 34, 32, 40, 2, 0.95f, 0.8f, 0.2f, 1);
+            im.line(32, 40, 38, 34, 2, 0.95f, 0.8f, 0.2f, 1); im.line(38, 34, 40, 42, 2, 0.95f, 0.8f, 0.2f, 1);
+            im.rect(24, 42, 40, 44, 0.95f, 0.8f, 0.2f, 1);
+            return im;
+        }
+        case SPR_PAIN: { // a syringe-like vial of red
+            Image im(64, 64, 0);
+            im.rect(27, 10, 37, 54, 0.9f, 0.9f, 0.9f, 0.6f);
+            im.rect(28, 20, 36, 53, 0.85f, 0.05f, 0.08f, 1);
+            im.rect(25, 6, 39, 11, 0.2f, 0.2f, 0.2f, 1);
+            for (int i = 0; i < 4; i++) im.rect(37, 24 + i * 7, 40, 25 + i * 7, 0.2f, 0.2f, 0.2f, 1);
+            im.rect(29, 21, 31, 50, 1, 0.6f, 0.6f, 0.5f);
+            return im;
+        }
+        case SPR_CASHEW: { // a milky bottle, cashew on the label
+            Image im(64, 64, 0);
+            im.rect(22, 16, 42, 60, 0.92f, 0.88f, 0.78f, 0.9f);
+            im.rect(27, 8, 37, 16, 0.92f, 0.88f, 0.78f, 0.9f);
+            im.rect(26, 4, 38, 9, 0.55f, 0.35f, 0.15f, 1);
+            im.rect(22, 30, 42, 46, 0.35f, 0.55f, 0.3f, 1);
+            im.disc(32, 38, 5, 0.85f, 0.7f, 0.45f, 1);
+            return im;
+        }
+        case SPR_LUCKY: { // a milk carton with a clover
+            Image im(64, 64, 0);
+            im.rect(18, 20, 46, 60, 0.95f, 0.95f, 0.92f, 1);
+            im.line(18, 20, 32, 8, 3, 0.95f, 0.95f, 0.92f, 1); im.line(46, 20, 32, 8, 3, 0.95f, 0.95f, 0.92f, 1);
+            im.rect(18, 20, 46, 28, 0.2f, 0.65f, 0.3f, 1);
+            for (int k = 0; k < 4; k++) im.disc(32 + (k % 2 ? 4.0f : -4.0f), 42 + (k / 2 ? 4.0f : -4.0f), 4.5f, 0.15f, 0.7f, 0.25f, 1);
+            im.line(32, 46, 34, 54, 1.5f, 0.15f, 0.6f, 0.25f, 1);
+            return im;
+        }
+        case SPR_FIRESALT: { // a little pouch of glowing orange crystals
+            Image im(64, 64, 0);
+            im.disc(32, 40, 17, 0.55f, 0.4f, 0.25f, 1);
+            im.rect(26, 18, 38, 26, 0.5f, 0.35f, 0.2f, 1);
+            Rng rng(77);
+            for (int i = 0; i < 14; i++) im.disc(rng.range(20, 44), rng.range(30, 52), rng.range(1.5f, 3.5f), 1, 0.55f + rng.f01() * 0.3f, 0.1f, 1);
+            im.disc(32, 40, 22, 1, 0.5f, 0.1f, 0.15f, 8);
+            return im;
+        }
+        case SPR_FLASHLIGHT: {
+            Image im(64, 64, 0);
+            im.rect(14, 26, 46, 38, 0.18f, 0.18f, 0.2f, 1);
+            im.rect(44, 22, 54, 42, 0.3f, 0.3f, 0.32f, 1);
+            im.rect(52, 24, 56, 40, 0.95f, 0.95f, 0.8f, 1);
+            im.rect(22, 26, 28, 28, 0.8f, 0.2f, 0.2f, 1);
+            for (int i = 0; i < 5; i++) im.rect(16 + i * 5, 36, 18 + i * 5, 38, 0.1f, 0.1f, 0.1f, 1);
+            return im;
+        }
+        case SPR_CROWBAR: {
+            Image im(64, 64, 0);
+            im.line(16, 54, 46, 12, 5, 0.6f, 0.1f, 0.1f, 1);
+            im.line(46, 12, 52, 10, 4, 0.6f, 0.1f, 0.1f, 1);
+            im.line(52, 10, 54, 16, 3, 0.6f, 0.1f, 0.1f, 1);
+            im.line(16, 54, 12, 56, 4, 0.6f, 0.1f, 0.1f, 1);
+            im.line(18, 52, 44, 14, 1.5f, 1, 0.5f, 0.5f, 0.4f);
+            return im;
+        }
+        case SPR_BEAM: { // flashlight cookie: bright hot centre, soft edge, a ring
+            Image im(128, 128, 0);
+            for (int y = 0; y < 128; y++)
+                for (int x = 0; x < 128; x++) {
+                    float d = std::sqrt((x - 63.5f) * (x - 63.5f) + (y - 63.5f) * (y - 63.5f)) / 64;
+                    float k = clampf(1.0f - d, 0, 1);
+                    float ring = std::exp(-std::pow((d - 0.55f) / 0.05f, 2.0f)) * 0.15f;
+                    float v = std::pow(k, 0.8f) * 0.9f + ring;
+                    im.set(x, y, v, v * 0.97f, v * 0.88f, 1);
+                }
+            return im;
+        }
+        case SPR_FLAME: {
+            Image im(64, 64, 0);
+            for (int y = 0; y < 64; y++)
+                for (int x = 0; x < 64; x++) {
+                    float dx = (x - 31.5f) / 14, dy = (y - 40) / 22.0f;
+                    float d = dx * dx + (dy < 0 ? dy * dy * 0.35f : dy * dy);
+                    if (d < 1) im.set(x, y, 1, 0.75f - d * 0.4f, 0.3f - d * 0.3f, clampf((1 - d) * 2, 0, 1));
                 }
             return im;
         }

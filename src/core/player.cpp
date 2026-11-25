@@ -20,12 +20,16 @@ const char* death_text(DeathCause c) {
 
 float PlayerState::eye_height() const { return lerpf(EYE_STAND, EYE_CROUCH, crouch); }
 
-float PlayerState::noise() const {
-    if (!alive) return 0;
+static float raw_noise(float speed, float crouch) {
     if (speed < 0.3f) return 0.5f;
     if (crouch > 0.5f) return 2.0f;
     if (speed > WALK_SPEED * 1.2f) return 17.0f;
     return 7.0f;
+}
+
+float PlayerState::noise() const {
+    if (!alive) return 0;
+    return raw_noise(speed, crouch) * (lucky > 0 ? 0.3f : 1.0f); // lucky o' milk: nobody notices you
 }
 
 void player_tick(PlayerState& p, const InputCmd& cmd, const World& world, float dt) {
@@ -53,6 +57,7 @@ void player_tick(PlayerState& p, const InputCmd& cmd, const World& world, float 
 
     float speed = crouching ? CROUCH_SPEED : (sprinting ? SPRINT_SPEED : WALK_SPEED);
     if (boosted) speed *= BOOST_MULT;
+    if (p.slow > 0) speed *= 0.72f;
     Vec2 fwd = yaw_forward(p.yaw), right = yaw_right(p.yaw);
     Vec2 target = (fwd * mz + right * mx) * speed;
 
@@ -63,7 +68,7 @@ void player_tick(PlayerState& p, const InputCmd& cmd, const World& world, float 
 
     Vec2 before{p.pos.x, p.pos.z};
     Vec2 pos = before + p.vel * dt;
-    collide_circle(world, pos, PLAYER_RADIUS);
+    if (!p.noclip) collide_circle(world, pos, PLAYER_RADIUS);
     p.pos.x = pos.x;
     p.pos.z = pos.z;
 

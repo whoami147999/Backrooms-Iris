@@ -17,10 +17,13 @@ struct InputCmd {
     float yaw = 0;     // radians
     float pitch = 0;   // radians
     uint8_t buttons = 0;
-    // action counters: the client bumps one per press, the sim acts on every change.
+    // Action counters: the client bumps one per press and the sim acts on every change.
     // Counters (not edges) survive packet loss: any later packet still carries the bump.
     uint8_t pickup_ctr = 0;
-    uint8_t use_ctr[3] = {0, 0, 0};
+    uint8_t use_ctr = 0;
+    uint8_t use_item = 0;   // ItemType to use when use_ctr changes
+    uint8_t light_ctr = 0;  // flashlight toggle
+    uint8_t attack_ctr = 0; // crowbar swing
 };
 
 enum class DeathCause : uint8_t { None, Bacteria, Hound, Smiler, SkinStealer, Partygoer, Sanity, MemoryJuice };
@@ -40,14 +43,21 @@ struct PlayerState {
     float health = 100;
     float sanity = 100;
     float boost = 0;       // energy drink seconds left
+    float slow = 0;        // cashew water seconds left
+    float lucky = 0;       // lucky o' milk seconds left
     float juice = -1;      // seconds since drinking memory juice (-1 = sober)
-    float hurt = 0;        // seconds since last damage (for regen + red flash)
-    uint8_t inv[3] = {0, 0, 0}; // almond water, energy drink, memory juice
+    float hurt = 99;       // seconds since last damage (regen + red flash)
+    float swing = 99;      // seconds since the last crowbar swing
+    float battery = 1;     // flashlight charge 0..1
+    bool light_on = false; // flashlight
+    bool noclip = false;   // sandbox: walk through walls
+    uint8_t inv[ITEM_COUNT] = {};
     bool alive = true;
     DeathCause cause = DeathCause::None;
 
     float eye_height() const;
     float noise() const;   // how far away hounds can hear you, metres
+    bool has(ItemType t) const { return inv[(int)t] > 0; }
 };
 
 void player_tick(PlayerState& p, const InputCmd& cmd, const World& world, float dt);

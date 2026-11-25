@@ -10,6 +10,7 @@
 #include <string>
 
 #include "../core/config.h"
+#include "../core/world.h"
 #include "app.h"
 
 using namespace iris;
@@ -17,7 +18,8 @@ using namespace iris;
 static void usage() {
     std::printf(
         "Backrooms Iris %s\n\n"
-        "  --level N           jump straight into level N (0, 1, 5, 8, 9, 11)\n"
+        "  --level N           jump straight into level N (0 1 2 4 5 6 8 9 11 37 fun)\n"
+        "  --sandbox           ...in sandbox mode\n"
         "  --seed N            world seed for --level\n"
         "  --host              host a multiplayer game right away\n"
         "  --join IP           join a multiplayer game right away\n"
@@ -27,10 +29,9 @@ static void usage() {
         IRIS_VERSION);
 }
 
-static int level_from_number(int n) {
-    const int nums[] = {0, 1, 5, 8, 9, 11};
-    for (int i = 0; i < 6; i++) if (nums[i] == n) return i;
-    return -1;
+static int level_arg(const char* s) {
+    LevelId id;
+    return level_from_number(s, id) ? (int)id : -1;
 }
 
 int main(int argc, char** argv) {
@@ -39,7 +40,7 @@ int main(int argc, char** argv) {
         std::string a = argv[i];
         auto next = [&]() -> const char* { return i + 1 < argc ? argv[++i] : ""; };
         if (a == "--help" || a == "-h") { usage(); return 0; }
-        else if (a == "--level") dev.level = level_from_number(std::atoi(next()));
+        else if (a == "--level") dev.level = level_arg(next());
         else if (a == "--seed") dev.seed = (uint32_t)std::strtoul(next(), nullptr, 10);
         else if (a == "--host") dev.host = true;
         else if (a == "--join") dev.join = next();
@@ -57,6 +58,13 @@ int main(int argc, char** argv) {
         else if (a == "--screen") dev.screen = next();
         else if (a == "--autowalk") dev.autowalk = true;
         else if (a == "--name") dev.name = next();
+        else if (a == "--sandbox") dev.sandbox = true;
+        else if (a == "--sandbox-menu") { dev.sandbox = true; dev.sandbox_menu = true; }
+        else if (a == "--light") dev.light = true;
+        else if (a == "--give-all") dev.give_all = true;
+        else if (a == "--select") dev.select = std::atoi(next());
+        else if (a == "--flare") dev.flare = std::atoi(next());
+        else if (a == "--stun") dev.stun = true;
         else if (a == "--nohud") dev.hud = false;
         else { std::fprintf(stderr, "unknown option %s (try --help)\n", a.c_str()); return 2; }
     }

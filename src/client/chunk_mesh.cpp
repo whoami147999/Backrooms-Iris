@@ -188,6 +188,7 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out) {
     const int c0x = kx * CHUNK_CELLS, c0z = kz * CHUNK_CELLS;
     out.exits.clear();
     out.items.clear();
+    out.balloons.clear();
 
     // light sources around the chunk
     int m = (int)(li.light_radius / CELL) + 1;
@@ -230,7 +231,7 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out) {
                     float cxm = x0 + CELL * 0.5f, czm = z0 + CELL * 0.5f;
                     uint8_t lum = ls == LightState::Dead ? 60 : 255;
                     if (id == LevelId::L8) { // glowing fungus on the floor
-                        float s = 0.8f, y = 0.015f;
+                        float s = 0.8f, y = 0.02f;
                         B.quad(MAT_LIGHT, {cxm - s, y, czm + s}, {cxm + s, y, czm + s}, {cxm + s, y, czm - s}, {cxm - s, y, czm - s}, lum);
                     } else if (id == LevelId::L9) { // streetlight: pole, head, lamp
                         B.box(MAT_PROP, cxm, czm, 0.07f, 0.07f, 0, li.light_y + 0.2f, 0.5f, 5.0f, 1);
@@ -241,7 +242,7 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out) {
                         float sx = 0.6f, sz = 0.3f;
                         if (id == LevelId::L5) { sx = sz = (W.floor_mat(cx, cz) == 1 ? 0.7f : 0.22f); } // chandelier vs sconce
                         if (id == LevelId::L1) { sx = 0.75f; sz = 0.12f; }                                // long tube
-                        float y = (id == LevelId::L1 ? li.light_y : H) - 0.004f;
+                        float y = (id == LevelId::L1 ? li.light_y : H) - 0.015f;
                         B.quad(MAT_LIGHT, {cxm - sx, y, czm - sz}, {cxm + sx, y, czm - sz}, {cxm + sx, y, czm + sz}, {cxm - sx, y, czm + sz}, lum);
                         if (id == LevelId::L1) { // hanging cables
                             B.box(MAT_PROP, cxm - 0.6f, czm, 0.01f, 0.01f, li.light_y, H, 0.1f, 1, 1);
@@ -310,16 +311,54 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out) {
             }
 
             // ----- thin walls owned by this cell (west + north edges), corner posts, pillars
+            const float WH = li.wall_h;
+            const bool low = WH < H - 0.01f;
+            auto cap = [&](float xa, float za, float xb, float zb) { // top of a low wall
+                B.grid(MAT_WALL, {xa, WH, zb}, {xb - xa, 0, 0}, {0, 0, za - zb}, 1, 1, {0, 1, 0},
+                       [&](Vec3 p, float& u, float& t) { u = (p.x + p.z) / TEX_WALL; t = 0.97f; }, [](Vec3) { return 1.0f; });
+            };
             if (W.wall_x(cx, cz)) {
-                B.vface(MAT_WALL, {x0 + hw, 0, z1}, {0, 0, -CELL}, {1, 0, 0}, 0, H, TEX_WALL, H, 2, 3, false);
-                B.vface(MAT_WALL, {x0 - hw, 0, z0}, {0, 0, CELL}, {-1, 0, 0}, 0, H, TEX_WALL, H, 2, 3, false);
+                B.vface(MAT_WALL, {x0 + hw, 0, z1}, {0, 0, -CELL}, {1, 0, 0}, 0, WH, TEX_WALL, WH, 2, low ? 1 : 3, false);
+                B.vface(MAT_WALL, {x0 - hw, 0, z0}, {0, 0, CELL}, {-1, 0, 0}, 0, WH, TEX_WALL, WH, 2, low ? 1 : 3, false);
+                if (low) cap(x0 - hw, z0, x0 + hw, z1);
             }
             if (W.wall_z(cx, cz)) {
-                B.vface(MAT_WALL, {x0, 0, z0 + hw}, {CELL, 0, 0}, {0, 0, 1}, 0, H, TEX_WALL, H, 2, 3, false);
-                B.vface(MAT_WALL, {x1, 0, z0 - hw}, {-CELL, 0, 0}, {0, 0, -1}, 0, H, TEX_WALL, H, 2, 3, false);
+                B.vface(MAT_WALL, {x0, 0, z0 + hw}, {CELL, 0, 0}, {0, 0, 1}, 0, WH, TEX_WALL, WH, 2, low ? 1 : 3, false);
+                B.vface(MAT_WALL, {x1, 0, z0 - hw}, {-CELL, 0, 0}, {0, 0, -1}, 0, WH, TEX_WALL, WH, 2, low ? 1 : 3, false);
+                if (low) cap(x0, z0 - hw, x1, z0 + hw);
             }
-            if (W.post(cx, cz)) B.box(MAT_WALL, x0, z0, hp, hp, 0, H, TEX_WALL, H, 1);
-            else if (W.pillar(cx, cz)) B.box(MAT_PROP, x0, z0, hl, hl, 0, H, TEX_WALL, H, 1);
+            if (W.post(cx, cz)) {
+                B.box(MAT_WALL, x0, z0, hp, hp, 0, WH, TEX_WALL, WH, 1);
+                if (low) cap(x0 - hp, z0 - hp, x0 + hp, z0 + hp);
+            } else if (W.pillar(cx, cz)) B.box(MAT_PROP, x0, z0, hl, hl, 0, H, TEX_WALL, H, 1);
+
+            // ----- Level 2: pipes along the tunnel walls
+            bool along_x;
+            if (W.pipe_run(cx, cz, along_x)) {
+                auto pipe = [&](float px, float pz, float hx, float hz, float y0, float y1) {
+                    B.box(MAT_PROP, px, pz, hx, hz, y0, y1, 0.6f, 0.6f, 1);
+                    B.grid(MAT_PROP, {px - hx, y0, pz - hz}, {hx * 2, 0, 0}, {0, 0, hz * 2}, 1, 1, {0, -1, 0},
+                           [&](Vec3 p, float& u, float& t) { u = (p.x + p.z) / 0.6f; t = 0.5f; }, [](Vec3) { return 0.85f; });
+                };
+                float cxm = x0 + CELL * 0.5f, czm = z0 + CELL * 0.5f;
+                for (int side = -1; side <= 1; side += 2) {
+                    if (along_x) {
+                        if (!W.solid(cx, cz + side)) continue;
+                        float pz = czm + side * (CELL * 0.5f - 0.16f);
+                        pipe(cxm, pz, CELL * 0.5f + 0.01f, 0.09f, H - 0.42f, H - 0.24f);
+                        pipe(cxm, pz - side * 0.05f, CELL * 0.5f + 0.01f, 0.05f, H - 0.75f, H - 0.65f);
+                    } else {
+                        if (!W.solid(cx + side, cz)) continue;
+                        float px = cxm + side * (CELL * 0.5f - 0.16f);
+                        pipe(px, czm, 0.09f, CELL * 0.5f + 0.01f, H - 0.42f, H - 0.24f);
+                        pipe(px - side * 0.05f, czm, 0.05f, CELL * 0.5f + 0.01f, H - 0.75f, H - 0.65f);
+                    }
+                }
+            }
+            if (W.balloon(cx, cz)) {
+                float jx = (float)(hash3(W.seed(), cx, cz, 501) % 100u) / 100.0f - 0.5f, jz = (float)(hash3(W.seed(), cx, cz, 502) % 100u) / 100.0f - 0.5f;
+                out.balloons.push_back({x0 + CELL * (0.5f + jx * 0.6f), 1.9f + jx * 0.4f, z0 + CELL * (0.5f + jz * 0.6f)});
+            }
         }
     }
 
