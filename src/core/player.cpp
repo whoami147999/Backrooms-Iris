@@ -40,7 +40,7 @@ static float raw_noise(float speed, float crouch) {
 }
 
 float PlayerState::noise() const {
-    if (!alive) return 0;
+    if (!alive || silent > 0) return 0;
     return raw_noise(speed, crouch) * (lucky > 0 ? 0.3f : 1.0f) * std::pow(0.8f, (float)perk(Perk::Quiet)); // lucky o' milk: nobody notices you
 }
 
@@ -70,6 +70,7 @@ void player_tick(PlayerState& p, const InputCmd& cmd, const World& world, float 
     float speed = crouching ? CROUCH_SPEED : (sprinting ? SPRINT_SPEED : WALK_SPEED);
     if (boosted) speed *= BOOST_MULT;
     if (p.slow > 0) speed *= 0.72f;
+    if (world.water(floor_to_int(p.pos.x / CELL), floor_to_int(p.pos.z / CELL))) speed *= 0.62f; // wading through the sea
     Vec2 fwd = yaw_forward(p.yaw), right = yaw_right(p.yaw);
     Vec2 target = (fwd * mz + right * mx) * speed;
 

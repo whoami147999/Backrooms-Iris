@@ -50,6 +50,7 @@ bool App::init(const DevOptions& dev) {
     join_ip_ = cfg_.last_ip;
     if (dev.camcorder >= 0) cfg_.camcorder = dev.camcorder != 0;
     if (dev.film >= 0) cfg_.film = dev.film != 0;
+    if (dev.retro >= 0) cfg_.retro = dev.retro != 0;
 
     PlatformConfig pc;
     pc.fullscreen = cfg_.fullscreen && dev.shot_path.empty();
@@ -71,6 +72,7 @@ bool App::init(const DevOptions& dev) {
     rs_.film = cfg_.film;
     rs_.camcorder = cfg_.camcorder;
     rs_.atmosphere = cfg_.atmosphere;
+    rs_.retro = cfg_.retro;
     std::printf("[iris] renderer init\n");
     ren_.init(rs_);
     std::printf("[iris] net init\n");
@@ -92,7 +94,7 @@ void App::shutdown() {
 void App::apply_display_settings() {
     platform_set_fullscreen(cfg_.fullscreen);
     platform_set_vsync(cfg_.vsync);
-    ren_.set_style(cfg_.film, cfg_.camcorder, cfg_.atmosphere);
+    ren_.set_style(cfg_.film, cfg_.camcorder, cfg_.atmosphere, cfg_.retro);
 }
 
 // Command-line shortcuts for testing: jump straight into a level / screen / state.
@@ -151,6 +153,15 @@ void App::dev_setup() {
             e.anim = 1.0f;
             e.speed = 1.0f;
             sim->freeze_ents = true; // hold still for the camera
+        }
+        if (!dev_.prop.empty()) {
+            Vec2 f = yaw_forward(cmd_.yaw);
+            Prop pr;
+            pr.id = 901;
+            pr.kind = dev_.prop == "lure" ? PropKind::Lure : PropKind::Glow;
+            pr.pos = Vec2{p.pos.x, p.pos.z} + f * 2.2f;
+            pr.life = 60;
+            sim->props.push_back(pr);
         }
         if (dev_.flare > 0) {
             Vec2 f = yaw_forward(cmd_.yaw);
@@ -254,24 +265,42 @@ void App::build_menu() {
             level_choice(&host_level_);
             diff_choice();
             spacer();
+            if (!platform_is_vita()) {
+                if (tail_.running && !tail_.self_ip.empty()) {
+                    label("TAILSCALE: " + tail_.self_ip + "  (" + tail_.self_name + ")");
+                    label("FRIENDS ON YOUR TAILNET SEE THIS GAME IN THEIR JOIN LIST");
+                } else if (tail_.available) label("TAILSCALE IS INSTALLED BUT NOT CONNECTED");
+                else label("ONLINE WITH FRIENDS: INSTALL TAILSCALE (SEE README)");
+            }
             button("START HOSTING", [this] { start_host(); });
             button("BACK", [this] { back(); });
             break;
         case Screen::Join: {
             m.title = "JOIN GAME";
-            m.subtitle = browser_.found.empty() ? "SEARCHING YOUR NETWORK..." : "GAMES ON YOUR NETWORK";
+            m.subtitle = browser_.found.empty() ? "SEARCHING YOUR NETWORK..." : "GAMES ON YOUR NETWORK AND TAILNET";
             for (const FoundServer& f : browser_.found) {
                 std::string addr = net_addr_str(f.addr);
                 char buf[160];
-                std::snprintf(buf, sizeof buf, "%s  %d/%d", f.name.c_str(), f.players, f.max_players);
+                std::snprintf(buf, sizeof buf, "%s  %d/%d%s", f.name.c_str(), f.players, f.max_players, f.via.empty() ? "" : "  [TAILSCALE]");
                 std::string ip = addr.substr(0, addr.find(':'));
-                button(buf, [this, ip] { start_join(ip); }, f.level + "  " + addr + (f.protocol != IRIS_PROTOCOL_VERSION ? "  (OTHER VERSION)" : ""));
+                button(buf, [this, ip] { start_join(ip); },
+                       f.level + "  " + (f.via.empty() ? addr : f.via + " " + addr) + (f.protocol != IRIS_PROTOCOL_VERSION ? "  (OTHER VERSION)" : ""));
             }
-            if (browser_.found.empty()) label("NOTHING YET  -  IS THE HOST ON THE SAME WIFI?");
+            if (browser_.found.empty()) label("NOTHING YET  -  SAME WIFI, OR BOTH ON TAILSCALE?");
+            if (!platform_is_vita()) {
+                int online = 0;
+                for (const TailPeer& p : tail_.peers) online += p.online;
+                if (tail_.running) label("TAILSCALE: " + tail_.self_ip + "  -  " + std::to_string(online) + " FRIEND PC(S) ONLINE");
+                else if (tail_.available) label("TAILSCALE: NOT CONNECTED (RUN TAILSCALE UP)");
+                else label("TAILSCALE: NOT INSTALLED (LAN ONLY)");
+            }
             spacer();
-            Item ip; ip.kind = Item::Text; ip.label = "DIRECT IP"; ip.text = &join_ip_; ip.charset = "0123456789."; ip.maxlen = 15;
+            Item ip; ip.kind = Item::Text; ip.label = "IP OR NAME"; ip.text = &join_ip_;
+            ip.charset = platform_is_vita() ? "0123456789." : "0123456789.ABCDEFGHIJKLMNOPQRSTUVWXYZ-";
+            ip.maxlen = 40;
+            ip.hint = "A LAN IP, A TAILSCALE IP (100.X.X.X) OR A TAILSCALE MACHINE NAME";
             m.items.push_back(ip);
-            button("CONNECT TO IP", [this] { start_join(join_ip_); });
+            button("CONNECT", [this] { start_join(join_ip_); });
             button("BACK", [this] { back(); });
             break;
         }
@@ -292,6 +321,8 @@ void App::build_menu() {
                 toggle("FULLSCREEN", &cfg_.fullscreen, [this] { apply_display_settings(); });
                 toggle("VSYNC", &cfg_.vsync, [this] { apply_display_settings(); });
             }
+            toggle("RETRO PS1 LOOK", &cfg_.retro, [this] { apply_display_settings(); });
+            m.items.back().hint = platform_is_vita() ? "CRISP PIXEL TEXTURES" : "CHUNKY PIXELS, DITHERING, WOBBLY VERTICES, CRISP TEXTURES";
             toggle("FILM EFFECTS", &cfg_.film, [this] { apply_display_settings(); });
             m.items.back().hint = platform_is_vita() ? "FILM GRAIN AND A DARK VIGNETTE" : "BLOOM, FILM GRAIN, LENS FRINGING, COLOUR GRADING";
             toggle("CAMCORDER LOOK", &cfg_.camcorder, [this] { apply_display_settings(); });
@@ -616,7 +647,9 @@ void App::game_input() {
     if (dev_.autowalk) cmd_.move_z = 0.8f;
     if (in_.crouch_toggle) crouch_toggle_ = !crouch_toggle_;
     if (in_.sprint && in_.using_gamepad) crouch_toggle_ = false;
-    cmd_.buttons = (uint8_t)((in_.sprint ? BTN_SPRINT : 0) | ((in_.crouch || crouch_toggle_) ? BTN_CROUCH : 0));
+    cmd_.buttons = (uint8_t)((in_.sprint ? BTN_SPRINT : 0) | ((in_.crouch || crouch_toggle_) ? BTN_CROUCH : 0) |
+                             (in_.fire_held && selected_ == ItemType::Rifle ? BTN_FIRE : 0));
+    cmd_.attack_item = is_weapon(selected_) ? (uint8_t)selected_ : 0;
 
     // hotbar: the items you own, in a fixed order
     std::vector<ItemType> have = owned();
@@ -633,8 +666,9 @@ void App::game_input() {
         if (in_.interact) cmd_.pickup_ctr++;
         if (in_.light) cmd_.light_ctr++;
         if (in_.use_item && selected_ != ItemType::None) {
-            if (selected_ == ItemType::Crowbar) cmd_.attack_ctr++;
+            if (is_weapon(selected_)) cmd_.attack_ctr++;
             else if (selected_ == ItemType::Flashlight) cmd_.light_ctr++;
+            else if (selected_ == ItemType::Compass || selected_ == ItemType::Radio) {} // passive tools
             else { cmd_.use_item = (uint8_t)selected_; cmd_.use_ctr++; }
         }
     } else if (!v.multiplayer && (in_.accept || in_.interact)) {
@@ -711,7 +745,11 @@ void App::draw_sandbox_menu() {
         tx += ren_.text(tx, py + 4 * s, s, SB_TABS[t], c) + 8 * s;
     }
     float y = py + 16 * s;
+    const int VIS = 11; // rows that fit: the list scrolls with the selection
+    int count = sb_tab_ == 0 ? (int)EntityType::COUNT : sb_tab_ == 1 ? ITEM_COUNT - 1 : SB_TOOLS;
+    int first = std::clamp(sb_sel_ - VIS / 2, 0, std::max(0, count - VIS));
     auto row = [&](int i, const std::string& label, const std::string& value, Sprite icon) {
+        if (i < first || i >= first + VIS) return;
         bool sel = i == sb_sel_;
         if (sel) ren_.rect(px + 2 * s, y - 2 * s, pw - 4 * s, 10 * s, rgba(0.9f, 0.8f, 0.4f, 0.18f));
         float x = px + 5 * s;
@@ -723,7 +761,9 @@ void App::draw_sandbox_menu() {
     if (sb_tab_ == 0) {
         for (int i = 0; i < (int)EntityType::COUNT; i++) row(i, entity_name((EntityType)i), "", SPR_WHITE);
     } else if (sb_tab_ == 1) {
-        for (int i = 1; i < ITEM_COUNT; i++) row(i - 1, item_info((ItemType)i).name, "", item_sprite((ItemType)i));
+        for (int i = 1; i < ITEM_COUNT; i++) row(i - 1, item_info((ItemType)i).name, item_info((ItemType)i).sandbox_only ? "GUN" : "", item_sprite((ItemType)i));
+        if (first > 0) ren_.text(px + pw - 6 * s, py + 16 * s, s, "^", rgba(1, 0.9f, 0.6f), 2);
+        if (first + VIS < count) ren_.text(px + pw - 6 * s, py + ph - 20 * s, s, "V", rgba(1, 0.9f, 0.6f), 2);
     } else {
         const PlayerState& me = sim->players[0].st;
         row(0, "GOD MODE", sim->god ? "ON" : "OFF", SPR_WHITE);
@@ -772,7 +812,18 @@ void App::draw_hud(const GameView& v, const ScreenFx& fx) {
 
     if (me.alive) {
         // ----- held item, bottom right of the view (drawn first so the HUD sits on top)
-        if (selected_ == ItemType::Crowbar || me.light_on) {
+        if (is_gun(selected_)) { // the gun in your hands: recoil, a muzzle flash, a crosshair
+            float sz = 170 * s;
+            float bob = std::sin(me.bob) * 3 * s * std::min(1.0f, me.speed / WALK_SPEED);
+            float kick = me.swing < 0.12f ? (1.0f - me.swing / 0.12f) : 0.0f;
+            float gx = W * 0.56f, gy = H - sz * 0.78f - 22 * s + bob + kick * 14 * s; // above the hotbar
+            if (me.swing < 0.06f) ren_.sprite(SPR_GLOW, gx - 12 * s, gy - 18 * s, 50 * s, 50 * s, rgba(1, 0.75f, 0.3f, 0.95f), 0, true);
+            ren_.sprite(item_sprite(selected_), gx, gy, sz, sz, rgba(0.95f, 0.95f, 0.95f), -0.1f - kick * 0.25f);
+            ren_.rect(W / 2 - 4 * s, H / 2 - s * 0.5f, 3 * s, s, rgba(1, 1, 1, 0.8f));
+            ren_.rect(W / 2 + 1 * s, H / 2 - s * 0.5f, 3 * s, s, rgba(1, 1, 1, 0.8f));
+            ren_.rect(W / 2 - s * 0.5f, H / 2 - 4 * s, s, 3 * s, rgba(1, 1, 1, 0.8f));
+            ren_.rect(W / 2 - s * 0.5f, H / 2 + 1 * s, s, 3 * s, rgba(1, 1, 1, 0.8f));
+        } else if (selected_ == ItemType::Crowbar || me.light_on) {
             bool crow = selected_ == ItemType::Crowbar;
             float sz = 90 * s;
             float bob = std::sin(me.bob) * 3 * s * std::min(1.0f, me.speed / WALK_SPEED);
@@ -780,6 +831,53 @@ void App::draw_hud(const GameView& v, const ScreenFx& fx) {
             ren_.sprite(crow ? SPR_CROWBAR : SPR_FLASHLIGHT, W * 0.62f - swing * 40 * s, H - sz * 0.9f + bob + swing * 10 * s, sz, sz,
                         rgba(0.9f, 0.9f, 0.9f), crow ? -0.4f - swing * 1.3f : -0.15f);
         }
+        // compass: a needle toward the nearest exit door
+        if (me.has(ItemType::Compass)) {
+            if (now_ - compass_t_ > 0.5) {
+                compass_t_ = now_;
+                compass_ok_ = false;
+                float best = 1e9f;
+                int pcx = floor_to_int(me.pos.x / CELL), pcz = floor_to_int(me.pos.z / CELL);
+                for (int cz = pcz - 40; cz <= pcz + 40; cz++)
+                    for (int cx = pcx - 40; cx <= pcx + 40; cx++) {
+                        ExitDoor d;
+                        if (!v.world.exit_door(cx, cz, &d)) continue;
+                        float dist = (d.pos - Vec2{me.pos.x, me.pos.z}).len();
+                        if (dist < best) { best = dist; compass_to_ = d.pos; compass_ok_ = true; }
+                    }
+            }
+            float cx = W / 2, cy = 22 * s, r = 12 * s;
+            ren_.sprite(SPR_GLOW, cx - r * 1.4f, cy - r * 1.4f, r * 2.8f, r * 2.8f, rgba(0, 0, 0, 0.6f));
+            if (compass_ok_) {
+                Vec2 d = compass_to_ - Vec2{me.pos.x, me.pos.z};
+                float ang = std::atan2(-d.x, -d.z) - cmd_.yaw; // relative to where you face
+                ren_.sprite(SPR_WHITE, cx - s * 0.75f, cy - r, 1.5f * s, 2 * r, rgba(0.5f, 0.5f, 0.5f, 0.8f), -ang);
+                ren_.sprite(SPR_GLOW, cx + std::sin(-ang) * r - 3 * s, cy - std::cos(-ang) * r - 3 * s, 6 * s, 6 * s, rgba(0.4f, 1, 0.5f), 0, true);
+                char buf[24];
+                std::snprintf(buf, sizeof buf, "EXIT %.0fM", d.len());
+                ren_.text(cx, cy + r + 2 * s, s, buf, rgba(0.6f, 1, 0.65f, 0.85f), 1);
+            } else {
+                ren_.sprite(SPR_WHITE, cx - s * 0.75f, cy - r, 1.5f * s, 2 * r, rgba(0.6f, 0.6f, 0.6f), (float)now_ * 3.0f); // spinning: nothing near
+                ren_.text(cx, cy + r + 2 * s, s, "NO SIGNAL", rgba(0.7f, 0.7f, 0.7f, 0.7f), 1);
+            }
+        }
+        // radio: static rises as something gets close
+        if (me.has(ItemType::Radio)) {
+            float nearest = 1e9f;
+            for (const DrawEntity& e : v.ents) nearest = std::min(nearest, (e.pos - Vec2{me.pos.x, me.pos.z}).len());
+            float sig = clampf(1.0f - nearest / 35.0f, 0, 1);
+            if (sig > 0) {
+                float ox = hash01(17, (int)(now_ * 30), 0, 1), oy = hash01(17, (int)(now_ * 30), 1, 1);
+                ren_.tiled(SPR_NOISE, 0, 0, W, H, rgba(1, 1, 1, sig * sig * 0.18f), 128 * s * 0.5f, ox, oy);
+            }
+            float rx = W - 74 * s, ry = H - 62 * s;
+            ren_.text(rx, ry, s, "RADIO", rgba(0.85f, 0.82f, 0.72f, 0.85f));
+            for (int k = 0; k < 8; k++) {
+                bool lit = k < (int)(sig * 8 + (hash01(19, (int)(now_ * 12), k, 1) - 0.5f) * 2 * sig);
+                ren_.rect(rx + 32 * s + k * 4 * s, ry + 6 * s - k * 0.8f * s, 3 * s, 1 * s + k * 0.8f * s, lit ? rgba(1, 0.4f + 0.6f * (1 - sig), 0.2f, 0.9f) : rgba(0.3f, 0.3f, 0.3f, 0.6f));
+            }
+        }
+        if (me.flash < 1.2f) ren_.rect(0, 0, W, H, rgba(1, 1, 0.95f, 1.0f - me.flash / 1.2f)); // flash bulb
 
         // ----- bars, bottom left
         float bx = 8 * s, by = H - 42 * s, bw = 64 * s, bh = 3 * s;
@@ -820,7 +918,10 @@ void App::draw_hud(const GameView& v, const ScreenFx& fx) {
             const ItemInfo& info = item_info(selected_);
             std::string use = pad ? (platform_is_vita() ? "SQUARE" : "X") : "CLICK";
             ren_.text(W - 6 * s, hy - 19 * s, s, info.name, rgba(1, 0.92f, 0.7f), 2);
-            ren_.text(W - 6 * s, hy - 10 * s, s, use + ": " + (selected_ == ItemType::Crowbar ? "SWING" : selected_ == ItemType::Flashlight ? "LIGHT" : selected_ == ItemType::Firesalt ? "THROW" : "USE"),
+            ren_.text(W - 6 * s, hy - 10 * s, s, use + ": " + (selected_ == ItemType::Crowbar ? "SWING" : is_gun(selected_) ? (selected_ == ItemType::Rifle ? "HOLD TO FIRE" : "SHOOT")
+  : selected_ == ItemType::Flashlight ? "LIGHT" : (selected_ == ItemType::Compass || selected_ == ItemType::Radio) ? "ALWAYS ON"
+  : (selected_ == ItemType::Firesalt || selected_ == ItemType::FlashBulb || selected_ == ItemType::MusicBox) ? "THROW"
+  : selected_ == ItemType::GlowStick ? "DROP" : "USE"),
                       rgba(0.8f, 0.76f, 0.65f, 0.85f), 2);
         }
 
@@ -1003,12 +1104,18 @@ void App::draw_game(bool overlay_menu) {
     film.aberration = 1.2f + insanity * 4.0f + fx.wobble * 3.0f;
     film.vignette = 0.38f + insanity * 0.25f;
     film.bloom = li.ambient[0] > 0.4f ? 0.12f : (li.outdoor ? 0.35f : (v.me.light_on && li.dark ? 0.45f : 0.85f));
-    film.saturation = 0.88f - insanity * 0.3f;
+    film.saturation = v.world.greyscale() ? 0.0f : 0.88f - insanity * 0.3f; // TH3 SH4DY GR3Y has no colour at all
     film.contrast = 0.32f;
     film.distort = 0.06f + insanity * 0.08f;
     for (int k = 0; k < 3; k++) film.lift[k] = li.fog[k] * 0.12f + 0.006f;
     film.dim = ren_.flicker_dim();
     film.camcorder = cfg_.camcorder;
+    if (cfg_.retro) { // PS1: ~360 lines of chunky pixels, 15-bit colour with ordered dither, a touch more colour
+        film.pixel_h = 360;
+        film.dither = 31;
+        if (!v.world.greyscale()) film.saturation = std::min(1.0f, film.saturation + 0.12f);
+        film.distort *= 0.5f;
+    }
     film_on_ = ren_.post_film(film);
 
     ren_.begin_2d();
@@ -1061,8 +1168,26 @@ void App::run() {
             if (session_->failed(&why)) { leave_game(); error_ = why; }
             else if (session_->ready()) { stack_ = {Screen::Title, Screen::Playing}; build_menu(); }
         }
+        // Tailscale: ask who's on the tailnet every few seconds while the multiplayer screens are open
+        if (!platform_is_vita() && (screen() == Screen::Join || screen() == Screen::Host || screen() == Screen::Multi)) {
+            if (now_ - tail_t_ > 6.0) { tailscale_.refresh(); tail_t_ = now_; }
+            if (!tailscale_.busy()) {
+                TailStatus st = tailscale_.status();
+                bool changed = st.running != tail_.running || st.self_ip != tail_.self_ip || st.peers.size() != tail_.peers.size() ||
+                               st.available != tail_.available;
+                tail_ = st;
+                if (changed && screen() != Screen::Multi) { int sel = menu_.sel; build_menu(); menu_.sel = std::min(sel, (int)menu_.items.size() - 1); }
+            }
+        }
         if (screen() == Screen::Join) {
-            if (now_ - browse_t_ > 1.0) { browser_.scan(now_); browse_t_ = now_; }
+            if (now_ - browse_t_ > 1.0) {
+                browser_.scan(now_);
+                for (const TailPeer& p : tail_.peers) { // and knock on every friend's PC on the tailnet
+                    NetAddr a;
+                    if (p.online && net_resolve(p.ip, IRIS_DEFAULT_PORT, a)) browser_.scan_to(a, "TAILSCALE: " + p.name);
+                }
+                browse_t_ = now_;
+            }
             size_t before = browser_.found.size();
             browser_.scan_poll(now_);
             if (browser_.found.size() != before) {

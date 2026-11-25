@@ -4,6 +4,7 @@
 // Server -> client:  WELCOME / REJECT, SNAPSHOT (20 Hz), and "IRIS!" query answers
 #pragma once
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <string>
@@ -71,6 +72,7 @@ inline void write_cmd(Writer& w, uint32_t seq, const InputCmd& c) {
     w.u8(c.use_item);
     w.u8(c.light_ctr);
     w.u8(c.attack_ctr);
+    w.u8(c.attack_item);
 }
 
 inline InputCmd read_cmd(Reader& r, uint32_t& seq) {
@@ -86,6 +88,7 @@ inline InputCmd read_cmd(Reader& r, uint32_t& seq) {
     c.use_item = r.u8();
     c.light_ctr = r.u8();
     c.attack_ctr = r.u8();
+    c.attack_item = r.u8();
     return c;
 }
 
@@ -97,6 +100,8 @@ inline void write_player(Writer& w, const PlayerState& s) {
     w.f32(s.bob); w.f32(s.speed);
     w.f32(s.health); w.f32(s.sanity); w.f32(s.boost); w.f32(s.slow); w.f32(s.lucky);
     w.f32(s.juice); w.f32(s.hurt); w.f32(s.swing); w.f32(s.battery);
+    w.u8((uint8_t)std::min(255.0f, std::ceil(s.regen))); w.u8((uint8_t)std::min(255.0f, std::ceil(s.silent)));
+    w.u8((uint8_t)std::min(255.0f, s.flash * 50.0f));
     w.u8((uint8_t)((s.light_on ? 1 : 0) | (s.noclip ? 2 : 0) | (s.alive ? 4 : 0)));
     for (int i = 0; i < ITEM_COUNT; i++) w.u8(s.inv[i]);
     for (int i = 0; i < PERK_COUNT; i++) w.u8(s.perks[i]);
@@ -110,6 +115,7 @@ inline void read_player(Reader& r, PlayerState& s) {
     s.bob = r.f32(); s.speed = r.f32();
     s.health = r.f32(); s.sanity = r.f32(); s.boost = r.f32(); s.slow = r.f32(); s.lucky = r.f32();
     s.juice = r.f32(); s.hurt = r.f32(); s.swing = r.f32(); s.battery = r.f32();
+    s.regen = r.u8(); s.silent = r.u8(); s.flash = r.u8() / 50.0f;
     uint8_t f = r.u8();
     s.light_on = f & 1; s.noclip = (f & 2) != 0; s.alive = (f & 4) != 0;
     for (int i = 0; i < ITEM_COUNT; i++) s.inv[i] = r.u8();

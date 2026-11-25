@@ -191,6 +191,21 @@ struct Builder {
         if (bottom) flat(y0, {0, -1, 0}, true);
     }
 
+    // ----- decals: a quad o, o+A, o+A+B, o+B (A x B points along n) showing atlas cell k
+    void decal(Vec3 o, Vec3 A, Vec3 B, Vec3 n, int k) {
+        float la = A.len(), lb = B.len();
+        if (la < 1e-4f || lb < 1e-4f) return;
+        Vec3 ad = A * (1.0f / la), bd = B * (1.0f / lb);
+        float u0 = (k % 4) / 4.0f + 0.004f, v0 = (k / 4) / 4.0f + 0.004f, u1 = u0 + 0.242f, v1 = v0 + 0.242f;
+        grid(MAT_DECAL, o, A, B, 1, 1, n,
+             [&](Vec3 p, float& u, float& t) {
+                 float s = (p - o).dot(ad) / la, r = (p - o).dot(bd) / lb;
+                 u = u0 + s * (u1 - u0);
+                 t = v1 - r * (v1 - v0); // B runs "up" the decal
+             },
+             [](Vec3) { return 1.0f; });
+    }
+
     void set_tint(uint32_t rgb) {
         tint[0] = ((rgb >> 16) & 255) / 255.0f;
         tint[1] = ((rgb >> 8) & 255) / 255.0f;
@@ -198,6 +213,34 @@ struct Builder {
     }
     void clear_tint() { tint[0] = tint[1] = tint[2] = 1; }
 };
+
+// which details turn up on a level's floors and walls
+struct DecalSet { int floor[8]; int nfloor; float floor_rate; int wall[6]; int nwall; float wall_rate; };
+const DecalSet& decal_set(LevelId id) {
+    static const DecalSet OFFICE{{DECAL_PAPER, DECAL_CRUMPLED, DECAL_STAIN, DECAL_STAIN2, DECAL_PRINTS, DECAL_TRASH, DECAL_CAN}, 7, 0.30f,
+                                 {DECAL_OUTLET, DECAL_VENT, DECAL_STREAK, DECAL_MOLD, DECAL_SCUFF}, 5, 0.26f};
+    static const DecalSet LOBBY{{DECAL_STAIN, DECAL_STAIN2, DECAL_PUDDLE, DECAL_PRINTS, DECAL_PAPER, DECAL_CRUMPLED}, 6, 0.30f,
+                                {DECAL_OUTLET, DECAL_OUTLET, DECAL_VENT, DECAL_STREAK, DECAL_MOLD, DECAL_SCUFF}, 6, 0.28f};
+    static const DecalSet INDUSTRIAL{{DECAL_CRACK, DECAL_PUDDLE, DECAL_STAIN2, DECAL_TRASH, DECAL_CAN, DECAL_GLASS}, 6, 0.30f,
+                                     {DECAL_STREAK, DECAL_CRACK, DECAL_MOLD, DECAL_VENT}, 4, 0.24f};
+    static const DecalSet HOTEL{{DECAL_STAIN, DECAL_PAPER, DECAL_GLASS, DECAL_STAIN2}, 4, 0.10f, {DECAL_STREAK, DECAL_SCUFF, DECAL_OUTLET}, 3, 0.12f};
+    static const DecalSet STONE{{DECAL_CRACK, DECAL_LEAVES, DECAL_STAIN, DECAL_STAIN2}, 4, 0.16f, {DECAL_CRACK, DECAL_MOLD, DECAL_STREAK}, 3, 0.14f};
+    static const DecalSet OUTSIDE{{DECAL_CRACK, DECAL_LEAVES, DECAL_STAIN2, DECAL_TRASH}, 4, 0.12f, {DECAL_STREAK, DECAL_CRACK}, 2, 0.06f};
+    static const DecalSet PARTY{{DECAL_PAPER, DECAL_CAN, DECAL_TRASH, DECAL_STAIN, DECAL_CRUMPLED}, 5, 0.20f, {DECAL_SCUFF, DECAL_OUTLET, DECAL_STREAK}, 3, 0.12f};
+    static const DecalSet MOON{{DECAL_CRACK}, 1, 0.05f, {DECAL_CRACK}, 1, 0.03f};
+    static const DecalSet NONE{{0}, 0, 0, {0}, 0, 0};
+    switch (id) {
+        case LevelId::L0: case LevelId::L6: case LevelId::TSG: case LevelId::TSGBlack: return LOBBY;
+        case LevelId::L4: case LevelId::L21: case LevelId::L33: case LevelId::L36: case LevelId::LRun: case LevelId::TSGHope: return OFFICE;
+        case LevelId::L1: case LevelId::L2: case LevelId::L22: case LevelId::L8: return INDUSTRIAL;
+        case LevelId::L5: case LevelId::TSGMansion: case LevelId::L7: case LevelId::L19: return HOTEL;
+        case LevelId::L51: return STONE;
+        case LevelId::L9: case LevelId::L11: return OUTSIDE;
+        case LevelId::LFun: return PARTY;
+        case LevelId::L24: return MOON;
+        default: return NONE;
+    }
+}
 
 // texture scale of a level's solid blocks: (metres per texture width, per height)
 void block_tex(LevelId id, float& tw, float& th) {
@@ -207,6 +250,14 @@ void block_tex(LevelId id, float& tw, float& th) {
         case LevelId::L8: tw = 4.0f; th = 4.0f; break;
         case LevelId::L9: tw = CELL; th = 4.6f; break;     // window + door per cell face
         case LevelId::L11: tw = CELL; th = 18.0f; break;   // ~3 m per storey
+        case LevelId::L7: case LevelId::L24: tw = 3.0f; th = 3.0f; break;
+        case LevelId::L19: tw = CELL; th = CELL; break;
+        case LevelId::L21: tw = 4 * CELL; th = 2.6f; break; // four numbered doors, one per cell
+        case LevelId::L22: tw = CELL; th = 1.35f; break;   // a car per cell
+        case LevelId::L33: tw = CELL; th = 5.0f; break;    // one shop front per cell
+        case LevelId::L36: tw = CELL; th = 4.5f; break;    // one window bay per cell
+        case LevelId::L51: tw = 3.0f; th = 3.0f; break;
+        case LevelId::LRun: tw = CELL; th = 2.7f; break;
         default: tw = TEX_WALL; th = 2.7f; break;
     }
 }
@@ -215,6 +266,16 @@ void block_tex(LevelId id, float& tw, float& th) {
 
 float ceiling_y(const World& w, float x, float z) {
     const LevelInfo& li = w.info();
+    if (w.id() == LevelId::L19) { // the roof slopes down from a ridge over the middle of each lane
+        float lz = z / CELL;
+        float local = lz - floor_to_int(lz / 4.0f) * 4.0f; // 0..4: lane cells 0-2, wall 3
+        float dist = std::fabs(local - 1.5f) * CELL;
+        return std::max(1.65f, li.ceil_h - dist * 0.3f);
+    }
+    if (w.id() == LevelId::L51) { // a vast, lumpy cavern roof over the city
+        float n = vnoise_world(w.seed(), x / 7.0f, z / 7.0f, 411) * 0.7f + vnoise_world(w.seed(), x / 2.5f, z / 2.5f, 412) * 0.3f;
+        return li.ceil_h - 0.5f - n * 2.5f;
+    }
     if (w.id() != LevelId::L8) return li.ceil_h;
     float n = vnoise_world(w.seed(), x / 2.3f, z / 2.3f, 401) * 0.7f + vnoise_world(w.seed(), x / 0.9f, z / 0.9f, 402) * 0.3f;
     return li.ceil_h - 0.2f - n * 1.0f;
@@ -225,7 +286,7 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
     const int D = std::max(1, std::min(detail, 3)); // PC: finer grids = smoother baked light
     const LevelInfo& li = W.info();
     const LevelId id = W.id();
-    const bool cave = id == LevelId::L8;
+    const bool cave = id == LevelId::L8 || id == LevelId::L19 || id == LevelId::L51; // uneven ceilings
     const int c0x = kx * CHUNK_CELLS, c0z = kz * CHUNK_CELLS;
     out.exits.clear();
     out.items.clear();
@@ -239,7 +300,7 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
             LightState s = W.light(cx, cz);
             if (s == LightState::On || s == LightState::Flicker)
                 B.lights.push_back({{(cx + 0.5f) * CELL, li.light_y, (cz + 0.5f) * CELL}, li.light_power * (s == LightState::On ? 1.0f : 0.75f)});
-            if (id == LevelId::L5) { // bedside lamps light their rooms a little
+            if (W.hotel()) { // bedside lamps light their rooms a little
                 Furn fs[MAX_FURN];
                 bool owner = false;
                 int nf = W.furniture(cx, cz, fs, &owner);
@@ -256,6 +317,28 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
     auto floor_uv = [](Vec3 p, float& u, float& t) { u = p.x / CELL; t = p.z / CELL; };
     auto ao = [&](Vec3 p) { return B.corner_ao(p); };
     auto damp = [&](Vec3 p) { return 0.80f + 0.25f * vnoise_world(W.seed(), p.x / 3.1f, p.z / 3.1f, 977); };
+    // a detail on a wall face: outlet, vent, water streak, mould, scuffs, cracks
+    auto wall_decal = [&](Vec3 o, Vec3 a, Vec3 n, float top, int hx, int hz) {
+        const DecalSet& ds = decal_set(id);
+        if (!ds.nwall || hash01(W.seed(), hx, hz, 7101) >= ds.wall_rate) return;
+        int d = ds.wall[hash3(W.seed(), hx, hz, 7111) % (uint32_t)ds.nwall];
+        float len = a.len();
+        Vec3 ad = a * (1.0f / len);
+        float w = 0.6f, hh = 0.6f, y = 1.0f;
+        switch (d) {
+            case DECAL_OUTLET: w = 0.22f; hh = 0.22f; y = 0.3f; break;
+            case DECAL_VENT: w = 0.7f; hh = 0.5f; y = top - 0.55f; break;
+            case DECAL_STREAK: w = 0.7f; hh = 1.4f; y = top - 0.75f; break;
+            case DECAL_SCUFF: w = 0.9f; hh = 0.45f; y = 0.25f; break;
+            case DECAL_MOLD: w = 0.8f; hh = 0.8f; y = 0.6f + hash01(W.seed(), hx, hz, 7121) * 1.0f; break;
+            default: w = 0.9f; hh = 0.9f; y = 0.7f + hash01(W.seed(), hx, hz, 7121) * 1.0f; break;
+        }
+        if (y + hh * 0.5f > top - 0.02f) y = top - 0.02f - hh * 0.5f;
+        float along = (0.2f + 0.6f * hash01(W.seed(), hx, hz, 7131)) * len;
+        Vec3 c = Vec3{o.x, 0, o.z} + ad * along + n * 0.008f;
+        Vec3 A = ad * w, Bv{0, hh, 0};
+        B.decal(c - A * 0.5f + Vec3{0, y - hh * 0.5f, 0}, A, Bv, n, d);
+    };
 
     for (int cz = c0z; cz < c0z + CHUNK_CELLS; cz++) {
         for (int cx = c0x; cx < c0x + CHUNK_CELLS; cx++) {
@@ -284,7 +367,13 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
                         float s = 0.8f, y = 0.02f;
                         B.quad(MAT_LIGHT, {cxm - s, y, czm + s}, {cxm + s, y, czm + s}, {cxm + s, y, czm - s}, {cxm - s, y, czm - s}, lum);
                         out.lights.push_back({{cxm, 0.08f, czm}, -1.0f, 0.8f, ls}); // sx < 0: a glow on the floor, no shaft
-                    } else if (id == LevelId::L9) { // streetlight: pole, head, lamp
+                    } else if (id == LevelId::L51) { // a stone brazier with a fire in it
+                        B.box(MAT_PROP, cxm, czm, 0.12f, 0.12f, 0, 1.15f, 0.5f, 1.2f, 1);
+                        B.box(MAT_PROP, cxm, czm, 0.3f, 0.3f, 1.15f, 1.4f, 0.6f, 0.3f, 1);
+                        float y = 1.41f, s = 0.24f;
+                        B.quad(MAT_LIGHT, {cxm - s, y, czm + s}, {cxm + s, y, czm + s}, {cxm + s, y, czm - s}, {cxm - s, y, czm - s}, lum, 1, 0.6f, 0.3f);
+                        out.lights.push_back({{cxm, 1.6f, czm}, -1.0f, 0.8f, ls});
+                    } else if (W.pole(cx, cz)) { // streetlight: pole, head, lamp
                         B.box(MAT_PROP, cxm, czm, 0.07f, 0.07f, 0, li.light_y + 0.2f, 0.5f, 5.0f, 1);
                         B.box(MAT_PROP, cxm, czm + 0.35f, 0.15f, 0.45f, li.light_y + 0.1f, li.light_y + 0.3f, 0.5f, 0.5f, 1);
                         float y = li.light_y + 0.09f;
@@ -292,7 +381,7 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
                         out.lights.push_back({{cxm, y, czm + 0.35f}, 0.12f, 0.35f, ls});
                     } else {
                         float sx = 0.6f, sz = 0.3f;
-                        if (id == LevelId::L5) { sx = sz = (W.floor_mat(cx, cz) == 1 ? 0.7f : 0.22f); } // chandelier vs sconce
+                        if (W.hotel()) { sx = sz = (W.floor_mat(cx, cz) == 1 ? 0.7f : 0.22f); } // chandelier vs sconce
                         if (id == LevelId::L1) { sx = 0.75f; sz = 0.12f; }                                // long tube
                         float y = (id == LevelId::L1 ? li.light_y : H) - 0.015f;
                         out.lights.push_back({{cxm, y, czm}, sx, sz, ls});
@@ -323,21 +412,66 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
                     out.exits.push_back(door);
                 }
                 if (W.item(cx, cz) != ItemType::None) out.items.push_back(World::item_id(cx, cz));
+                // ----- floor details: papers, stains, cracks, puddles
+                if (!W.water(cx, cz) && !W.exit_cell(cx, cz)) {
+                    const DecalSet& ds = decal_set(id);
+                    for (int k = 0; k < 2 && ds.nfloor; k++) {
+                        if (hash01(W.seed(), cx, cz, 7001 + k) >= ds.floor_rate) continue;
+                        int d = ds.floor[hash3(W.seed(), cx, cz, 7011 + k) % (uint32_t)ds.nfloor];
+                        float sz = d == DECAL_PUDDLE ? 1.3f : (d == DECAL_PAPER || d == DECAL_CAN || d == DECAL_CRUMPLED) ? 0.42f : 0.9f;
+                        sz *= 0.8f + hash01(W.seed(), cx, cz, 7021 + k) * 0.5f;
+                        float ang = hash01(W.seed(), cx, cz, 7031 + k) * 2 * PI;
+                        float px = x0 + CELL * (0.2f + 0.6f * hash01(W.seed(), cx, cz, 7041 + k));
+                        float pz = z0 + CELL * (0.2f + 0.6f * hash01(W.seed(), cx, cz, 7051 + k));
+                        Vec3 A{std::cos(ang) * sz, 0, std::sin(ang) * sz};
+                        Vec3 Bv{A.z, 0, -A.x}; // n x A for n = up
+                        B.decal(Vec3{px, 0.006f + k * 0.002f, pz} - A * 0.5f - Bv * 0.5f, A, Bv, {0, 1, 0}, d);
+                    }
+                }
             } else {
                 // ----- solid block: sides facing open (or lower) neighbours, top if visible
                 float h = W.block_h(cx, cz);
                 B.set_tint(W.tint(cx, cz));
+                // low furniture-like blocks use a different texture from the tall ones
+                Material bmat = MAT_BLOCK;
+                float tw = btw, th = bth;
+                bool low = h < 2.2f;
+                if (id == LevelId::L19 && low) { bmat = MAT_ROOF; tw = 1.2f; th = 1.2f; }   // boxes
+                if (id == LevelId::L22 && !low) { bmat = MAT_WALL; tw = TEX_WALL; th = H; } // stairwell cores
+                if (id == LevelId::L33 && low) { bmat = MAT_PROP; tw = 1.0f; th = 1.0f; }   // planters, shelves
+                if (id == LevelId::L36 && low) { bmat = MAT_ROOF; tw = CELL; th = 1.0f; }   // seats, desks
                 int sv = (li.outdoor ? (id == LevelId::L9 ? 2 : 1) : 2) * D;
                 int su = (id == LevelId::L11 ? 1 : 2) * D;
                 auto side = [&](int nx, int nz, Vec3 o, Vec3 a, Vec3 n) {
                     float nh = W.solid(nx, nz) ? W.block_h(nx, nz) : 0.0f;
                     if (nh >= h - 0.01f) return;
-                    B.vface(MAT_BLOCK, o, a, n, nh, h, btw, bth, su, sv, cave);
+                    B.vface(bmat, o, a, n, nh, h, tw, th, su, sv, cave && !low);
+                    if (!low && nh <= 0.0f) wall_decal(o, a, n, std::min(h, H), cx * 7 + nx, cz * 7 + nz);
                 };
-                side(cx + 1, cz, {x1, 0, z1}, {0, 0, -CELL}, {1, 0, 0});
-                side(cx - 1, cz, {x0, 0, z0}, {0, 0, CELL}, {-1, 0, 0});
-                side(cx, cz + 1, {x0, 0, z1}, {CELL, 0, 0}, {0, 0, 1});
-                side(cx, cz - 1, {x1, 0, z0}, {-CELL, 0, 0}, {0, 0, -1});
+                float mxc = x0 + CELL * 0.5f, mzc = z0 + CELL * 0.5f;
+                if (id == LevelId::L22 && low) { // a parked car: body, cabin, wheels (the bay itself still blocks you)
+                    B.box(MAT_BLOCK, mxc, mzc, 0.88f, 1.15f, 0.25f, 0.85f, CELL, 1.35f, 1);
+                    B.grid(MAT_ROOF, {mxc - 0.88f, 0.85f, mzc + 1.15f}, {1.76f, 0, 0}, {0, 0, -2.3f}, 1, 1, {0, 1, 0},
+                           [&](Vec3 p, float& u, float& t) { u = (p.z - mzc + 1.15f) / 2.3f; t = (p.x - mxc + 0.88f) / 1.76f; }, [](Vec3) { return 1.0f; });
+                    B.box(MAT_ROOF, mxc, mzc + 0.1f, 0.78f, 0.62f, 0.85f, 1.32f, 2.3f, 1.0f, 1);
+                    B.grid(MAT_ROOF, {mxc - 0.78f, 1.32f, mzc + 0.72f}, {1.56f, 0, 0}, {0, 0, -1.24f}, 1, 1, {0, 1, 0},
+                           [&](Vec3 p, float& u, float& t) { u = 0.5f; t = (p.x - mxc) * 0.1f + 0.5f; }, [](Vec3) { return 1.0f; });
+                    for (int wx = -1; wx <= 1; wx += 2)
+                        for (int wz = -1; wz <= 1; wz += 2)
+                            B.box(MAT_FLOOR3, mxc + wx * 0.8f, mzc + wz * 0.75f, 0.12f, 0.3f, 0, 0.55f, 0.6f, 0.6f, 1);
+                } else if (id == LevelId::L36 && low && h < 0.8f) { // a row of airport seats with backs
+                    for (int k = 0; k < 4; k++) {
+                        float sx = x0 + CELL * (k + 0.5f) / 4.0f;
+                        B.box(MAT_ROOF, sx, mzc, 0.27f, 0.25f, 0.38f, 0.48f, CELL / 4.0f, 0.5f, 1);
+                        B.box(MAT_ROOF, sx, mzc - 0.24f, 0.27f, 0.04f, 0.48f, 0.95f, CELL / 4.0f, 0.5f, 1);
+                        B.box(MAT_PROP, sx, mzc, 0.03f, 0.03f, 0, 0.38f, 0.2f, 0.4f, 1);
+                    }
+                } else {
+                    side(cx + 1, cz, {x1, 0, z1}, {0, 0, -CELL}, {1, 0, 0});
+                    side(cx - 1, cz, {x0, 0, z0}, {0, 0, CELL}, {-1, 0, 0});
+                    side(cx, cz + 1, {x0, 0, z1}, {CELL, 0, 0}, {0, 0, 1});
+                    side(cx, cz - 1, {x1, 0, z0}, {-CELL, 0, 0}, {0, 0, -1});
+                }
                 if (id == LevelId::L9) {
                     // gable roof: houses are two cells deep, the ridge runs along x between them
                     int mz = ((cz % 8) + 8) % 8;
@@ -365,7 +499,7 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
                         for (Vec3 p : {A, Bv, C}) { auto t = uv(p); vs.push_back(B.vert(p, t.first, t.second, c, 1)); }
                         is.insert(is.end(), {b0, (uint16_t)(b0 + 1), (uint16_t)(b0 + 2)});
                     }
-                } else if (li.outdoor || h < H - 0.01f) {
+                } else if ((li.outdoor || h < H - 0.01f) && !(id == LevelId::L22 && low) && !(id == LevelId::L36 && low && h < 0.8f)) {
                     B.grid(MAT_ROOF, {x0, h, z1}, {CELL, 0, 0}, {0, 0, -CELL}, 1, 1, {0, 1, 0}, floor_uv, [](Vec3) { return 1.0f; });
                 }
                 B.clear_tint();
@@ -382,6 +516,7 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
                 bool tall = low && W.exit_on_edge(cx, cz, true); // office: the exit's wall section is full height
                 float h = tall ? H : WH;
                 B.vface(MAT_WALL, {x0 + hw, 0, z1}, {0, 0, -CELL}, {1, 0, 0}, 0, h, TEX_WALL, h, 2 * D, (low && !tall ? 1 : 3) * D, false);
+                if (!low) { wall_decal({x0 + hw, 0, z1}, {0, 0, -CELL}, {1, 0, 0}, h, cx * 3, cz * 3 + 1); wall_decal({x0 - hw, 0, z0}, {0, 0, CELL}, {-1, 0, 0}, h, cx * 3 + 1, cz * 3); }
                 B.vface(MAT_WALL, {x0 - hw, 0, z0}, {0, 0, CELL}, {-1, 0, 0}, 0, h, TEX_WALL, h, 2 * D, (low && !tall ? 1 : 3) * D, false);
                 if (tall) { // ends of the tall section
                     B.vface(MAT_WALL, {x0 - hw, 0, z1}, {WALL_T, 0, 0}, {0, 0, 1}, WH, H, TEX_WALL, H, 1, 1, false);
@@ -392,6 +527,7 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
                 bool tall = low && W.exit_on_edge(cx, cz, false);
                 float h = tall ? H : WH;
                 B.vface(MAT_WALL, {x0, 0, z0 + hw}, {CELL, 0, 0}, {0, 0, 1}, 0, h, TEX_WALL, h, 2 * D, (low && !tall ? 1 : 3) * D, false);
+                if (!low) { wall_decal({x0, 0, z0 + hw}, {CELL, 0, 0}, {0, 0, 1}, h, cx * 3 + 2, cz * 3); wall_decal({x1, 0, z0 - hw}, {-CELL, 0, 0}, {0, 0, -1}, h, cx * 3, cz * 3 + 2); }
                 B.vface(MAT_WALL, {x1, 0, z0 - hw}, {-CELL, 0, 0}, {0, 0, -1}, 0, h, TEX_WALL, h, 2 * D, (low && !tall ? 1 : 3) * D, false);
                 if (tall) {
                     B.vface(MAT_WALL, {x0, 0, z0 - hw}, {0, 0, WALL_T}, {-1, 0, 0}, WH, H, TEX_WALL, H, 1, 1, false);
@@ -427,7 +563,7 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
                 }
             }
             // ----- Level 5: guest-room furniture and doorways (drawn once per room)
-            if (id == LevelId::L5) {
+            if (W.hotel()) {
                 Furn fs[MAX_FURN];
                 bool owner = false;
                 int nf = W.furniture(cx, cz, fs, &owner);

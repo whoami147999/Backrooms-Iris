@@ -18,18 +18,31 @@ enum Salt : uint32_t {
 
 // clang-format off
 const LevelInfo LEVELS[(int)LevelId::COUNT] = {
-    // code        name               num    ceil   wall   out    dark   fog                      dens    vita    ambient                  light colour            pow   rad   y      pillar drain  items   next
-    {"LEVEL 0",   "THE LOBBY",        "0",   2.7f,  2.7f,  false, false, {0.24f, 0.21f, 0.12f},   0.055f, 0.070f, {0.17f, 0.16f, 0.13f},   {1.00f, 0.95f, 0.82f},  1.35f, 7.5f, 2.65f, 0.6f, 0.10f, 0.011f, LevelId::L1},
-    {"LEVEL 1",   "HABITABLE ZONE",   "1",   4.2f,  4.2f,  false, false, {0.20f, 0.22f, 0.24f},   0.065f, 0.080f, {0.13f, 0.14f, 0.15f},   {0.92f, 0.96f, 1.00f},  1.50f, 9.0f, 3.80f, 1.0f, 0.12f, 0.022f, LevelId::L2},
-    {"LEVEL 2",   "PIPE DREAMS",      "2",   2.5f,  2.5f,  false, false, {0.07f, 0.045f, 0.03f},  0.090f, 0.100f, {0.10f, 0.08f, 0.06f},   {1.00f, 0.55f, 0.25f},  1.25f, 6.5f, 2.35f, 0.6f, 0.20f, 0.016f, LevelId::L4},
-    {"LEVEL 4",   "ABANDONED OFFICE", "4",   2.8f,  1.55f, false, false, {0.20f, 0.21f, 0.23f},   0.050f, 0.065f, {0.16f, 0.17f, 0.19f},   {0.95f, 0.98f, 1.00f},  1.30f, 7.5f, 2.75f, 0.6f, 0.06f, 0.018f, LevelId::L5},
-    {"LEVEL 5",   "TERROR HOTEL",     "5",   2.9f,  2.9f,  false, false, {0.10f, 0.06f, 0.04f},   0.085f, 0.100f, {0.10f, 0.07f, 0.05f},   {1.00f, 0.72f, 0.42f},  1.30f, 6.5f, 2.30f, 0.6f, 0.20f, 0.014f, LevelId::L6},
-    {"LEVEL 6",   "LIGHTS OUT",       "6",   2.7f,  2.7f,  false, true,  {0.00f, 0.00f, 0.00f},   0.240f, 0.260f, {0.30f, 0.30f, 0.32f},   {1.00f, 1.00f, 1.00f},  0.00f, 1.0f, 2.65f, 0.6f, 0.40f, 0.012f, LevelId::L8},
-    {"LEVEL 8",   "CAVE SYSTEM",      "8",   3.0f,  3.0f,  false, true,  {0.00f, 0.00f, 0.00f},   0.150f, 0.170f, {0.62f, 0.56f, 0.50f},   {0.45f, 1.00f, 0.70f},  0.90f, 6.0f, 1.20f, 0.6f, 0.35f, 0.012f, LevelId::L9},
-    {"LEVEL 9",   "THE SUBURBS",      "9",   6.0f,  6.0f,  true,  false, {0.03f, 0.035f, 0.07f},  0.060f, 0.075f, {0.15f, 0.16f, 0.24f},   {1.00f, 0.66f, 0.30f},  1.60f, 11.f, 5.00f, 0.6f, 0.25f, 0.008f, LevelId::L37},
-    {"LEVEL 11",  "THE ENDLESS CITY", "11",  60.0f, 60.0f, true,  false, {0.62f, 0.64f, 0.67f},   0.030f, 0.045f, {0.88f, 0.88f, 0.90f},   {1.00f, 1.00f, 1.00f},  0.00f, 1.0f, 3.00f, 0.6f, -0.60f, 0.006f, LevelId::L0},
-    {"LEVEL 37",  "SUBLIMITY",        "37",  4.0f,  4.0f,  false, false, {0.70f, 0.82f, 0.86f},   0.035f, 0.050f, {0.55f, 0.62f, 0.66f},   {0.90f, 1.00f, 1.00f},  0.80f, 8.0f, 3.95f, 0.7f, -0.05f, 0.009f, LevelId::LFun},
-    {"LEVEL FUN", "=)",               "FUN", 2.7f,  2.7f,  false, false, {0.30f, 0.20f, 0.24f},   0.060f, 0.075f, {0.22f, 0.18f, 0.19f},   {1.00f, 0.90f, 0.85f},  1.40f, 7.5f, 2.65f, 0.6f, 0.30f, 0.012f, LevelId::L11},
+    // code              name                 num        ceil   wall   out    dark   fog                      dens    vita    ambient                  light colour            pow   rad   y      pillar drain  items   next
+    {"LEVEL 0",         "THE LOBBY",         "0",       2.7f,  2.7f,  false, false, {0.24f, 0.21f, 0.12f},   0.055f, 0.070f, {0.17f, 0.16f, 0.13f},   {1.00f, 0.95f, 0.82f},  1.35f, 7.5f, 2.65f, 0.6f, 0.10f, 0.011f, LevelId::L1},
+    {"LEVEL 1",         "HABITABLE ZONE",    "1",       4.2f,  4.2f,  false, false, {0.20f, 0.22f, 0.24f},   0.065f, 0.080f, {0.13f, 0.14f, 0.15f},   {0.92f, 0.96f, 1.00f},  1.50f, 9.0f, 3.80f, 1.0f, 0.12f, 0.022f, LevelId::L2},
+    {"LEVEL 2",         "PIPE DREAMS",       "2",       2.5f,  2.5f,  false, false, {0.07f, 0.045f, 0.03f},  0.090f, 0.100f, {0.10f, 0.08f, 0.06f},   {1.00f, 0.55f, 0.25f},  1.25f, 6.5f, 2.35f, 0.6f, 0.20f, 0.016f, LevelId::L4},
+    {"LEVEL 4",         "ABANDONED OFFICE",  "4",       2.8f,  1.55f, false, false, {0.20f, 0.21f, 0.23f},   0.050f, 0.065f, {0.16f, 0.17f, 0.19f},   {0.95f, 0.98f, 1.00f},  1.30f, 7.5f, 2.75f, 0.6f, 0.06f, 0.018f, LevelId::L5},
+    {"LEVEL 5",         "TERROR HOTEL",      "5",       2.9f,  2.9f,  false, false, {0.10f, 0.06f, 0.04f},   0.085f, 0.100f, {0.10f, 0.07f, 0.05f},   {1.00f, 0.72f, 0.42f},  1.30f, 6.5f, 2.30f, 0.6f, 0.20f, 0.014f, LevelId::L6},
+    {"LEVEL 6",         "LIGHTS OUT",        "6",       2.7f,  2.7f,  false, true,  {0.00f, 0.00f, 0.00f},   0.240f, 0.260f, {0.30f, 0.30f, 0.32f},   {1.00f, 1.00f, 1.00f},  0.00f, 1.0f, 2.65f, 0.6f, 0.40f, 0.012f, LevelId::L7},
+    {"LEVEL 7",         "THALASSOPHOBIA",    "7",       2.7f,  2.7f,  true,  false, {0.05f, 0.10f, 0.15f},   0.050f, 0.065f, {0.20f, 0.26f, 0.32f},   {0.70f, 0.90f, 1.00f},  1.20f, 8.0f, 2.60f, 0.6f, 0.25f, 0.010f, LevelId::L8},
+    {"LEVEL 8",         "CAVE SYSTEM",       "8",       3.0f,  3.0f,  false, true,  {0.00f, 0.00f, 0.00f},   0.150f, 0.170f, {0.62f, 0.56f, 0.50f},   {0.45f, 1.00f, 0.70f},  0.90f, 6.0f, 1.20f, 0.6f, 0.35f, 0.012f, LevelId::L9},
+    {"LEVEL 9",         "THE SUBURBS",       "9",       6.0f,  6.0f,  true,  false, {0.03f, 0.035f, 0.07f},  0.060f, 0.075f, {0.15f, 0.16f, 0.24f},   {1.00f, 0.66f, 0.30f},  1.60f, 11.f, 5.00f, 0.6f, 0.25f, 0.008f, LevelId::L19},
+    {"LEVEL 11",        "THE ENDLESS CITY",  "11",      60.0f, 60.0f, true,  false, {0.62f, 0.64f, 0.67f},   0.030f, 0.045f, {0.88f, 0.88f, 0.90f},   {1.00f, 1.00f, 1.00f},  0.00f, 1.0f, 3.00f, 0.6f, -0.60f, 0.006f, LevelId::TSG},
+    {"LEVEL 19",        "THE ATTIC",         "19",      2.75f, 2.75f, false, true,  {0.00f, 0.00f, 0.00f},   0.160f, 0.180f, {0.40f, 0.36f, 0.30f},   {1.00f, 0.75f, 0.45f},  0.95f, 5.5f, 2.15f, 0.6f, 0.30f, 0.014f, LevelId::L21},
+    {"LEVEL 21",        "NUMBERED DOORS",    "21",      2.6f,  2.6f,  false, false, {0.16f, 0.17f, 0.15f},   0.060f, 0.075f, {0.15f, 0.16f, 0.14f},   {0.95f, 1.00f, 0.92f},  1.30f, 7.0f, 2.55f, 0.6f, 0.12f, 0.012f, LevelId::L22},
+    {"LEVEL 22",        "THE CAR PARK",      "22",      2.8f,  2.8f,  false, false, {0.09f, 0.085f, 0.07f},  0.070f, 0.085f, {0.10f, 0.10f, 0.09f},   {1.00f, 0.70f, 0.35f},  1.40f, 8.0f, 2.75f, 0.7f, 0.18f, 0.012f, LevelId::L33},
+    {"LEVEL 24",        "THE MOON",          "24",      60.0f, 60.0f, true,  false, {0.00f, 0.00f, 0.00f},   0.022f, 0.035f, {0.72f, 0.72f, 0.76f},   {1.00f, 1.00f, 1.00f},  0.00f, 1.0f, 3.00f, 0.6f, 0.15f, 0.008f, LevelId::L11},
+    {"LEVEL 33",        "THE INFINITE MALL", "33",      5.0f,  5.0f,  false, false, {0.12f, 0.08f, 0.14f},   0.050f, 0.065f, {0.16f, 0.13f, 0.17f},   {1.00f, 0.78f, 0.95f},  1.40f, 9.0f, 4.90f, 0.8f, 0.10f, 0.012f, LevelId::L36},
+    {"LEVEL 36",        "AIRPORT",           "36",      4.5f,  4.5f,  false, false, {0.14f, 0.15f, 0.17f},   0.045f, 0.060f, {0.17f, 0.18f, 0.20f},   {0.92f, 0.96f, 1.00f},  1.40f, 9.0f, 4.40f, 0.9f, 0.08f, 0.012f, LevelId::L37},
+    {"LEVEL 37",        "SUBLIMITY",         "37",      4.0f,  4.0f,  false, false, {0.70f, 0.82f, 0.86f},   0.035f, 0.050f, {0.55f, 0.62f, 0.66f},   {0.90f, 1.00f, 1.00f},  0.80f, 8.0f, 3.95f, 0.7f, -0.05f, 0.009f, LevelId::LFun},
+    {"LEVEL 51",        "THE FORGOTTEN CITY","51",      8.0f,  8.0f,  false, true,  {0.02f, 0.015f, 0.01f},  0.110f, 0.130f, {0.45f, 0.38f, 0.30f},   {1.00f, 0.60f, 0.25f},  1.30f, 8.0f, 1.70f, 0.7f, 0.25f, 0.012f, LevelId::L24},
+    {"LEVEL FUN",       "=)",                "FUN",     2.7f,  2.7f,  false, false, {0.30f, 0.20f, 0.24f},   0.060f, 0.075f, {0.22f, 0.18f, 0.19f},   {1.00f, 0.90f, 0.85f},  1.40f, 7.5f, 2.65f, 0.6f, 0.30f, 0.012f, LevelId::LRun},
+    {"LEVEL !",         "RUN FOR YOUR LIFE", "!",       2.7f,  2.7f,  false, false, {0.15f, 0.01f, 0.01f},   0.045f, 0.060f, {0.16f, 0.04f, 0.04f},   {1.00f, 0.15f, 0.10f},  1.50f, 7.0f, 2.65f, 0.6f, 0.60f, 0.040f, LevelId::L51},
+    {"TH3 SH4DY GR3Y",  "TH3 H4LLS",         "GREY",    2.7f,  2.7f,  false, false, {0.20f, 0.20f, 0.20f},   0.070f, 0.085f, {0.16f, 0.16f, 0.16f},   {1.00f, 1.00f, 1.00f},  1.20f, 7.0f, 2.65f, 0.6f, 0.25f, 0.011f, LevelId::TSGBlack},
+    {"TSG - B14CK",     "TH3 D4RK H4LLS",    "BLACK",   2.7f,  2.7f,  false, true,  {0.00f, 0.00f, 0.00f},   0.200f, 0.220f, {0.30f, 0.30f, 0.30f},   {1.00f, 1.00f, 1.00f},  0.00f, 1.0f, 2.65f, 0.6f, 0.45f, 0.012f, LevelId::TSGMansion},
+    {"TSG - M4NS10N",   "TH3 GR3Y H0USE",    "MANSION", 3.2f,  3.2f,  false, false, {0.10f, 0.10f, 0.10f},   0.080f, 0.095f, {0.11f, 0.11f, 0.11f},   {1.00f, 1.00f, 1.00f},  1.25f, 6.5f, 2.60f, 0.6f, 0.30f, 0.014f, LevelId::TSGHope},
+    {"TSG - L0ST H0P3", "TH3 L4ST M4Z3",     "HOPE",    2.7f,  2.7f,  false, true,  {0.00f, 0.00f, 0.00f},   0.220f, 0.240f, {0.25f, 0.25f, 0.25f},   {1.00f, 1.00f, 1.00f},  0.00f, 1.0f, 2.65f, 0.6f, 0.50f, 0.012f, LevelId::L0},
 };
 
 const ItemInfo ITEMS[ITEM_COUNT] = {
@@ -44,6 +57,19 @@ const ItemInfo ITEMS[ITEM_COUNT] = {
     {"FIRESALT", false, "THROW IT: BURNS BRIGHT, KEEPS THEM AWAY"},
     {"FLASHLIGHT", true, "F / TRIANGLE: LIGHT. SMILERS HATE IT"},
     {"CROWBAR", true, "SWING TO STUN WHATEVER IS IN FRONT OF YOU"},
+    {"SUPER ALMOND WATER", false, "THE GOOD STUFF. HEALS BODY AND MIND"},
+    {"MOTH JELLY", false, "SLOWLY HEALS YOU FOR A WHILE"},
+    {"LIQUID SILENCE", false, "30 S WHERE YOU MAKE NO SOUND AT ALL"},
+    {"MED KIT", false, "PATCHES YOU UP. A LOT"},
+    {"FLASH BULB", false, "THROW IT: A BLINDING FLASH STUNS THEM"},
+    {"GLOW STICK", false, "DROP IT: GREEN LIGHT FOR 3 MINUTES"},
+    {"MUSIC BOX", false, "THROW IT: THEY GO TO THE MUSIC"},
+    {"RABBIT'S FOOT", false, "KEEP IT. IT SAVES YOU FROM DYING ONCE"},
+    {"COMPASS", true, "POINTS TO THE NEAREST EXIT"},
+    {"RADIO", true, "STATIC GETS LOUDER WHEN THEY'RE NEAR"},
+    {"PISTOL", true, "SANDBOX. CLICK TO SHOOT", true},
+    {"SHOTGUN", true, "SANDBOX. EIGHT PELLETS, SHORT RANGE", true},
+    {"RIFLE", true, "SANDBOX. HOLD TO FIRE", true},
 };
 const DiffInfo DIFFS[(int)Difficulty::COUNT] = {
     // name        count  speed  dmg    sanity items  exits  grace  regen  batt   hearing
@@ -85,6 +111,12 @@ constexpr int OFFICE_GRID = 6;   // Level 4 cubicle blocks
 constexpr int HOTEL_GRID = 5;    // Level 5 corridors
 constexpr int SUBURB_GRID = 8;   // Level 9 blocks
 constexpr int CITY_GRID = 10;    // Level 11 blocks
+constexpr int ATTIC_GRID = 4;    // Level 19 lanes
+constexpr int DOOR_GRID = 4;     // Level 21 hallways
+constexpr int MALL_GRID = 8;     // Level 33 halls + stores
+constexpr int AIR_GRID = 10;     // Level 36 concourses + gates
+constexpr int RUIN_GRID = 7;     // Level 51 streets
+constexpr int RUN_LEN = 60;      // Level !: cells of corridor to the exit
 
 // Level 4: each 6x6 block holds four 2x2 cubicles separated by aisles. Every cubicle
 // has one opening (side + which of its two cells) and a desk in the opposite corner.
@@ -159,11 +191,15 @@ const char* level_label(LevelId id) {
 }
 
 bool level_from_number(const char* s, LevelId& out) {
+    if (std::strchr(s, '!')) { out = LevelId::LRun; return true; }
     std::string v;
     for (const char* p = s; *p; p++) if (std::isalnum((unsigned char)*p)) v += (char)std::toupper((unsigned char)*p);
     if (v.rfind("LEVEL", 0) == 0) v = v.substr(5);
     for (int i = 0; i < (int)LevelId::COUNT; i++)
         if (v == LEVELS[i].number) { out = (LevelId)i; return true; }
+    if (v == "RUN") { out = LevelId::LRun; return true; }
+    if (v == "TSG" || v == "TH3SH4DYGR3Y" || v == "SHADYGREY") { out = LevelId::TSG; return true; }
+    if (v == "LOSTHOPE" || v == "L0STH0P3") { out = LevelId::TSGHope; return true; }
     return false;
 }
 
@@ -174,6 +210,9 @@ World::District World::district(int cx, int cz) const {
     if (dx == 0 && dz == 0) return District::Rooms;
     float r = hash01(seed_, dx, dz, S_DISTRICT);
     if (id_ == LevelId::LFun) return r < 0.75f ? District::Rooms : District::Hall; // party rooms
+    if (id_ == LevelId::TSG) return r < 0.55f ? District::Maze : District::Corridors;      // grey halls
+    if (id_ == LevelId::TSGBlack) return District::Corridors;                             // long dark halls
+    if (id_ == LevelId::TSGHope) return r < 0.7f ? District::Maze : District::Corridors;   // the last maze
     if (r < 0.50f) return District::Rooms;
     if (r < 0.68f) return District::Hall;
     if (r < 0.84f) return District::Maze;
@@ -252,7 +291,7 @@ bool World::solid(int cx, int cz) const {
             int oz = c.side == 2 ? 0 : c.side == 3 ? 1 : c.idx;
             return lx == 1 - ox && lz == 1 - oz;
         }
-        case LevelId::L5: {
+        case LevelId::L5: case LevelId::TSGMansion: {
             int mx = pmod(cx, HOTEL_GRID), mz = pmod(cz, HOTEL_GRID);
             if (mx == 0 || mz == 0) return false; // corridors stay clear: every room door opens onto one
             return hotel_block(floor_div(cx, HOTEL_GRID), floor_div(cz, HOTEL_GRID)) == 0;
@@ -274,6 +313,67 @@ bool World::solid(int cx, int cz) const {
             if (mx < 3 || mx > 8 || mz < 3 || mz > 8) return false;
             return hash01(seed_, floor_div(cx, CITY_GRID), floor_div(cz, CITY_GRID), S_LOT) >= 0.10f;
         }
+        case LevelId::L7: // rocks rising out of the water (not near the drowned house)
+            if (near_spawn(cx, cz, 5)) return false;
+            return hash01(seed_, cx, cz, S_SOLID) < 0.03f;
+        case LevelId::L19: { // long attic lanes between walls of beams, junk everywhere
+            int mz = pmod(cz, ATTIC_GRID);
+            if (near_spawn(cx, cz, 1)) return false;
+            if (mz == 3) return hash01(seed_, cx, floor_div(cz, ATTIC_GRID), S_DOOR) >= 0.16f; // gaps between lanes
+            return mz != 1 && hash01(seed_, cx, cz, S_SOLID) < 0.08f;                         // boxes, junk
+        }
+        case LevelId::L21: { // hallways lined with numbered doors (every block face is doors)
+            int mx = pmod(cx, DOOR_GRID), mz = pmod(cz, DOOR_GRID);
+            if (mz == 0) return false;                                             // long halls along x
+            if (mx == 0) return hash01(seed_, floor_div(cx, DOOR_GRID), floor_div(cz, DOOR_GRID), S_LOT) >= 0.4f; // some cross halls
+            return true;
+        }
+        case LevelId::L22: { // parked cars in bays, stairwell cores
+            if (near_spawn(cx, cz, 1)) return false;
+            int rx = floor_div(cx, 8), rz = floor_div(cz, 8);
+            if (pmod(cx, 8) >= 5 && pmod(cx, 8) <= 6 && pmod(cz, 8) >= 5 && pmod(cz, 8) <= 6 && hash01(seed_, rx, rz, S_LOT) < 0.55f) return true; // stairwell
+            int mz = pmod(cz, 4);
+            if (mz == 1 || mz == 2) return hash01(seed_, cx, cz, S_SOLID) < 0.5f && pmod(cx, 3) != 0; // a car in the bay
+            return false;
+        }
+        case LevelId::L24: { // boulders and the odd towering rock
+            if (near_spawn(cx, cz, 2)) return false;
+            return hash01(seed_, cx, cz, S_SOLID) < 0.055f;
+        }
+        case LevelId::L33: { // shop blocks between wide halls
+            int mx = pmod(cx, MALL_GRID), mz = pmod(cz, MALL_GRID);
+            if (mx < 3 || mz < 3) { // halls: a planter or fountain in the middle of the crossings
+                return (mx == 1 && mz == 1 && !near_spawn(cx, cz, 2) && hash01(seed_, cx, cz, S_SOLID) < 0.5f);
+            }
+            int bx = floor_div(cx, MALL_GRID), bz = floor_div(cz, MALL_GRID);
+            bool open = hash01(seed_, bx, bz, S_LOT) < 0.35f;
+            if (!open) return true; // shuttered store
+            bool ring = mx == 3 || mx == 7 || mz == 3 || mz == 7;
+            if (ring) return !((mx == 5 && mz == 3) || (mz == 5 && mx == 3)); // two doorways
+            return (mx == 4 || mx == 6) && mz != 5;                            // shelves inside
+        }
+        case LevelId::L36: { // concourses, gate lounges with rows of seats, window walls
+            int mx = pmod(cx, AIR_GRID), mz = pmod(cz, AIR_GRID);
+            if (mz <= 3) return false;                       // concourse
+            if (mz == 9) return mx != 5;                     // windows, with a jet bridge through
+            if ((mz == 5 || mz == 7) && mx >= 2 && mx <= 8 && mx != 5) return true; // seat rows
+            if (mz == 4 && mx == 1) return true;             // gate desk
+            return false;
+        }
+        case LevelId::L51: { // ruined stone city blocks between streets
+            int mx = pmod(cx, RUIN_GRID), mz = pmod(cz, RUIN_GRID);
+            if (mx < 2 || mz < 2 || near_spawn(cx, cz, 1)) return false;
+            int bx = floor_div(cx, RUIN_GRID), bz = floor_div(cz, RUIN_GRID);
+            if (hash01(seed_, bx, bz, S_LOT) < 0.12f) return false;       // a plaza
+            if (hash01(seed_, bx, bz, S_LOT + 1) < 0.10f) return true;    // a stepped temple
+            return hash01(seed_, cx, cz, S_SOLID) >= 0.18f;                // buildings, some fallen
+        }
+        case LevelId::LRun: { // one corridor, three wide, to the exit far ahead
+            if (cx < -1 || cx > 1 || cz > 2 || cz < -RUN_LEN) return true;
+            if (cz > -4 || cz == -RUN_LEN) return false;
+            if (pmod(cz, 5) == 0) return cx == ((hash3(seed_, 0, cz, S_SOLID) & 1u) ? -1 : 1); // obstacles to weave past
+            return false;
+        }
         default: return false;
     }
 }
@@ -283,6 +383,38 @@ float World::block_h(int cx, int cz) const {
         case LevelId::L1: return 1.2f * (1 + (int)(hash3(seed_, cx, cz, S_HEIGHT) % 3u)); // 1-3 crates tall
         case LevelId::L4: return 0.76f;  // desk
         case LevelId::L9: return 4.6f;
+        case LevelId::L7: return 2.6f + hash01(seed_, cx, cz, S_HEIGHT) * 2.0f;
+        case LevelId::L19: return pmod(cz, ATTIC_GRID) == 3 ? info().ceil_h : 0.5f + 0.8f * hash01(seed_, cx, cz, S_HEIGHT);
+        case LevelId::L22: {
+            int mz = pmod(cz, 4);
+            return (mz == 1 || mz == 2) && !(pmod(cx, 8) >= 5 && pmod(cx, 8) <= 6 && pmod(cz, 8) >= 5 && pmod(cz, 8) <= 6) ? 1.35f : info().ceil_h;
+        }
+        case LevelId::L24: {
+            float r = hash01(seed_, cx, cz, S_HEIGHT);
+            return r < 0.3f ? 3.0f + r * 8.0f : 0.5f + r * 1.2f; // spires among boulders
+        }
+        case LevelId::L33: {
+            int mx = pmod(cx, MALL_GRID), mz = pmod(cz, MALL_GRID);
+            if (mx < 3 || mz < 3) return 0.75f;                 // planter
+            bool open = hash01(seed_, floor_div(cx, MALL_GRID), floor_div(cz, MALL_GRID), S_LOT) < 0.35f;
+            bool ring = mx == 3 || mx == 7 || mz == 3 || mz == 7;
+            return (open && !ring) ? 1.6f : info().ceil_h;      // shelves / shop front
+        }
+        case LevelId::L36: {
+            int mz = pmod(cz, AIR_GRID);
+            if (mz == 9) return info().ceil_h;
+            return mz == 4 ? 1.1f : 0.5f;                      // desk / seats
+        }
+        case LevelId::L51: {
+            int bx = floor_div(cx, RUIN_GRID), bz = floor_div(cz, RUIN_GRID);
+            int mx = pmod(cx, RUIN_GRID), mz = pmod(cz, RUIN_GRID);
+            if (hash01(seed_, bx, bz, S_LOT + 1) < 0.10f) { // temple steps rise toward the middle
+                int ring = std::min(std::min(mx - 2, 6 - mx), std::min(mz - 2, 6 - mz));
+                return 1.2f + ring * 1.5f;
+            }
+            float r = hash01(seed_, cx, cz, S_HEIGHT);
+            return r < 0.2f ? 0.7f : 2.6f + r * 3.0f; // rubble or a building
+        }
         case LevelId::L11: {
             int qx = floor_div(cx - 3, 3), qz = floor_div(cz - 3, 3); // each 3x3 quarter is one building
             float r = hash01(seed_, qx, qz, S_HEIGHT);
@@ -294,14 +426,23 @@ float World::block_h(int cx, int cz) const {
 
 bool World::wall_x(int gx, int cz) const {
     switch (id_) {
-        case LevelId::L0: case LevelId::L6: case LevelId::LFun:
+        case LevelId::L0: case LevelId::L6: case LevelId::LFun: case LevelId::TSG: case LevelId::TSGBlack: case LevelId::TSGHope:
             if (near_spawn(gx, cz, 1) && gx != -1) return false; // keep the spawn room open
             return edge_wall_rooms(gx, cz, true);
+        case LevelId::L7: // the drowned house's walls, and broken walls standing in the sea
+            if (near_spawn(gx, cz, 1) && gx != -1) return false;
+            if (std::abs(gx) <= 4 && std::abs(cz) <= 4) return edge_wall_rooms(gx, cz, true);
+            return hash01(seed_, gx, cz, S_LINE) < 0.035f;
+        case LevelId::L22: // concrete dividing walls here and there
+            if (near_spawn(gx, cz, 2)) return false;
+            return edge_wall_l1(gx, cz, true);
+        case LevelId::L36: // walls between the gate lounges
+            return pmod(gx, AIR_GRID) == 0 && pmod(cz, AIR_GRID) >= 4 && pmod(cz, AIR_GRID) <= 8 && pmod(cz, AIR_GRID) != 6;
         case LevelId::L1:
             if (near_spawn(gx, cz, 2)) return false;
             return edge_wall_l1(gx, cz, true);
         case LevelId::L4: return office_wall(gx, cz, true);
-        case LevelId::L5: return hotel_wall(gx, cz, true);
+        case LevelId::L5: case LevelId::TSGMansion: return hotel_wall(gx, cz, true);
         case LevelId::L37:
             if (near_spawn(gx, cz, 2)) return false;
             return edge_wall_l37(gx, cz, true);
@@ -311,14 +452,21 @@ bool World::wall_x(int gx, int cz) const {
 
 bool World::wall_z(int cx, int gz) const {
     switch (id_) {
-        case LevelId::L0: case LevelId::L6: case LevelId::LFun:
+        case LevelId::L0: case LevelId::L6: case LevelId::LFun: case LevelId::TSG: case LevelId::TSGBlack: case LevelId::TSGHope:
             if (near_spawn(cx, gz, 1) && gz != -1) return false;
             return edge_wall_rooms(gz, cx, false);
+        case LevelId::L7:
+            if (near_spawn(cx, gz, 1) && gz != -1) return false;
+            if (std::abs(cx) <= 4 && std::abs(gz) <= 4) return edge_wall_rooms(gz, cx, false);
+            return hash01(seed_, cx, gz, S_LINE + 1000) < 0.035f;
+        case LevelId::L22:
+            if (near_spawn(cx, gz, 2)) return false;
+            return edge_wall_l1(gz, cx, false);
         case LevelId::L1:
             if (near_spawn(cx, gz, 2)) return false;
             return edge_wall_l1(gz, cx, false);
         case LevelId::L4: return office_wall(gz, cx, false);
-        case LevelId::L5: return hotel_wall(gz, cx, false);
+        case LevelId::L5: case LevelId::TSGMansion: return hotel_wall(gz, cx, false);
         case LevelId::L37:
             if (near_spawn(cx, gz, 2)) return false;
             return edge_wall_l37(gz, cx, false);
@@ -329,6 +477,7 @@ bool World::wall_z(int cx, int gz) const {
 bool World::post(int gx, int gz) const {
     switch (id_) {
         case LevelId::L0: case LevelId::L1: case LevelId::L4: case LevelId::L5: case LevelId::L6: case LevelId::L37: case LevelId::LFun:
+        case LevelId::L7: case LevelId::L22: case LevelId::L36: case LevelId::TSG: case LevelId::TSGBlack: case LevelId::TSGMansion: case LevelId::TSGHope:
             return wall_x(gx, gz - 1) || wall_x(gx, gz) || wall_z(gx - 1, gz) || wall_z(gx, gz);
         default: return false;
     }
@@ -336,7 +485,20 @@ bool World::post(int gx, int gz) const {
 
 bool World::pillar(int gx, int gz) const {
     switch (id_) {
-        case LevelId::L0: case LevelId::L6: case LevelId::LFun: {
+        case LevelId::L22: { // the car park's grid of columns
+            if (pmod(gx, 3) != 0 || pmod(gz, 4) != 0 || near_spawn(gx, gz, 1)) return false;
+            for (int a = -1; a <= 0; a++)
+                for (int b = -1; b <= 0; b++)
+                    if (solid(gx + a, gz + b) && block_h(gx + a, gz + b) > 2.0f) return false;
+            return !post(gx, gz);
+        }
+        case LevelId::L36: return pmod(gx, 5) == 0 && pmod(gz, AIR_GRID) == 0 && !near_spawn(gx, gz, 1);
+        case LevelId::L51: { // colonnades along the streets
+            int mx = pmod(gx, RUIN_GRID), mz = pmod(gz, RUIN_GRID);
+            if (near_spawn(gx, gz, 1)) return false;
+            return ((mx == 1 && (gz & 1) == 0) || (mz == 1 && (gx & 1) == 0)) && hash01(seed_, gx, gz, S_PILLAR) < 0.6f;
+        }
+        case LevelId::L0: case LevelId::L6: case LevelId::LFun: case LevelId::TSG: {
             if (gx >= -1 && gx <= 2 && gz >= -1 && gz <= 2) return false;
             float p = ROOM_STYLES[(int)district(gx, gz)].pillar_prob;
             if (p <= 0 || hash01(seed_, gx, gz, S_PILLAR) >= p) return false;
@@ -350,7 +512,7 @@ bool World::pillar(int gx, int gz) const {
                     if (solid(gx + a, gz + b)) return false;
             return !post(gx, gz);
         }
-        case LevelId::L5: {
+        case LevelId::L5: case LevelId::TSGMansion: {
             int mx = pmod(gx, HOTEL_GRID), mz = pmod(gz, HOTEL_GRID);
             if (mx == 0 || mz == 0) return false;
             return hotel_block(floor_div(gx, HOTEL_GRID), floor_div(gz, HOTEL_GRID)) == 1 && ((mx + mz) % 2 == 0);
@@ -365,13 +527,70 @@ bool World::pillar(int gx, int gz) const {
 }
 
 bool World::pole(int cx, int cz) const {
-    return id_ == LevelId::L9 && light(cx, cz) != LightState::None;
+    return (id_ == LevelId::L9 || id_ == LevelId::L7 || id_ == LevelId::L51) && light(cx, cz) != LightState::None &&
+           !(id_ == LevelId::L7 && std::abs(cx) <= 4 && std::abs(cz) <= 4); // the drowned house has ceiling lamps
 }
 
 LightState World::light(int cx, int cz) const {
     if (solid(cx, cz)) return LightState::None;
     float r = hash01(seed_, cx, cz, S_LIGHTSTATE);
     switch (id_) {
+        case LevelId::TSG: { // grey panels, a lot of them dead
+            if ((cx & 1) || (cz & 1)) return LightState::None;
+            if (near_spawn(cx, cz, 1)) return LightState::On;
+            if (r < 0.30f) return LightState::Dead;
+            return r < 0.40f ? LightState::Flicker : LightState::On;
+        }
+        case LevelId::TSGBlack: case LevelId::TSGHope: return LightState::None;
+        case LevelId::L7: {
+            if (std::abs(cx) <= 4 && std::abs(cz) <= 4) { // lamps in the drowned house
+                if ((cx & 1) || (cz & 1)) return LightState::None;
+                return r < 0.25f ? LightState::Flicker : LightState::On;
+            }
+            return r < 0.012f ? (r < 0.004f ? LightState::Flicker : LightState::On) : LightState::None; // lamp posts in the water
+        }
+        case LevelId::L19: {
+            if (pmod(cz, ATTIC_GRID) != 1 || pmod(cx, 3) != 0) return LightState::None;
+            if (near_spawn(cx, cz, 2)) return LightState::On;
+            if (r < 0.45f) return LightState::Dead;
+            return r < 0.55f ? LightState::Flicker : LightState::On;
+        }
+        case LevelId::L21: {
+            if (((cx + cz) & 1) != 0) return LightState::None;
+            if (near_spawn(cx, cz, 1)) return LightState::On;
+            if (r < 0.12f) return LightState::Dead;
+            return r < 0.18f ? LightState::Flicker : LightState::On;
+        }
+        case LevelId::L22: {
+            if (pmod(cz, 4) != 0 && pmod(cz, 4) != 3) return LightState::None;
+            if ((cx & 1) != 0) return LightState::None;
+            if (near_spawn(cx, cz, 1)) return LightState::On;
+            if (fbm2(seed_, cx / 10.0f, cz / 10.0f, S_LIGHT) < 0.30f) return LightState::Dead;
+            if (r < 0.25f) return LightState::Dead;
+            return r < 0.35f ? LightState::Flicker : LightState::On;
+        }
+        case LevelId::L33: {
+            int mx = pmod(cx, MALL_GRID), mz = pmod(cz, MALL_GRID);
+            if (!(mx < 3 || mz < 3) || ((cx + cz) & 1)) return LightState::None;
+            if (near_spawn(cx, cz, 1)) return LightState::On;
+            if (r < 0.15f) return LightState::Dead;
+            return r < 0.22f ? LightState::Flicker : LightState::On;
+        }
+        case LevelId::L36: {
+            if ((cx & 1) || (cz & 1)) return LightState::None;
+            if (near_spawn(cx, cz, 1)) return LightState::On;
+            if (r < 0.08f) return LightState::Dead;
+            return r < 0.12f ? LightState::Flicker : LightState::On;
+        }
+        case LevelId::L51: { // braziers along the streets
+            int mx = pmod(cx, RUIN_GRID), mz = pmod(cz, RUIN_GRID);
+            if (!((mx == 0 && pmod(cz, 3) == 0) || (mz == 0 && pmod(cx, 3) == 0)) || (mx == 0 && mz == 0)) return LightState::None;
+            if (near_spawn(cx, cz, 3)) return LightState::Flicker;
+            if (r < 0.35f) return LightState::Dead;
+            return LightState::Flicker; // fire never holds still
+        }
+        case LevelId::LRun: // alarm lights all the way down
+            return (cx == 0 && (cz & 1) == 0) ? LightState::On : LightState::None;
         case LevelId::L0: case LevelId::LFun: {
             District d = district(cx, cz);
             bool slot = d == District::Hall ? ((cx + cz) & 1) == 0 : ((cx & 1) == 0 && (cz & 1) == 0);
@@ -407,7 +626,7 @@ LightState World::light(int cx, int cz) const {
             if (r < 0.18f) return LightState::Flicker;
             return LightState::On;
         }
-        case LevelId::L5: {
+        case LevelId::L5: case LevelId::TSGMansion: {
             int mx = pmod(cx, HOTEL_GRID), mz = pmod(cz, HOTEL_GRID);
             bool corridor = mx == 0 || mz == 0;
             Room room;
@@ -452,7 +671,28 @@ int World::floor_mat(int cx, int cz) const {
             int mx = pmod(cx, PIPE_GRID), mz = pmod(cz, PIPE_GRID);
             return (mx == 0) == (mz == 0) ? 1 : 0;
         }
-        case LevelId::L5: {
+        case LevelId::L7: { // wooden floor in the house and on the piers, water everywhere else
+            if (std::abs(cx) <= 4 && std::abs(cz) <= 4) return 0;
+            if ((pmod(cz, 9) == 0 && hash01(seed_, floor_div(cx, 6), cz, S_LOT) < 0.6f) ||
+                (pmod(cx, 9) == 0 && hash01(seed_, cx, floor_div(cz, 6), S_LOT) < 0.6f)) return 0; // piers
+            return 1;
+        }
+        case LevelId::L22: { // painted bays; rubble where the floor gave way
+            int mz = pmod(cz, 4);
+            if (mz == 1 || mz == 2) return 1;
+            return hash01(seed_, cx, cz, S_NOISE) < 0.04f ? 2 : 0;
+        }
+        case LevelId::L24: return fbm2(seed_, cx / 4.0f, cz / 4.0f, S_NOISE + 40) > 0.64f ? 1 : 0; // craters
+        case LevelId::L33: { // tiles in the halls, carpet in the open shops
+            int mx = pmod(cx, MALL_GRID), mz = pmod(cz, MALL_GRID);
+            return (mx < 3 || mz < 3) ? 0 : 1;
+        }
+        case LevelId::L36: return pmod(cz, AIR_GRID) <= 3 ? 1 : 0; // polished concourse, carpeted lounges
+        case LevelId::L51: { // paved streets, dirt elsewhere
+            int mx = pmod(cx, RUIN_GRID), mz = pmod(cz, RUIN_GRID);
+            return (mx < 2 || mz < 2) ? 0 : 1;
+        }
+        case LevelId::L5: case LevelId::TSGMansion: {
             int mx = pmod(cx, HOTEL_GRID), mz = pmod(cz, HOTEL_GRID);
             if (mx == 0 || mz == 0) return 0;
             return guest_room(cx, cz) ? 2 : 1; // worn guest-room carpet / ballroom parquet
@@ -484,6 +724,22 @@ uint32_t World::tint(int cx, int cz) const {
             static const uint32_t STONE[] = {0xd8d4cc, 0xb9bcc0, 0xc8b8a4, 0x9ea4aa, 0xe2ddd2, 0xaaa196};
             return STONE[hash3(seed_, qx, qz, S_TINT) % 6u];
         }
+        case LevelId::L22: { // car colours
+            static const uint32_t CAR[] = {0x8a2b25, 0x2c4a7a, 0xb8b8b0, 0x2a2a2a, 0x5a6b3a, 0x9a8a5a, 0x6b6f78};
+            int mz = pmod(cz, 4);
+            if ((mz != 1 && mz != 2) || block_h(cx, cz) > 2.0f) return 0xffffff; // stairwells stay concrete
+            return CAR[hash3(seed_, cx, cz, S_TINT) % 7u];
+        }
+        case LevelId::L33: { // shop fronts in different colours
+            int mx = pmod(cx, MALL_GRID), mz = pmod(cz, MALL_GRID);
+            if (mx < 3 || mz < 3) return 0xffffff;
+            static const uint32_t SHOP[] = {0xffd0e0, 0xd0f0ff, 0xfff0c0, 0xd8ffd0, 0xe8d8ff, 0xffffff};
+            return SHOP[hash3(seed_, floor_div(cx, MALL_GRID), floor_div(cz, MALL_GRID), S_TINT) % 6u];
+        }
+        case LevelId::L51: {
+            float r = hash01(seed_, floor_div(cx, RUIN_GRID), floor_div(cz, RUIN_GRID), S_TINT);
+            return r < 0.5f ? 0xd8ccb0 : 0xc0b8a8;
+        }
         default: return 0xffffff;
     }
 }
@@ -511,7 +767,7 @@ int World::hotel_block(int bx, int bz) const {
 }
 
 bool World::hotel_room(int cx, int cz, Room& r) const {
-    if (id_ != LevelId::L5) return false;
+    if (id_ != LevelId::L5 && id_ != LevelId::TSGMansion) return false;
     int mx = pmod(cx, HOTEL_GRID), mz = pmod(cz, HOTEL_GRID);
     if (mx == 0 || mz == 0) return false;
     r.bx = floor_div(cx, HOTEL_GRID);
@@ -663,6 +919,11 @@ bool World::exit_for_region(int rx, int rz, ExitDoor& out) const {
 }
 
 bool World::exit_door(int cx, int cz, ExitDoor* out) const {
+    if (id_ == LevelId::LRun) { // one door, at the very end of the corridor
+        if (cx != 0 || cz != -RUN_LEN) return false;
+        if (out) { out->cx = 0; out->cz = -RUN_LEN; out->side = 2; out->normal = {0, 1}; out->pos = {CELL * 0.5f, -RUN_LEN * CELL}; }
+        return true;
+    }
     int rx = floor_div(cx + EXIT_REGION / 2, EXIT_REGION), rz = floor_div(cz + EXIT_REGION / 2, EXIT_REGION);
     if (std::abs(rx) <= 1 && std::abs(rz) <= 1) return false;
     if (hash01(seed_, rx, rz, S_EXIT) > diff().exits) return false; // cheap early out
@@ -683,13 +944,16 @@ ItemType World::item(int cx, int cz) const {
     if (near_spawn(cx, cz, 0) || solid(cx, cz) || exit_cell(cx, cz) || pole(cx, cz)) return ItemType::None;
     if (cx < -32000 || cx > 32000 || cz < -32000 || cz > 32000) return ItemType::None; // id range
     // a flashlight waits right next to spawn where you'll need one
-    if (cx == 1 && cz == 1 && (id_ == LevelId::L0 || id_ == LevelId::L6 || id_ == LevelId::L8)) return ItemType::Flashlight;
+    if (cx == 1 && cz == 1 && (id_ == LevelId::L0 || id_ == LevelId::L6 || id_ == LevelId::L8 || id_ == LevelId::L19 ||
+                               id_ == LevelId::L51 || id_ == LevelId::TSGBlack || id_ == LevelId::TSGHope)) return ItemType::Flashlight;
     float rate = info().item_rate * diff().items;
     if (near_spawn(cx, cz, 6)) rate *= 2.5f;
-    if (id_ == LevelId::L5 && guest_room(cx, cz)) rate *= 3.0f; // rooms are worth searching
+    if (guest_room(cx, cz)) rate *= 3.0f; // rooms are worth searching
     if (hash01(seed_, cx, cz, S_ITEM) >= rate) return ItemType::None;
     // weights per item, with a few level flavours
-    float w[ITEM_COUNT] = {0, 30, 15, 6, 10, 6, 6, 6, 8, 5, 5};
+    float w[ITEM_COUNT] = {0, 30, 15, 6, 10, 6, 6, 6, 8, 5, 5,
+                           3, 6, 5, 4, 4, 7, 4, 2, 3, 3,   // 0.5 items
+                           0, 0, 0};                        // guns: sandbox only
     bool dark = info().dark || id_ == LevelId::L2;
     if (dark) w[(int)ItemType::Flashlight] *= 3, w[(int)ItemType::Firesalt] *= 2;
     if (id_ == LevelId::L1) w[(int)ItemType::RoyalRation] *= 2.5f, w[(int)ItemType::AlmondWater] *= 1.5f; // supply crates

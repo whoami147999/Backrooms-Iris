@@ -13,6 +13,7 @@ struct InputState {
     float look_x = 0, look_y = 0;     // right stick, -1..1, dead-zoned
     bool sprint = false;
     bool crouch = false;              // held crouch (keyboard)
+    bool fire_held = false;           // left mouse / Square / L held (automatic weapons)
 
     // ----- one-shot (true for the frame they happened)
     bool up = false, down = false, left = false, right = false; // menu navigation (with repeat)

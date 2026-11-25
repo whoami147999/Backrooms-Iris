@@ -10,6 +10,7 @@
 #include "core/sim.h"
 #include "net/client.h"
 #include "net/server.h"
+#include "client/tailscale.h"
 #include <chrono>
 #include <thread>
 #include "core/player.h"
@@ -152,8 +153,9 @@ static void test_all_levels() {
             for (int x = -O; x < O; x++) { open += L.open(x, z); items += L.item(x, z) != ItemType::None; }
         double reach = 100.0 * q.size() / open;
         CHECK(reach > 80.0, "%s: only %.1f%% of open cells reachable", nm, reach);
-        CHECK(exits >= 2, "%s: only %d reachable exits in a 350 m square", nm, exits);
-        CHECK(items >= 20, "%s: only %d items", nm, items);
+        bool run = (LevelId)li == LevelId::LRun; // one corridor, one door at the end
+        CHECK(exits >= (run ? 1 : 2), "%s: only %d reachable exits in a 350 m square", nm, exits);
+        CHECK(items >= (run ? 4 : 20), "%s: only %d items", nm, items);
         std::printf("  %-9s reachable %5.1f%%  exits %3d  items %4d\n", nm, reach, exits, items);
     }
 }
@@ -259,7 +261,7 @@ static void test_sim_soak() {
             sim.apply_input(a, ca);
             sim.apply_input(b, cb);
             sim.tick(1.0f / 60);
-            max_ents = std::max(max_ents, (int)sim.ents.size());
+            if (sim.world.id() == (LevelId)li) max_ents = std::max(max_ents, (int)sim.ents.size()); // (random walks find exits)
             for (int i : {a, b}) deaths += !sim.players[i].st.alive && sim.players[i].respawn_t > 9.98f;
         }
         bool expect = (LevelId)li != LevelId::L11 && (LevelId)li != LevelId::L37; // the two safe levels
@@ -321,7 +323,7 @@ static void test_difficulty_exits() {
                           diff_info((Difficulty)d).name, x, z);
                     CHECK(!L.solid(x, z), "exit opens into a solid cell");
                 }
-            CHECK(n >= 3, "%s %s: only %d exits in a 400 m square", level_info((LevelId)li).code, diff_info((Difficulty)d).name, n);
+            CHECK(n >= ((LevelId)li == LevelId::LRun ? 1 : 3), "%s %s: only %d exits in a 400 m square", level_info((LevelId)li).code, diff_info((Difficulty)d).name, n);
             CHECK(n <= prev + 2, "%s: %s has more exits (%d) than an easier difficulty (%d)", level_info((LevelId)li).code,
                   diff_info((Difficulty)d).name, n, prev);
             prev = n;
@@ -391,6 +393,7 @@ static void test_objectives() {
         sim.add_player("A");
         const Objective& o = sim.objective;
         types[(int)o.type]++;
+        if (sim.world.id() == LevelId::LRun) continue; // no objective on Level !: just run
         CHECK(o.type != ObjType::None && o.need > 0, "seed %u: no objective", seed);
         int things = 0;
         for (const Prop& p : sim.props) things += p.kind == PropKind::Tape || p.kind == PropKind::Breaker;
@@ -443,6 +446,89 @@ static void test_objectives() {
     std::printf("  objectives: tapes %d breakers %d survive %d\n", types[1], types[2], types[3]);
 }
 
+// Sandbox guns kill things; the rabbit's foot cheats death once; music boxes pull entities in.
+static void test_new_items() {
+    GameSim sim(7);
+    sim.sandbox = true;
+    sim.auto_spawn = false;
+    sim.start_level(LevelId::L11, 7);
+    int p = sim.add_player("A");
+    PlayerState& st = sim.players[p].st;
+    st.inv[(int)ItemType::Pistol] = 1;
+    InputCmd cmd;
+    sim.apply_input(p, cmd);
+    Entity& e = sim.spawn_entity(EntityType::Hound, {st.pos.x, st.pos.z - 5.0f}, 0);
+    uint16_t id = e.id;
+    cmd.yaw = 0; // facing -z
+    cmd.attack_item = (uint8_t)ItemType::Pistol;
+    for (int shot = 0; shot < 4; shot++) {
+        cmd.attack_ctr++;
+        sim.apply_input(p, cmd);
+        for (int t = 0; t < 30; t++) { sim.apply_input(p, cmd); sim.tick(1.0f / 60); }
+    }
+    bool alive = false;
+    for (auto& x : sim.ents) if (x.id == id && x.pos.x < 1e5f) alive = true;
+    CHECK(!alive, "four pistol shots should kill a hound");
+    // shotgun up close
+    st.inv[(int)ItemType::Shotgun] = 1;
+    Entity& e2 = sim.spawn_entity(EntityType::Partygoer, {st.pos.x, st.pos.z - 2.0f}, 0);
+    float hp0 = e2.hp;
+    uint16_t id2 = e2.id;
+    cmd.attack_item = (uint8_t)ItemType::Shotgun;
+    sim.freeze_ents = true;
+    for (int t = 0; t < 60; t++) sim.tick(1.0f / 60); // the shotgun's pump
+    sim.freeze_ents = false;
+    cmd.attack_ctr++;
+    sim.apply_input(p, cmd);
+    for (auto& x : sim.ents) if (x.id == id2) CHECK(x.hp < hp0 - 40 || x.pos.x > 1e5f, "shotgun should hurt a lot up close (%.0f)", x.hp);
+    // rabbit's foot
+    sim.clear_entities();
+    st.inv[(int)ItemType::RabbitFoot] = 1;
+    Entity& b = sim.spawn_entity(EntityType::Bacteria, {st.pos.x, st.pos.z - 0.5f}, 0);
+    b.state = EntState::Chase;
+    for (int t = 0; t < 30; t++) sim.tick(1.0f / 60);
+    CHECK(st.alive && st.inv[(int)ItemType::RabbitFoot] == 0, "the rabbit's foot should save you once");
+    // music box
+    sim.clear_entities();
+    st.inv[(int)ItemType::MusicBox] = 1;
+    cmd.use_item = (uint8_t)ItemType::MusicBox;
+    cmd.use_ctr++;
+    sim.apply_input(p, cmd);
+    Vec2 box{0, 0};
+    for (auto& pr : sim.props) if (pr.kind == PropKind::Lure) box = pr.pos;
+    Entity& h = sim.spawn_entity(EntityType::Partygoer, box + Vec2{8, 0}, 0);
+    uint16_t hid = h.id;
+    float d0 = 8;
+    for (int t = 0; t < 180; t++) sim.tick(1.0f / 60);
+    for (auto& x : sim.ents) if (x.id == hid) CHECK((x.pos - box).len() < d0 - 3, "the music box should draw entities in");
+}
+
+// Tailscale: `tailscale status --json` is parsed into this machine + online peers.
+static void test_tailscale() {
+    const char* json = R"({
+  "Version": "1.76.1", "BackendState": "Running", "TailscaleIPs": ["100.101.1.2", "fd7a:115c:a1e0::1"],
+  "Self": {"ID": "n1", "HostName": "bigg-pc", "DNSName": "bigg-pc.tail1234.ts.net.", "OS": "linux",
+           "TailscaleIPs": ["100.101.1.2", "fd7a:115c:a1e0::1"], "Online": true, "Capabilities": ["a", "b"]},
+  "Peer": {
+    "nodekey:abc": {"HostName": "friend-laptop", "DNSName": "friend-laptop.tail1234.ts.net.", "OS": "windows",
+                    "TailscaleIPs": ["fd7a:115c:a1e0::2", "100.88.7.6"], "Online": true, "Relay": "nyc",
+                    "PrimaryRoutes": null, "Tags": [], "LastSeen": "0001-01-01T00:00:00Z", "KeepAlive": false},
+    "nodekey:def": {"HostName": "old-phone", "TailscaleIPs": ["100.70.0.9"], "Online": false, "Escaped": "a \"quoted\" name é"}
+  },
+  "CurrentTailnet": {"Name": "bigg@example.com", "MagicDNSSuffix": "tail1234.ts.net", "MagicDNSEnabled": true}
+})";
+    TailStatus st;
+    CHECK(parse_tailscale_status(json, st), "tailscale json should parse");
+    CHECK(st.running && st.self_ip == "100.101.1.2" && st.self_name == "bigg-pc", "self: %s %s", st.self_ip.c_str(), st.self_name.c_str());
+    CHECK(st.peers.size() == 2, "two peers (%zu)", st.peers.size());
+    bool friend_ok = false;
+    for (auto& p : st.peers) if (p.name == "friend-laptop" && p.ip == "100.88.7.6" && p.online) friend_ok = true;
+    CHECK(friend_ok, "the friend's IPv4 and online state");
+    CHECK(is_tailscale_ip("100.64.0.1") && is_tailscale_ip("100.127.255.1") && !is_tailscale_ip("100.128.0.1") && !is_tailscale_ip("192.168.1.2"), "tailnet range");
+    TailStatus bad;
+    CHECK(!parse_tailscale_status("tailscale: command not found", bad), "garbage is not a status");
+}
+
 int main() {
     test_determinism();
     test_connectivity();
@@ -456,6 +542,8 @@ int main() {
     test_difficulty_exits();
     test_hotel_rooms();
     test_objectives();
+    test_new_items();
+    test_tailscale();
     test_sim_soak();
     test_network();
     if (g_fail) { std::printf("%d check(s) failed\n", g_fail); return 1; }

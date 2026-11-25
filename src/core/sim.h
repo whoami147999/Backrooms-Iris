@@ -38,12 +38,14 @@ struct Entity {
     float repath_t = 0;
     float attack_cd = 0;
     float stare_t = 0;     // smilers: how long they've been looked at
+    float hp = 100;        // sandbox guns can kill things
 };
+float entity_max_hp(EntityType t);
 
 // Things lying or burning in the world that aren't part of the level itself.
 // Item: something to pick up. Flare: burning firesalt. Tape: objective pickup.
 // Breaker: objective switch box on a wall (item = which wall side it hangs on, life 1 = switched on).
-enum class PropKind : uint8_t { Item, Flare, Tape, Breaker };
+enum class PropKind : uint8_t { Item, Flare, Tape, Breaker, Glow, Lure };
 struct Prop {
     uint16_t id = 0;
     PropKind kind = PropKind::Item;
@@ -63,6 +65,8 @@ struct Objective {
 std::string objective_text(const Objective& o); // "FIND THE LOST TAPES 1/3"
 constexpr float FLARE_TIME = 40.0f;
 constexpr float FLARE_RADIUS = 6.5f;
+constexpr float GLOW_TIME = 180.0f, GLOW_RADIUS = 5.0f;  // glow stick
+constexpr float LURE_TIME = 20.0f, LURE_RANGE = 26.0f;   // music box
 
 struct SimPlayer {
     bool active = false;
@@ -141,6 +145,12 @@ private:
     void use_item(int i, ItemType t);
     void try_pickup(int i);
     void swing(int i);
+    void attack(int i, ItemType weapon);
+    void shoot(int i, ItemType gun);
+    void hurt_entity(size_t k, float dmg, int by);
+    Vec2 throw_point(const PlayerState& p, float max_d) const;
+    void add_prop(PropKind k, Vec2 pos, float life, ItemType item = ItemType::None);
+    bool lure_for(const Entity& e, Vec2& out) const;
     void toast(int i, const std::string& s);
     void kill(int i, DeathCause c);
     void lethal_touch(int i, Entity& e, DeathCause c); // kills, except on easy where it badly hurts

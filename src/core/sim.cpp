@@ -9,6 +9,16 @@
 
 namespace iris {
 
+float entity_max_hp(EntityType t) {
+    switch (t) {
+        case EntityType::Bacteria: return 160;
+        case EntityType::Hound: return 80;
+        case EntityType::SkinStealer: return 130;
+        case EntityType::Partygoer: return 100;
+        default: return 1e9f; // a smile can't be shot
+    }
+}
+
 const char* entity_name(EntityType t) {
     switch (t) {
         case EntityType::Bacteria: return "BACTERIA";
@@ -36,6 +46,19 @@ std::vector<Population> population(LevelId id) {
         case LevelId::L8: return {{EntityType::Smiler, 4}, {EntityType::Hound, 1}};
         case LevelId::L9: return {{EntityType::SkinStealer, 2}, {EntityType::Hound, 2}};
         case LevelId::LFun: return {{EntityType::Partygoer, 5}};
+        case LevelId::L7: return {{EntityType::Smiler, 1}};                          // the sea is nearly empty
+        case LevelId::L19: return {{EntityType::Smiler, 2}, {EntityType::Hound, 1}};
+        case LevelId::L21: return {{EntityType::Bacteria, 1}};
+        case LevelId::L22: return {{EntityType::Hound, 2}, {EntityType::SkinStealer, 1}};
+        case LevelId::L24: return {{EntityType::Hound, 1}};
+        case LevelId::L33: return {{EntityType::SkinStealer, 1}, {EntityType::Smiler, 1}, {EntityType::Partygoer, 1}};
+        case LevelId::L36: return {{EntityType::Bacteria, 1}, {EntityType::Smiler, 1}};
+        case LevelId::L51: return {{EntityType::Hound, 2}, {EntityType::Smiler, 2}};
+        case LevelId::LRun: return {{EntityType::Partygoer, 5}, {EntityType::Hound, 1}}; // the chase (spawned behind you)
+        case LevelId::TSG: return {{EntityType::Bacteria, 2}};
+        case LevelId::TSGBlack: return {{EntityType::Bacteria, 2}, {EntityType::Hound, 2}};
+        case LevelId::TSGMansion: return {{EntityType::SkinStealer, 1}, {EntityType::Smiler, 2}};
+        case LevelId::TSGHope: return {{EntityType::Smiler, 3}, {EntityType::Bacteria, 1}};
         default: return {}; // Level 11 and Level 37 are safe
     }
 }
@@ -131,6 +154,7 @@ void GameSim::setup_objective() {
     objective = Objective{};
     LevelId id = world.id();
     uint32_t h = hash3(world.seed(), (int)id, 0, 9001);
+    if (id == LevelId::LRun) return; // the only objective here is the door at the end
     bool safe = id == LevelId::L11 || id == LevelId::L37;
     int pick = safe ? 0 : (int)(h % 3u);
     objective.reward = (Perk)((h / 3u + objectives_done) % (uint32_t)PERK_COUNT);
@@ -251,6 +275,7 @@ Entity& GameSim::spawn_entity(EntityType t, Vec2 pos, float yaw) {
     e.id = next_ent_id_++;
     if (next_ent_id_ == 0) next_ent_id_ = 1;
     e.type = t;
+    e.hp = entity_max_hp(t);
     e.pos = pos;
     e.goal = pos;
     e.yaw = yaw;
@@ -300,6 +325,11 @@ float GameSim::light_at(Vec3 p) const {
         if (f.kind != PropKind::Flare) continue;
         float d = (f.pos - Vec2{p.x, p.z}).len();
         if (d < FLARE_RADIUS && !world.segment_blocked(f.pos, {p.x, p.z})) b += (1.0f - d / FLARE_RADIUS) * 1.2f;
+    }
+    for (const Prop& g : props) {
+        if (g.kind != PropKind::Glow) continue;
+        float d = (g.pos - Vec2{p.x, p.z}).len();
+        if (d < GLOW_RADIUS && !world.segment_blocked(g.pos, {p.x, p.z})) b += (1.0f - d / GLOW_RADIUS) * 0.6f;
     }
     for (const SimPlayer& sp : players) {
         if (!sp.active || !sp.st.alive || !sp.st.light_on) continue;
@@ -395,26 +425,118 @@ void GameSim::use_item(int i, ItemType t) {
         case ItemType::LuckyMilk:
             p.lucky = 35.0f;
             break;
-        case ItemType::Firesalt: {
-            // throw it a few metres ahead (stopping at walls); it burns as a flare
-            Vec2 f = yaw_forward(p.yaw);
-            Vec2 from{p.pos.x, p.pos.z}, at = from;
-            for (float d = 0.5f; d <= 5.0f; d += 0.25f) {
-                Vec2 c = from + f * d;
-                if (world.segment_blocked(from, c) || world.solid(floor_to_int(c.x / CELL), floor_to_int(c.z / CELL))) break;
-                at = c;
+        case ItemType::Firesalt: // thrown a few metres ahead; it burns as a flare
+            add_prop(PropKind::Flare, throw_point(p, 5.0f), FLARE_TIME);
+            break;
+        case ItemType::SuperAlmond:
+            p.stamina = 1;
+            p.exhausted = false;
+            p.sanity = std::min(100.0f, p.sanity + 70.0f);
+            p.health = std::min(100.0f, p.health + 25.0f);
+            break;
+        case ItemType::MothJelly: p.regen = 15.0f; break;
+        case ItemType::LiquidSilence: p.silent = 30.0f; toast(i, "YOU CAN'T HEAR YOUR OWN FOOTSTEPS"); break;
+        case ItemType::MedKit: p.health = std::min(100.0f, p.health + 70.0f); break;
+        case ItemType::GlowStick: add_prop(PropKind::Glow, throw_point(p, 2.0f), GLOW_TIME); break;
+        case ItemType::MusicBox: add_prop(PropKind::Lure, throw_point(p, 6.0f), LURE_TIME); break;
+        case ItemType::FlashBulb: { // a blinding flash: everything that can see it is stunned
+            Vec2 at = throw_point(p, 4.0f);
+            p.flash = 0;
+            int n = 0;
+            for (Entity& e : ents) {
+                if ((e.pos - at).len() > 9.0f || world.segment_blocked(at, e.pos)) continue;
+                n++;
+                if (e.type == EntityType::Smiler) { e.state = EntState::Retreat; e.state_t = 0; continue; }
+                e.state = EntState::Stunned;
+                e.state_t = -1.5f; // 5.5 s
+                e.path.clear();
             }
-            Prop pr;
-            pr.id = next_prop_id_++;
-            if (next_prop_id_ == 0) next_prop_id_ = 1;
-            pr.kind = PropKind::Flare;
-            pr.pos = at;
-            pr.life = FLARE_TIME;
-            props.push_back(pr);
+            for (int j = 0; j < IRIS_MAX_PLAYERS; j++) // anyone looking at it is dazzled too
+                if (j != i && players[j].active && looking_at(players[j].st, at, 12.0f, 0.6f)) players[j].st.flash = 0;
+            if (n) toast(i, n == 1 ? "IT'S STUNNED" : "THEY'RE STUNNED");
             break;
         }
+        case ItemType::RabbitFoot: p.inv[(int)t]++; toast(i, "KEEP IT. IT WORKS ON ITS OWN"); break; // not used up by hand
         default: break;
     }
+}
+
+Vec2 GameSim::throw_point(const PlayerState& p, float max_d) const {
+    // a few metres ahead, stopping at walls
+    Vec2 f = yaw_forward(p.yaw);
+    Vec2 from{p.pos.x, p.pos.z}, at = from;
+    for (float d = 0.5f; d <= max_d; d += 0.25f) {
+        Vec2 c = from + f * d;
+        if (world.segment_blocked(from, c) || world.solid(floor_to_int(c.x / CELL), floor_to_int(c.z / CELL))) break;
+        at = c;
+    }
+    return at;
+}
+
+void GameSim::add_prop(PropKind k, Vec2 pos, float life, ItemType item) {
+    Prop pr;
+    pr.id = next_prop_id_++;
+    if (next_prop_id_ == 0) next_prop_id_ = 1;
+    pr.kind = k;
+    pr.pos = pos;
+    pr.life = life;
+    pr.item = item;
+    props.push_back(pr);
+}
+
+void GameSim::attack(int i, ItemType weapon) {
+    if (weapon == ItemType::Crowbar || weapon == ItemType::None) swing(i);
+    else if (is_gun(weapon)) shoot(i, weapon);
+}
+
+// Damage from a gun. Smilers just leave; everything else bleeds, flinches, and dies at 0.
+void GameSim::hurt_entity(size_t k, float dmg, int by) {
+    Entity& e = ents[k];
+    if (e.type == EntityType::Smiler) { e.state = EntState::Retreat; e.state_t = 0; return; }
+    e.hp -= dmg;
+    if (e.hp <= 0) {
+        event(players[by].name + " KILLED A " + entity_name(e.type));
+        e.pos = {1e6f, 1e6f}; // removed on the next despawn pass, far from everyone
+        e.state = EntState::Retreat;
+        return;
+    }
+    if (e.state != EntState::Stunned) { e.state = EntState::Stunned; e.state_t = 3.7f; } // a short flinch
+    e.target = by;
+    e.last_seen = {players[by].st.pos.x, players[by].st.pos.z};
+}
+
+void GameSim::shoot(int i, ItemType gun) {
+    PlayerState& p = players[i].st;
+    if (!p.alive || !p.has(gun)) return;
+    float cd = gun == ItemType::Pistol ? 0.3f : gun == ItemType::Shotgun ? 0.85f : 0.1f;
+    if (p.swing < cd) return;
+    p.swing = 0;
+    int pellets = gun == ItemType::Shotgun ? 8 : 1;
+    float dmg = gun == ItemType::Pistol ? 34.0f : gun == ItemType::Shotgun ? 14.0f : 21.0f;
+    float range = gun == ItemType::Shotgun ? 16.0f : 45.0f;
+    float spread = gun == ItemType::Shotgun ? 0.11f : gun == ItemType::Rifle ? 0.025f : 0.012f;
+    Vec2 from{p.pos.x, p.pos.z};
+    for (int k = 0; k < pellets; k++) {
+        float yaw = p.yaw + rng_.range(-spread, spread);
+        Vec2 d = yaw_forward(yaw);
+        // closest entity the ray passes through, if nothing solid is in the way
+        int hit = -1;
+        float best = range;
+        for (size_t n = 0; n < ents.size(); n++) {
+            Vec2 to = ents[n].pos - from;
+            float t = to.x * d.x + to.z * d.z;
+            if (t < 0.2f || t > best) continue;
+            Vec2 c = from + d * t;
+            if ((ents[n].pos - c).len() > (ents[n].type == EntityType::Smiler ? 0.6f : 0.42f)) continue;
+            if (world.segment_blocked(from, ents[n].pos)) continue;
+            best = t;
+            hit = (int)n;
+        }
+        if (hit >= 0) hurt_entity((size_t)hit, dmg * (gun == ItemType::Shotgun ? std::max(0.35f, 1.0f - best / range) : 1.0f), i);
+    }
+    // gunfire is loud: every hound in earshot comes running
+    for (Entity& e : ents)
+        if (e.type == EntityType::Hound && (e.pos - from).len() < 35.0f && e.state != EntState::Stunned) { e.target = i; e.last_seen = from; }
 }
 
 void GameSim::swing(int i) {
@@ -452,7 +574,10 @@ void GameSim::apply_input(int i, const InputCmd& cmd) {
     if (sp.st.alive) {
         if (cmd.pickup_ctr != sp.last_cmd.pickup_ctr) try_pickup(i);
         if (cmd.use_ctr != sp.last_cmd.use_ctr) use_item(i, (ItemType)cmd.use_item);
-        if (cmd.attack_ctr != sp.last_cmd.attack_ctr) swing(i);
+        ItemType weapon = (ItemType)cmd.attack_item;
+        if ((int)weapon >= ITEM_COUNT) weapon = ItemType::None;
+        if (cmd.attack_ctr != sp.last_cmd.attack_ctr) attack(i, weapon);
+        else if ((cmd.buttons & BTN_FIRE) && weapon == ItemType::Rifle) shoot(i, weapon); // automatic
         if (cmd.light_ctr != sp.last_cmd.light_ctr && sp.st.has(ItemType::Flashlight))
             sp.st.light_on = !sp.st.light_on && sp.st.battery > 0.02f;
     }
@@ -463,6 +588,16 @@ void GameSim::apply_input(int i, const InputCmd& cmd) {
 void GameSim::kill(int i, DeathCause c) {
     PlayerState& p = players[i].st;
     if (!p.alive || (god && c != DeathCause::MemoryJuice)) return;
+    if (c != DeathCause::MemoryJuice && p.has(ItemType::RabbitFoot)) { // the rabbit's foot takes it instead
+        p.inv[(int)ItemType::RabbitFoot]--;
+        p.health = 40;
+        p.hurt = 0;
+        p.sanity = std::max(p.sanity, 30.0f);
+        toast(i, "THE RABBIT'S FOOT SAVED YOU");
+        for (Entity& e : ents) // and whatever did it is knocked back
+            if ((e.pos - Vec2{p.pos.x, p.pos.z}).len() < 4.0f && e.type != EntityType::Smiler) { e.state = EntState::Stunned; e.state_t = 0; }
+        return;
+    }
     p.alive = false;
     p.health = 0;
     p.cause = c;
@@ -512,6 +647,9 @@ void GameSim::update_player_stats(int i, float dt) {
         if (p.boost <= 0) { p.boost = 0; p.stamina = 0.15f; p.exhausted = true; } // the crash
     }
     p.slow = std::max(0.0f, p.slow - dt);
+    p.silent = std::max(0.0f, p.silent - dt);
+    p.flash += dt;
+    if (p.regen > 0) { p.regen -= dt; p.health = std::min(100.0f, p.health + 4.0f * dt); }
     p.lucky = std::max(0.0f, p.lucky - dt);
     if (p.light_on) {
         p.battery -= dt / 200.0f * world.diff().battery / (1.0f + 0.4f * p.perk(Perk::Battery));
@@ -563,7 +701,7 @@ void GameSim::update_player_stats(int i, float dt) {
             ExitDoor door;
             if (!world.exit_door(cx + dx, cz + dz, &door)) continue;
             if ((door.pos - Vec2{p.pos.x, p.pos.z}).len() < 0.72f) { // walk into the door
-                if (world.id() == LevelId::L11) { escaped = true; event(sp.name + " FOUND A WAY OUT..."); }
+                if (world.id() == LevelId::TSGHope) { escaped = true; event(sp.name + " FOUND A WAY OUT..."); }
                 pending_level_ = world.info().next;
             }
         }
@@ -655,6 +793,18 @@ void GameSim::move_entity(Entity& e, Vec2 goal, float speed, float dt) {
     e.anim += e.speed * dt * 2.2f;
 }
 
+bool GameSim::lure_for(const Entity& e, Vec2& out) const {
+    if (e.type == EntityType::Smiler) return false;
+    float best = LURE_RANGE;
+    bool found = false;
+    for (const Prop& p : props) {
+        if (p.kind != PropKind::Lure) continue;
+        float d = (p.pos - e.pos).len();
+        if (d < best) { best = d; out = p.pos; found = true; }
+    }
+    return found;
+}
+
 // Burning firesalt keeps everything (but the smilers, who just hate light) at a distance.
 bool GameSim::flee_flares(Entity& e, float dt) {
     for (const Prop& f : props) {
@@ -679,6 +829,14 @@ void GameSim::update_entity(Entity& e, float dt) {
         return;
     }
     if (e.type != EntityType::Smiler && flee_flares(e, dt)) return;
+    Vec2 lure;
+    if (e.state != EntState::Charge && lure_for(e, lure)) { // the music box: they can't help it
+        e.state = EntState::Search;
+        if ((lure - e.pos).len() > 1.2f) move_entity(e, lure, e.type == EntityType::Partygoer ? 2.2f : 2.0f, dt);
+        else e.speed = 0;
+        e.yaw += dt * 1.5f; // swaying to it
+        return;
+    }
 
     float pd = 1e9f;
     int pi = closest_player(e.pos, &pd);
@@ -869,6 +1027,30 @@ void GameSim::spawn_entities() {
         closest_player(e.pos, &d);
         return d > 75.0f;
     }), ents.end());
+    if (auto_spawn && world.id() == LevelId::LRun) { // Level !: they come up the corridor behind you, already running
+        if (level_time < 3.0f) return;
+        for (const Population& pop : population(world.id())) {
+            int have = 0;
+            for (const Entity& e : ents) have += e.type == pop.type;
+            int want = std::max(1, (int)std::lround(pop.count * world.diff().ent_count));
+            if (have >= want) continue;
+            float back = -1e9f; // the rearmost player
+            int who = -1;
+            for (int i = 0; i < IRIS_MAX_PLAYERS; i++)
+                if (players[i].active && players[i].st.alive && players[i].st.pos.z > back) { back = players[i].st.pos.z; who = i; }
+            if (who < 0) return;
+            int cz = std::min(2, floor_to_int(back / CELL) + 9 + (int)rng_.range(0, 4));
+            for (int cx = -1; cx <= 1; cx++) {
+                if (!world.open(cx, cz)) continue;
+                Entity& e = spawn_entity(pop.type, cell_center(cx, cz), 0);
+                e.state = EntState::Chase;
+                e.target = who;
+                e.last_seen = {players[who].st.pos.x, players[who].st.pos.z};
+                return;
+            }
+        }
+        return;
+    }
     if (!auto_spawn || level_time < world.diff().grace) return; // a moment to get your bearings
     if (ents.size() >= 12) return;
     for (const Population& pop : population(world.id())) {
@@ -897,8 +1079,10 @@ void GameSim::tick(float dt) {
         for (Entity& e : ents) update_entity(e, dt);
     // flares burn out
     for (Prop& p : props)
-        if (p.kind == PropKind::Flare) p.life -= dt;
-    props.erase(std::remove_if(props.begin(), props.end(), [](const Prop& p) { return p.kind == PropKind::Flare && p.life <= 0; }), props.end());
+        if (p.kind == PropKind::Flare || p.kind == PropKind::Glow || p.kind == PropKind::Lure) p.life -= dt;
+    props.erase(std::remove_if(props.begin(), props.end(), [](const Prop& p) {
+        return (p.kind == PropKind::Flare || p.kind == PropKind::Glow || p.kind == PropKind::Lure) && p.life <= 0;
+    }), props.end());
     spawn_t_ -= dt;
     if (spawn_t_ <= 0) {
         spawn_entities();

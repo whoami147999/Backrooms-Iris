@@ -26,10 +26,12 @@ cmake --build build-vita -j
 
 Output: `build-vita/BackroomsIris.vpk` (title ID BKIR00001).
 
-Version 0.4.0 (network protocol 4). The renderer uses a chunk-building worker thread (std::thread, so the Vita target
+Version 0.5.0 (network protocol 5). The renderer uses a chunk-building worker thread (std::thread, so the Vita target
 links `pthread`) and procedural textures (all power-of-two, 512 px on the Vita, generated at level load: expect
 ~2-3 s per level). The film-look GLSL shader is PC only (`#if !defined(IRIS_GL_VITA)`): the Vita draws grain, vignette
-and scanlines as plain textured quads, so vitaGL only ever sees fixed-function GL.
+and scanlines as plain textured quads, so vitaGL only ever sees fixed-function GL. The PS1 look's GLSL world shader is PC only too; on the Vita the retro
+setting just switches textures to nearest filtering. `src/client/tailscale.cpp` is compiled on the Vita but does
+nothing there (`#elif defined(__vita__)` returns no peers).
 
 ## 3. If it fails
 

@@ -96,6 +96,8 @@ void gamepad_poll(InputState& in, double now) {
     if (SDL_GameControllerGetButton(g_pad, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER) ||
         axis(SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > 0.4f || SDL_GameControllerGetButton(g_pad, SDL_CONTROLLER_BUTTON_LEFTSTICK))
         in.sprint = true;
+    if (SDL_GameControllerGetButton(g_pad, SDL_CONTROLLER_BUTTON_X) || SDL_GameControllerGetButton(g_pad, SDL_CONTROLLER_BUTTON_LEFTSHOULDER))
+        in.fire_held = true;
 }
 
 void gamepad_shutdown() {

@@ -11,6 +11,7 @@
 #include "renderer.h"
 #include "session.h"
 #include "settings.h"
+#include "tailscale.h"
 
 namespace iris {
 
@@ -37,10 +38,12 @@ struct DevOptions {          // command-line switches used for testing / screens
     bool give_all = false;   // fill the inventory
     int select = -1;         // select this item type in the hotbar
     int flare = -1;          // drop a burning firesalt this far ahead
+    std::string prop;        // drop a glow stick ("glow") or music box ("lure") ahead
     bool stun = false;       // the dev entity starts knocked down
     int difficulty = -1;
     int camcorder = -1;      // force the camcorder look on/off
     int film = -1;
+    int retro = -1;
     float at_exit = -1;      // stand this far in front of the nearest exit door, facing it
 };
 
@@ -83,6 +86,9 @@ private:
     std::unique_ptr<Session> session_;
     NetClient browser_;          // LAN discovery for the Join screen
     double browse_t_ = 0;
+    Tailscale tailscale_;        // tailnet discovery (PC): friends' games anywhere
+    double tail_t_ = -100;
+    TailStatus tail_;
 
     std::vector<Screen> stack_{Screen::Title};
     Menu menu_;
@@ -107,6 +113,9 @@ private:
     double now_ = 0, frame_dt_ = 0;
     float fps_ = 0;
     bool film_on_ = false;   // the PC film shader ran this frame
+    double compass_t_ = -100;
+    Vec2 compass_to_;
+    bool compass_ok_ = false;
     int frames_ = 0;
     int frames_total_ = 0;   // boot log: first frames only
     double fps_t_ = 0;

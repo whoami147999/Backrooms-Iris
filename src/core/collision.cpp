@@ -42,7 +42,7 @@ void collide_circle(const World& W, Vec2& pos, float r) {
                 if (W.wall_z(gx, gz)) push_out(pos, r, {x, z - hw, x + CELL, z + hw});
                 if (W.post(gx, gz)) push_out(pos, r, {x - hp, z - hp, x + hp, z + hp});
                 else if (W.pillar(gx, gz)) push_out(pos, r, {x - hl, z - hl, x + hl, z + hl});
-                if (W.id() == LevelId::L5) { // guest-room furniture and doorway jambs
+                if (W.hotel()) { // guest-room furniture and doorway jambs
                     Furn f[MAX_FURN];
                     int n = W.furniture(gx, gz, f); // (every cell of a room repeats it: harmless)
                     for (int k = 0; k < n; k++)

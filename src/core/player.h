@@ -8,7 +8,7 @@
 
 namespace iris {
 
-enum InputButtons : uint8_t { BTN_SPRINT = 1, BTN_CROUCH = 2 };
+enum InputButtons : uint8_t { BTN_SPRINT = 1, BTN_CROUCH = 2, BTN_FIRE = 4 /* held: automatic weapons */ };
 
 // One tick of player intent. This is exactly what goes over the network.
 struct InputCmd {
@@ -23,7 +23,8 @@ struct InputCmd {
     uint8_t use_ctr = 0;
     uint8_t use_item = 0;   // ItemType to use when use_ctr changes
     uint8_t light_ctr = 0;  // flashlight toggle
-    uint8_t attack_ctr = 0; // crowbar swing
+    uint8_t attack_ctr = 0; // crowbar swing / gun shot
+    uint8_t attack_item = 0; // ItemType of the weapon in hand (crowbar or gun)
 };
 
 // Rewards for objectives: they last the whole run (and stack up to PERK_MAX).
@@ -56,6 +57,9 @@ struct PlayerState {
     float hurt = 99;       // seconds since last damage (regen + red flash)
     float swing = 99;      // seconds since the last crowbar swing
     float battery = 1;     // flashlight charge 0..1
+    float regen = 0;       // moth jelly seconds left
+    float silent = 0;      // liquid silence seconds left
+    float flash = 99;      // seconds since you set off a flash bulb (screen flash)
     bool light_on = false; // flashlight
     bool noclip = false;   // sandbox: walk through walls
     uint8_t inv[ITEM_COUNT] = {};

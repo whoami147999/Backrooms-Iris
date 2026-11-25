@@ -49,6 +49,7 @@ struct FoundServer {
     std::string name, level;
     int players = 0, max_players = 0, protocol = 0;
     double seen = 0;
+    std::string via;   // "TAILSCALE: bigg-pc" when found on the tailnet, empty on the LAN
 };
 
 class NetClient {
@@ -76,6 +77,7 @@ public:
     // LAN browser
     std::vector<FoundServer> found;
     void scan(double now);           // send a broadcast query (call about once a second)
+    void scan_to(const NetAddr& addr, const std::string& via); // ask one machine (Tailscale peers)
     void scan_poll(double now);
     void scan_stop() { scan_sock_.close(); }
 
@@ -85,6 +87,7 @@ private:
     std::string name_;
     double hello_t_ = 0, connect_start_ = 0, last_heard_ = 0;
     void handle(const uint8_t* data, int len, double now);
+    std::vector<std::pair<NetAddr, std::string>> asked_; // unicast queries: who we asked, and the label
 };
 
 bool parse_server_info(const char* text, FoundServer& out);

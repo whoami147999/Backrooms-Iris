@@ -157,6 +157,7 @@ void platform_poll(InputState& in) {
         in.move_z = (float)((k[SDL_SCANCODE_W] || k[SDL_SCANCODE_UP]) - (k[SDL_SCANCODE_S] || k[SDL_SCANCODE_DOWN]));
         in.sprint = k[SDL_SCANCODE_LSHIFT] || k[SDL_SCANCODE_RSHIFT];
         in.crouch = k[SDL_SCANCODE_LCTRL] || k[SDL_SCANCODE_C];
+        in.fire_held = (SDL_GetMouseState(nullptr, nullptr) & SDL_BUTTON_LMASK) != 0;
     }
     gamepad_poll(in, platform_time());
 

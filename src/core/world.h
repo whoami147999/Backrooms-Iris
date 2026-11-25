@@ -14,7 +14,12 @@
 
 namespace iris {
 
-enum class LevelId : uint8_t { L0, L1, L2, L4, L5, L6, L8, L9, L11, L37, LFun, COUNT };
+enum class LevelId : uint8_t {
+    L0, L1, L2, L4, L5, L6, L7, L8, L9, L11, L19, L21, L22, L24, L33, L36, L37, L51, LFun,
+    LRun,                                     // Level ! - Run For Your Life
+    TSG, TSGBlack, TSGMansion, TSGHope,       // TH3 SH4DY GR3Y and its sub-levels
+    COUNT
+};
 enum class LightState : uint8_t { None, On, Dead, Flicker };
 
 enum class Difficulty : uint8_t { Easy, Medium, Hard, Nightmare, COUNT };
@@ -41,6 +46,11 @@ enum class ItemType : uint8_t {
     RoyalRation, LiquidPain, CashewWater, LuckyMilk,  // more from the wiki
     Firesalt,                                         // thrown: burns as a flare
     Flashlight, Crowbar,                              // tools / weapons (you carry one)
+    SuperAlmond, MothJelly, LiquidSilence, MedKit,    // 0.5: more drinks and medicine
+    FlashBulb, GlowStick, MusicBox,                   // thrown / dropped
+    RabbitFoot,                                       // cheats death once (stacks)
+    Compass, Radio,                                   // tools: point to the exit / pick up entities
+    Pistol, Shotgun, Rifle,                           // sandbox only
     COUNT
 };
 constexpr int ITEM_COUNT = (int)ItemType::COUNT;
@@ -49,7 +59,10 @@ struct ItemInfo {
     const char* name;
     bool tool;           // flashlight / crowbar: you own it or you don't
     const char* blurb;   // one line for the HUD and the sandbox menu
+    bool sandbox_only = false; // guns: never found lying around
 };
+inline bool is_gun(ItemType t) { return t == ItemType::Pistol || t == ItemType::Shotgun || t == ItemType::Rifle; }
+inline bool is_weapon(ItemType t) { return t == ItemType::Crowbar || is_gun(t); }
 const ItemInfo& item_info(ItemType t);
 
 struct LevelInfo {
@@ -122,6 +135,9 @@ public:
     // `owner` is true for the one cell that should draw it.
     int furniture(int cx, int cz, Furn* out, bool* owner = nullptr) const;
     bool guest_room(int cx, int cz) const;   // Level 5: this cell is inside an enterable room
+    bool hotel() const { return id_ == LevelId::L5 || id_ == LevelId::TSGMansion; } // levels with guest rooms
+    bool water(int cx, int cz) const { return id_ == LevelId::L7 && floor_mat(cx, cz) == 1; } // wading: slow
+    bool greyscale() const { return id_ == LevelId::TSG || id_ == LevelId::TSGBlack || id_ == LevelId::TSGMansion || id_ == LevelId::TSGHope; }
 
     bool exit_door(int cx, int cz, ExitDoor* out = nullptr) const; // an exit door opens into this cell
     bool exit_cell(int cx, int cz) const { return exit_door(cx, cz); }
@@ -148,7 +164,6 @@ private:
     uint32_t seed_;
     Difficulty diff_;
     bool near_spawn(int cx, int cz, int r) const { return cx >= -r && cx <= r && cz >= -r && cz <= r; }
-    bool rooms_level() const { return id_ == LevelId::L0 || id_ == LevelId::L6 || id_ == LevelId::LFun; }
     bool edge_wall_rooms(int line, int along, bool vertical) const;
     bool edge_wall_l1(int line, int along, bool vertical) const;
     bool edge_wall_l37(int line, int along, bool vertical) const;

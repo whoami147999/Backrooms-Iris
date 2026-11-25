@@ -28,6 +28,7 @@ struct RenderSettings {
     bool film = true;             // film look: bloom, grain, aberration, grading (PC shader; overlays on Vita)
     bool camcorder = false;       // found-footage look: scanlines, tracking noise, REC
     bool atmosphere = true;       // light halos and shafts, dust, flicker
+    bool retro = true;            // PS1 look: crisp texels, wobbly vertices + affine textures (PC), pixels + dither (PC)
 };
 
 // Parameters for the film post-process (PC).
@@ -38,6 +39,8 @@ struct FilmParams {
     float lift[3] = {0.02f, 0.02f, 0.015f};
     float dim = 0;                // extra darkening (flickering lights)
     bool camcorder = false;
+    float pixel_h = 0;            // retro: virtual vertical resolution (0 = full res)
+    float dither = 0;             // retro: colour levels per channel with ordered dithering (0 = off)
 };
 
 struct Camera {
@@ -107,7 +110,7 @@ public:
     void post_warp(float wobble, float ghost, float time);
     // Film look over the finished 3D frame (PC with GLSL). Returns false if it couldn't run.
     bool post_film(const FilmParams& f);
-    void set_style(bool film, bool camcorder, bool atmosphere) { s_.film = film; s_.camcorder = camcorder; s_.atmosphere = atmosphere; }
+    void set_style(bool film, bool camcorder, bool atmosphere, bool retro);
     // How much a nearby flickering light is darkening the view right now (0..1), set by draw_world.
     float flicker_dim() const { return flicker_dim_; }
 
@@ -163,6 +166,11 @@ private:
     Camera cam_;
     float flicker_dim_ = 0;
     uint32_t film_prog_ = 0;
+    uint32_t retro_prog_ = 0;
+    bool retro_failed_ = false;
+    int retro_loc_[4] = {};
+    void apply_texture_filtering();
+    bool use_retro_shader();
     bool film_failed_ = false;
     int film_loc_[16] = {};
     void grab_screen();

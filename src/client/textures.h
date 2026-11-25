@@ -35,7 +35,14 @@ enum Material : int {
     MAT_DOOR,    // the exit door
     MAT_PROP,    // poles, frames
     MAT_FURN,    // furniture atlas (Level 5 rooms): 4 quadrants, see furniture_atlas()
+    MAT_DECAL,   // alpha-tested detail atlas, 4x4: papers, stains, cracks, puddles, outlets... (see DECAL_*)
     MAT_COUNT
+};
+
+enum Decal : int {
+    DECAL_PAPER, DECAL_CRUMPLED, DECAL_STAIN, DECAL_STAIN2, DECAL_CRACK, DECAL_PUDDLE, DECAL_LEAVES, DECAL_TRASH,
+    DECAL_PRINTS, DECAL_MOLD, DECAL_SCUFF, DECAL_CAN, DECAL_OUTLET, DECAL_VENT, DECAL_STREAK, DECAL_GLASS,
+    DECAL_COUNT
 };
 
 // size = base resolution (512 on PC, 256 on Vita)
@@ -59,6 +66,10 @@ enum Sprite : int {
     SPR_FLAME,         // burning firesalt
     SPR_CONE,          // light shaft: bright at the top, fading down and to the sides
     SPR_SCANLINES,     // camcorder look on the Vita (no shaders there)
+    SPR_PLANET,        // a lit sphere (tinted per planet)
+    SPR_SUPER, SPR_MOTH, SPR_SILENCE, SPR_MEDKIT, SPR_BULB, SPR_GLOWSTICK, SPR_MUSICBOX, SPR_RABBIT, SPR_COMPASS, SPR_RADIO,
+    SPR_PISTOL, SPR_SHOTGUN, SPR_RIFLE,
+    SPR_STAR,          // a tiny bright point
     SPR_COUNT
 };
 Image make_sprite(Sprite s);

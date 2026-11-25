@@ -20,6 +20,7 @@ struct Settings {
     bool film = true;           // film look (bloom, grain, aberration, grading)
     bool camcorder = false;     // found-footage camcorder look
     bool atmosphere = true;     // light halos/shafts, dust, flicker
+    bool retro = true;          // PS1 look
 
     void load(const std::string& path);
     void save(const std::string& path) const;

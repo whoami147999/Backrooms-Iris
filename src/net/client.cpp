@@ -209,6 +209,13 @@ void NetClient::scan(double now) {
         else i++;
 }
 
+void NetClient::scan_to(const NetAddr& addr, const std::string& via) {
+    if (!scan_sock_.is_open() && !scan_sock_.open(0, true)) return;
+    scan_sock_.send(addr, "IRIS?", 5);
+    for (auto& a : asked_) if (a.first == addr) { a.second = via; return; }
+    asked_.push_back({addr, via});
+}
+
 void NetClient::scan_poll(double now) {
     if (!scan_sock_.is_open()) return;
     char buf[512];
@@ -220,12 +227,14 @@ void NetClient::scan_poll(double now) {
         if (!parse_server_info(buf, f)) continue;
         f.addr = from;
         f.seen = now;
+        for (const auto& a : asked_) if (a.first == from) f.via = a.second;
         bool merged = false;
         for (auto& o : found) {
             // the same server answering on loopback and on the LAN: keep one entry
             if (o.addr == from || (o.name == f.name && o.addr.port == from.port && (from.ip >> 24) == 127)) {
                 if ((from.ip >> 24) != 127) o.addr = from;
                 o.players = f.players; o.max_players = f.max_players; o.level = f.level; o.seen = now;
+                if (!f.via.empty()) o.via = f.via;
                 merged = true;
             }
         }

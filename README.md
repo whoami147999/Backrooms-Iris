@@ -3,12 +3,79 @@
 Open-source co-op Backrooms horror. Up to 4 players, PvE: survive, keep your head together, find the exit.
 One C++ codebase for **Linux, Windows and PS Vita**, plus a headless dedicated server for **FreeBSD**.
 
-![Level 0 in 0.4](docs/screenshots/v04/03-level0-new-look.jpg)
+![Level 21 in 0.5](docs/screenshots/v05/04-level21.jpg)
 
 > Inspired by Backrooms games and the community wiki lore. All code, art and sound are original and generated
 > in code: no assets, maps or art copied from any other game.
 
-## What's in 0.4
+## What's in 0.5
+
+| | |
+|---|---|
+| **13 new levels** | Level 7 Thalassophobia, 19 The Attic, 21 Numbered Doors, 22 The Car Park, 24 The Moon, 33 The Infinite Mall, 36 Airport, 51 The Forgotten City, Level ! Run For Your Life, and TH3 SH4DY GR3Y with its sub-levels B14CK, M4NS10N and L0ST H0P3 |
+| **10 new items** | Super Almond Water, Moth Jelly, Liquid Silence, Med Kit, Flash Bulb, Glow Stick, Music Box, Rabbit's Foot, Compass, Radio |
+| **Sandbox guns** | Pistol, Shotgun, Rifle (hold to fire). Entities have health now: shoot them dead. Smilers just leave |
+| **PS1 look** | chunky pixels, ordered dithering, wobbly vertices, swimming (affine) textures, crisp texels, in the spirit of LSD: Dream Emulator. Settings: RETRO PS1 LOOK |
+| **More detail** | papers, stains, cracks, puddles, outlets, vents, mould on every level; real parked cars; rows of airport seats |
+| **Tailscale** | play with friends anywhere: friends' games on your tailnet show up in JOIN GAME automatically, and you can connect by Tailscale IP or machine name |
+
+### The new levels
+
+| level | what it is | who lives there |
+|---|---|---|
+| **7 - Thalassophobia** | a drowned house in a dark endless sea. You wade (slowly) between piers, rocks and lamp posts | one Smiler |
+| **19 - The Attic** | long, low wooden lanes under a sloping roof, junk boxes, bare bulbs, mostly dark | Smilers, a Hound |
+| **21 - Numbered Doors** | hallways lined with green numbered doors that never open | a Bacteria |
+| **22 - The Car Park** | endless concrete parking levels, parked cars, sodium lights, broken floor | Hounds, a Skin-Stealer |
+| **24 - The Moon** | grey dust, boulders and spires under a black sky; the Earth, Jupiter and Saturn hang overhead | a Hound |
+| **33 - The Infinite Mall** | neon shop fronts, checkered tiles, planters, abandoned stores you can walk into | a Skin-Stealer, a Smiler, a Partygoer |
+| **36 - Airport** | concourses, gate lounges with rows of seats, night-black windows with runway lights | a Bacteria, a Smiler |
+| **51 - The Forgotten City** | ruined stone city with colonnades and stepped temples in a vast cavern, lit by braziers | Hounds, Smilers |
+| **! - Run For Your Life** | one red, strobing corridor. They come up behind you the moment you arrive. The door is 150 m ahead | Partygoers, a Hound |
+| **TH3 SH4DY GR3Y** | greyscale halls: no colour at all | Bacteria |
+| **TSG - B14CK** | pitch-black halls, fast things in them | Bacteria, Hounds |
+| **TSG - M4NS10N** | a grey mansion with rooms you can walk into | a Skin-Stealer, Smilers |
+| **TSG - L0ST H0P3** | the last dark maze. Its exit is the way out of everything | Smilers, a Bacteria |
+
+Exit order now: 0 → 1 → 2 → 4 → 5 → 6 → 7 → 8 → 9 → 19 → 21 → 22 → 33 → 36 → 37 → Fun → ! → 51 → 24 → 11 → TH3 SH4DY GR3Y →
+B14CK → M4NS10N → L0ST H0P3 → back to 0.
+
+The level designs are our own takes on the community wiki pages (the wikis disagree a lot, especially on TH3 SH4DY GR3Y).
+
+### The new items
+
+| | |
+|---|---|
+| **Super Almond Water** | stamina full, +70 sanity, +25 health |
+| **Moth Jelly** | heals you slowly for 15 s |
+| **Liquid Silence** | 30 s of making no sound at all (hounds can't hear you) |
+| **Med Kit** | +70 health |
+| **Flash Bulb** | throw it: everything that can see the flash is stunned for ~5 s (Smilers flee). Don't look at it |
+| **Glow Stick** | drop it: green light for 3 minutes (keeps your sanity up, doesn't scare anything) |
+| **Music Box** | throw it: for 20 s everything nearby wanders over to listen |
+| **Rabbit's Foot** | keep it: the next thing that would kill you doesn't (once per foot) |
+| **Compass** | a needle at the top of the screen pointing to the nearest exit door, with the distance |
+| **Radio** | static gets louder (and the meter climbs) the closer something is |
+| **Pistol / Shotgun / Rifle** | sandbox only. Click / Square to shoot; the rifle fires while you hold. Gunfire brings hounds running |
+
+### Playing with friends over Tailscale
+
+[Tailscale](https://tailscale.com) puts your PCs on one private network, wherever they are, with no port forwarding.
+
+1. Everyone installs Tailscale and logs in to the **same tailnet** (or the host shares their machine with friends from the
+   Tailscale admin console).
+   - Arch: `sudo pacman -S tailscale`, `sudo systemctl enable --now tailscaled`, `sudo tailscale up`
+   - Windows: install from tailscale.com and sign in
+   - FreeBSD server: `pkg install tailscale`, `sysrc tailscaled_enable=YES`, `service tailscaled start`, `tailscale up`
+2. The host picks **MULTIPLAYER → HOST GAME** (or runs the dedicated server). The host screen shows its Tailscale IP.
+3. Friends open **JOIN GAME**: games running on any online machine in the tailnet appear in the list marked
+   `[TAILSCALE]`. You can also type the host's Tailscale IP (`100.x.y.z`) or machine name in **IP OR NAME**.
+
+The game finds friends with the `tailscale` command (`tailscale status --json`), so the Tailscale CLI has to be
+installed (it is with the normal installers). Windows may ask to allow the game through the firewall the first time
+you host: allow it. The Vita can't run Tailscale; it plays on the LAN.
+
+## What was in 0.4
 
 | | |
 |---|---|
@@ -40,7 +107,7 @@ Perks stay through deaths and level changes until you quit the run.
 
 ### Graphics settings
 
-Settings menu: **FILM EFFECTS** (bloom, grain, fringing, grading; on the Vita, grain and a vignette), **CAMCORDER LOOK**
+Settings menu: **RETRO PS1 LOOK** (on PC: ~360-line pixels, 15-bit colour with ordered dither, vertices snapping to a coarse grid, affine texture swim; on both PC and Vita: crisp, unfiltered texels), **FILM EFFECTS** (bloom, grain, fringing, grading; on the Vita, grain and a vignette), **CAMCORDER LOOK**
 (scanlines, a rolling tracking band, REC and a clock), **LIGHT HALOS + DUST** (glowing lamps, light shafts, flickering
 tubes, dust). The film look needs GLSL 1.20 on PC; without it the game falls back to the Vita-style overlays.
 
@@ -138,6 +205,15 @@ Main menu → **Sandbox**, pick a level, then press **Tab** (Select on Vita) in 
 
 
 ## Screenshots
+
+0.5:
+
+| | |
+|---|---|
+| ![](docs/screenshots/v05/02-level7.jpg) | ![](docs/screenshots/v05/07-level33.jpg) |
+| ![](docs/screenshots/v05/06-level24.jpg) | ![](docs/screenshots/v05/10-level-run.jpg) |
+| ![](docs/screenshots/v05/15-shotgun.jpg) | ![](docs/screenshots/v05/11-tsg.jpg) |
+| ![](docs/screenshots/v05/08-level36.jpg) | ![](docs/screenshots/v05/03-level19.jpg) |
 
 0.4:
 
@@ -394,7 +470,7 @@ select it, then type, or use up/down to change the letter under the cursor and l
 backrooms-iris [--level N] [--seed N] [--difficulty easy|medium|hard|nightmare] [--sandbox] [--host] [--join IP]
 ```
 
-`--level` jumps straight into a level (0 1 2 4 5 6 8 9 11 37 fun) in single player; add `--sandbox` for sandbox mode. Settings live in
+`--level` jumps straight into a level (0 1 2 4 5 6 7 8 9 11 19 21 22 24 33 36 37 51 fun ! grey black mansion hope) in single player; add `--sandbox` for sandbox mode. Settings live in
 `~/.local/share/BackroomsIris/BackroomsIris/settings.cfg` (Linux), `%APPDATA%\BackroomsIris\BackroomsIris\` (Windows),
 `ux0:data/BackroomsIris/` (Vita).
 

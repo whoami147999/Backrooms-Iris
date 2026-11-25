@@ -161,6 +161,7 @@ void Renderer::set_world(const World& w) {
         Image imgs[MAT_COUNT];
         make_level_textures(w.id(), s_.texture_size, imgs);
         for (int i = 0; i < MAT_COUNT; i++) tex_[i] = upload_texture(imgs[i], true, false, true);
+        apply_texture_filtering();
         std::printf("[iris] textures uploaded\n");
     }
     level_ = w.id();
@@ -630,6 +631,40 @@ void Renderer::draw_world(const World& w, const Camera& cam, float time, float f
     glEnableClientState(GL_TEXTURE_COORD_ARRAY);
     glEnableClientState(GL_COLOR_ARRAY);
 
+    // ----- night sky (outdoor levels): stars, and on the moon, the planets
+    if (li.outdoor && li.ambient[0] < 0.8f) {
+        glDepthMask(GL_FALSE);
+        glEnable(GL_BLEND);
+        const float R = far_z * 0.85f;
+        bool moon = w.id() == LevelId::L24;
+        for (int i = 0; i < (moon ? 420 : 160); i++) {
+            float a = hash01(4242, i, 0, 1) * 2 * PI, e = 0.06f + hash01(4242, i, 1, 1) * 1.45f;
+            Vec3 d{std::cos(a) * std::cos(e), std::sin(e), std::sin(a) * std::cos(e)};
+            float tw = 0.6f + 0.4f * std::sin(time * (1.0f + hash01(4242, i, 2, 1) * 3) + i);
+            float sz = R * (0.004f + hash01(4242, i, 3, 1) * 0.005f);
+            billboard(cam.eye + d * R, sz, sz, rgba(1, 1, 1, (moon ? 0.9f : 0.45f) * tw));
+        }
+        flush_dyn(spr_[SPR_STAR], true, false);
+        if (moon) {
+            struct Pl { float az, el, size, r, g, b; };
+            const Pl P[] = {{0.6f, 0.35f, 0.14f, 0.35f, 0.55f, 1.0f},   // the Earth, huge in the sky
+                            {2.2f, 0.55f, 0.05f, 0.95f, 0.45f, 0.3f},   // Mars
+                            {3.5f, 0.25f, 0.09f, 0.9f, 0.75f, 0.55f},   // Jupiter
+                            {4.6f, 0.7f, 0.07f, 0.95f, 0.85f, 0.55f},   // Saturn
+                            {5.5f, 0.15f, 0.04f, 0.6f, 0.85f, 0.95f}};  // Neptune
+            for (const Pl& p : P) {
+                Vec3 d{std::cos(p.az) * std::cos(p.el), std::sin(p.el), std::sin(p.az) * std::cos(p.el)};
+                billboard(cam.eye + d * R, R * p.size, R * p.size, rgba(p.r, p.g, p.b, 1));
+            }
+            flush_dyn(spr_[SPR_PLANET], false, false);
+            Vec3 sun{std::cos(1.8f) * 0.8f, 0.6f, std::sin(1.8f) * 0.8f};
+            billboard(cam.eye + sun * R, R * 0.12f, R * 0.12f, rgba(1, 0.97f, 0.9f, 1));
+            flush_dyn(spr_[SPR_GLOW], true, false);
+        }
+        glDisable(GL_BLEND);
+        glDepthMask(GL_TRUE);
+    }
+
     // ----- static chunks
     Vec2 fwd = yaw_forward(cam.yaw);
     const float half_diag = CHUNK_SIZE * 0.7072f;
@@ -642,10 +677,13 @@ void Renderer::draw_world(const World& w, const Camera& cam, float time, float f
         if (cx * fwd.x + cz * fwd.z < -half_diag) continue; // behind the camera
         visible.push_back(&g);
     }
+    bool retro_shader = use_retro_shader();
+    (void)retro_shader; // (Vita: always false)
     for (int mat = 0; mat < MAT_COUNT; mat++) {
         glBindTexture(GL_TEXTURE_2D, tex_[mat]);
         bool emissive = mat == MAT_LIGHT;
         if (emissive) glFogf(GL_FOG_DENSITY, fog_density_ * 0.45f); // lights cut through the haze a bit
+        if (mat == MAT_DECAL) { glEnable(GL_ALPHA_TEST); glAlphaFunc(GL_GREATER, 0.5f); } // hard-edged details
         for (const GpuChunk* g : visible) {
             if (!g->count[mat]) continue;
             glBindBuffer(GL_ARRAY_BUFFER, g->vbo);
@@ -655,9 +693,13 @@ void Renderer::draw_world(const World& w, const Camera& cam, float time, float f
                            (const void*)(uintptr_t)(g->first[mat] * sizeof(uint16_t)));
         }
         if (emissive) glFogf(GL_FOG_DENSITY, fog_density_);
+        if (mat == MAT_DECAL) { glDisable(GL_ALPHA_TEST); glAlphaFunc(GL_GREATER, 0.02f); }
     }
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+#if !defined(IRIS_GL_VITA)
+    if (retro_shader) iris_glUseProgram(0);
+#endif
 
     // ----- entities and other players (opaque; box models are drawn without culling)
     glDisable(GL_CULL_FACE);
@@ -735,6 +777,33 @@ void Renderer::draw_world(const World& w, const Camera& cam, float time, float f
             flush_dyn(spr_[SPR_WHITE]);
             float pulse = 0.5f + 0.5f * std::sin(time * 2.5f + p.id);
             billboard({p.pos.x, 0.12f, p.pos.z}, 0.55f, 0.55f, rgba(0.6f, 0.85f, 1.0f, 0.10f + 0.12f * pulse));
+            flush_dyn(spr_[SPR_GLOW], true, false);
+            continue;
+        }
+        if (p.kind == PropKind::Glow) { // a glow stick on the floor and a pool of green light
+            float yaw = (float)(p.id % 17) * 0.37f;
+            Part stick{0, 0, 0, 0.03f, 0.03f, 0.2f, 0.4f, 1.0f, 0.45f, 0};
+            add_part(dyn_, stick, p.pos, yaw, 1.6f);
+            flush_dyn(spr_[SPR_WHITE]);
+            float fade = clampf(p.life / 10.0f, 0, 1);
+            float r = GLOW_RADIUS * 0.7f;
+            push_quad({p.pos.x - r, 0.025f, p.pos.z + r}, {p.pos.x + r, 0.025f, p.pos.z + r}, {p.pos.x + r, 0.025f, p.pos.z - r},
+                      {p.pos.x - r, 0.025f, p.pos.z - r}, rgba(0.3f, 1, 0.4f, 0.35f * fade));
+            flush_dyn(spr_[SPR_GLOW], true, false);
+            billboard({p.pos.x, 0.25f, p.pos.z}, 1.2f, 0.8f, rgba(0.4f, 1, 0.5f, 0.35f * fade));
+            flush_dyn(spr_[SPR_GLOW], true, false);
+            continue;
+        }
+        if (p.kind == PropKind::Lure) { // a little music box, notes drifting up from it
+            float light = clampf(w.light_level({p.pos.x, 0.5f, p.pos.z}) + 0.3f, 0.3f, 1.2f);
+            Part box{0, 0, 0, 0.18f, 0.11f, 0.13f, 0.5f, 0.28f, 0.15f, 0};
+            Part lid{0, 0.11f, -0.06f, 0.18f, 0.015f, 0.13f, 0.65f, 0.4f, 0.22f, -0.9f};
+            for (const Part& pt : {box, lid}) add_part(dyn_, pt, p.pos, time * 0.3f, light);
+            flush_dyn(spr_[SPR_WHITE]);
+            for (int k = 0; k < 4; k++) {
+                float ph = std::fmod(time * 0.6f + k * 0.25f, 1.0f);
+                billboard({p.pos.x + std::sin(ph * 6 + k) * 0.2f, 0.2f + ph * 1.4f, p.pos.z}, 0.08f, 0.08f, rgba(1, 0.95f, 0.7f, (1 - ph) * 0.9f));
+            }
             flush_dyn(spr_[SPR_GLOW], true, false);
             continue;
         }
@@ -925,7 +994,11 @@ void Renderer::draw_atmosphere(const World& w, const std::vector<const GpuChunk*
     glDisable(GL_ALPHA_TEST);
     flicker_dim_ = 0;
     // flicker: mostly on, now and then a stutter of dark frames
+    const bool alarm = w.id() == LevelId::LRun; // Level !: everything strobes red
+    const float strobe = std::sin(time * 6.0f) > 0 ? 1.0f : 0.2f;
+    if (alarm) flicker_dim_ = (1.0f - strobe) * 0.35f;
     auto flicker = [&](const ChunkMesh::LightMark& l) {
+        if (alarm) return strobe;
         if (l.state != LightState::Flicker) return 1.0f;
         int seed = (int)(l.pos.x * 7.0f) * 131 + (int)(l.pos.z * 7.0f);
         float slow = std::sin(time * 0.9f + seed) * 0.5f + 0.5f;           // when it's having a bad moment
@@ -1007,22 +1080,26 @@ const char* FILM_FS = R"(#version 120
 uniform sampler2D scene;
 uniform vec2 uvmax;
 uniform vec2 res;
-uniform float time, grain, aberr, vignette, bloom, sat, contrast, distort, cam, dim;
+uniform float time, grain, aberr, vignette, bloom, sat, contrast, distort, cam, dim, pix, dither;
 uniform vec3 lift;
 varying vec2 uv;
 float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+float bayer2(vec2 a) { a = floor(a); return fract(dot(a, vec2(0.5, a.y * 0.75))); }
+float bayer4(vec2 a) { return bayer2(0.5 * a) * 0.25 + bayer2(a); }
 vec3 tap(vec2 p, float bias) { return texture2D(scene, clamp(p, vec2(0.002), vec2(0.998)) * uvmax, bias).rgb; }
 void main() {
     vec2 c = uv - 0.5;
     float r2 = dot(c, c);
     vec2 p = 0.5 + c * (1.0 - distort * r2);
+    vec2 vres = pix > 0.0 ? vec2(floor(pix * res.x / res.y), pix) : res;
+    if (pix > 0.0) p = (floor(p * vres) + 0.5) / vres; // chunky pixels
     if (cam > 0.0) { // a tracking band rolls up the picture; lines inside it jitter sideways
         float band = 1.0 - fract(time * 0.11);
         float k = smoothstep(0.045, 0.0, abs(uv.y - band)) * cam;
         p.x += (hash(vec2(floor(uv.y * res.y * 0.5), floor(time * 24.0))) - 0.5) * 0.02 * k;
         p.x += sin(uv.y * 300.0 + time * 13.0) * 0.0007 * cam;
     }
-    vec2 off = c * 2.0 * aberr / res;
+    vec2 off = c * 2.0 * aberr / (pix > 0.0 ? vres * 2.0 : res);
     vec3 col = vec3(tap(p + off, 0.0).r, tap(p, 0.0).g, tap(p - off, 0.0).b);
     vec3 b1 = tap(p, 2.5), b2 = tap(p, 4.0), b3 = tap(p, 5.5);
     vec3 glow = max(b1 - 0.55, 0.0) * 0.5 + max(b2 - 0.42, 0.0) * 0.7 + max(b3 - 0.3, 0.0) * 0.9;
@@ -1040,9 +1117,46 @@ void main() {
         col += (hash(uv * res + time) - 0.5) * 0.25 * k * cam;
     }
     col *= 1.0 - vignette * smoothstep(0.06, 0.5, r2);
-    float n = hash(uv * res + fract(time * 13.7) * 91.0) - 0.5;
+    float n = hash(floor(uv * vres) + fract(time * 13.7) * 91.0) - 0.5;
     col += n * grain * (1.3 - l);
+    if (dither > 0.0) col = floor(col * dither + bayer4(uv * vres)) / dither; // PS1-style banding
     gl_FragColor = vec4(col, 1.0);
+}
+)";
+// PS1 world: vertices snap to a coarse screen grid (the wobble), textures are mapped affinely
+// (the swim), fog is the same exp2 fog as the fixed-function pipeline.
+const char* RETRO_VS = R"(#version 120
+uniform vec2 snap;
+varying vec4 col;
+varying vec2 uvp;
+varying vec3 uvw;
+varying float fogz;
+void main() {
+    vec4 p = ftransform();
+    if (snap.y > 0.0) {
+        vec2 ndc = p.xy / p.w;
+        ndc = floor(ndc * snap * 0.5 + 0.5) / (snap * 0.5);
+        p.xy = ndc * p.w;
+    }
+    gl_Position = p;
+    col = gl_Color;
+    uvp = gl_MultiTexCoord0.xy;
+    uvw = vec3(gl_MultiTexCoord0.xy * p.w, p.w);
+    fogz = length((gl_ModelViewMatrix * gl_Vertex).xyz);
+}
+)";
+const char* RETRO_FS = R"(#version 120
+uniform sampler2D tex;
+uniform float affine;
+varying vec4 col;
+varying vec2 uvp;
+varying vec3 uvw;
+varying float fogz;
+void main() {
+    vec2 uv = mix(uvp, uvw.xy / uvw.z, affine);
+    vec4 c = texture2D(tex, uv) * col;
+    float f = clamp(exp(-pow(gl_Fog.density * fogz, 2.0)), 0.0, 1.0);
+    gl_FragColor = vec4(mix(gl_Fog.color.rgb, c.rgb, f), c.a);
 }
 )";
 uint32_t compile(uint32_t type, const char* src) {
@@ -1062,6 +1176,52 @@ uint32_t compile(uint32_t type, const char* src) {
 } // namespace
 #endif
 
+bool Renderer::use_retro_shader() {
+#if defined(IRIS_GL_VITA)
+    return false;
+#else
+    if (!s_.retro || retro_failed_ || !g_glcaps.shaders) return false;
+    if (!retro_prog_) {
+        GLuint vs = compile(GL_VERTEX_SHADER, RETRO_VS), fs = compile(GL_FRAGMENT_SHADER, RETRO_FS);
+        if (!vs || !fs) { retro_failed_ = true; return false; }
+        GLuint p = iris_glCreateProgram();
+        iris_glAttachShader(p, vs);
+        iris_glAttachShader(p, fs);
+        iris_glLinkProgram(p);
+        GLint ok = 0;
+        iris_glGetProgramiv(p, GL_LINK_STATUS, &ok);
+        if (!ok) { retro_failed_ = true; return false; }
+        retro_prog_ = p;
+        retro_loc_[0] = iris_glGetUniformLocation(p, "tex");
+        retro_loc_[1] = iris_glGetUniformLocation(p, "snap");
+        retro_loc_[2] = iris_glGetUniformLocation(p, "affine");
+    }
+    iris_glUseProgram(retro_prog_);
+    iris_glUniform1i(retro_loc_[0], 0);
+    const float lines = 300.0f; // vertices land on a 300-line grid
+    iris_glUniform2f(retro_loc_[1], lines * (float)width / (float)height, lines);
+    iris_glUniform1f(retro_loc_[2], 0.28f); // some swim, not a broken ceiling
+    return true;
+#endif
+}
+
+void Renderer::set_style(bool film, bool camcorder, bool atmosphere, bool retro) {
+    s_.film = film;
+    s_.camcorder = camcorder;
+    s_.atmosphere = atmosphere;
+    if (s_.retro != retro) { s_.retro = retro; apply_texture_filtering(); }
+}
+
+// Retro: texels stay crisp squares up close (nearest), with mip levels picked without blending.
+void Renderer::apply_texture_filtering() {
+    for (int i = 0; i < MAT_COUNT; i++) {
+        if (!tex_[i]) continue;
+        glBindTexture(GL_TEXTURE_2D, tex_[i]);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, s_.retro ? GL_NEAREST : GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, s_.retro ? GL_NEAREST_MIPMAP_LINEAR : GL_LINEAR_MIPMAP_LINEAR);
+    }
+}
+
 bool Renderer::post_film(const FilmParams& f) {
 #if defined(IRIS_GL_VITA)
     (void)f;
@@ -1079,8 +1239,8 @@ bool Renderer::post_film(const FilmParams& f) {
         iris_glGetProgramiv(p, GL_LINK_STATUS, &ok);
         if (!ok) { std::printf("[iris] film shader didn't link: film look off\n"); film_failed_ = true; return false; }
         film_prog_ = p;
-        const char* names[] = {"scene", "uvmax", "res", "time", "grain", "aberr", "vignette", "bloom", "sat", "contrast", "distort", "cam", "dim", "lift"};
-        for (int i = 0; i < 14; i++) film_loc_[i] = iris_glGetUniformLocation(p, names[i]);
+        const char* names[] = {"scene", "uvmax", "res", "time", "grain", "aberr", "vignette", "bloom", "sat", "contrast", "distort", "cam", "dim", "lift", "pix", "dither"};
+        for (int i = 0; i < 16; i++) film_loc_[i] = iris_glGetUniformLocation(p, names[i]);
         std::printf("[iris] film look on (GLSL)\n");
     }
     grab_screen();
@@ -1111,6 +1271,8 @@ bool Renderer::post_film(const FilmParams& f) {
     iris_glUniform1f(film_loc_[11], f.camcorder ? 1.0f : 0.0f);
     iris_glUniform1f(film_loc_[12], f.dim);
     iris_glUniform3f(film_loc_[13], f.lift[0], f.lift[1], f.lift[2]);
+    iris_glUniform1f(film_loc_[14], f.pixel_h);
+    iris_glUniform1f(film_loc_[15], f.dither);
     glEnableClientState(GL_VERTEX_ARRAY);
     glEnableClientState(GL_TEXTURE_COORD_ARRAY);
     glEnableClientState(GL_COLOR_ARRAY);

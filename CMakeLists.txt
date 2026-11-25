@@ -66,7 +66,7 @@ endif()
 option(IRIS_BUILD_TESTS "Build the core tests (ctest)" ON)
 if(IRIS_BUILD_TESTS AND NOT VITA AND NOT CMAKE_CROSSCOMPILING)
   enable_testing()
-  add_executable(iris_core_tests tests/core_tests.cpp)
+  add_executable(iris_core_tests tests/core_tests.cpp src/client/tailscale.cpp)
   target_link_libraries(iris_core_tests PRIVATE iris_net)
   add_test(NAME core COMMAND iris_core_tests)
 endif()
@@ -84,6 +84,7 @@ if(IRIS_BUILD_CLIENT)
     src/client/textures.cpp
     src/client/chunk_mesh.cpp
     src/client/renderer.cpp
+    src/client/tailscale.cpp
     src/platform/sdl_gamepad.cpp
   )
 
