@@ -102,6 +102,7 @@ private:
     double now_ = 0, frame_dt_ = 0;
     float fps_ = 0;
     int frames_ = 0;
+    int frames_total_ = 0;   // boot log: first frames only
     double fps_t_ = 0;
     bool debug_ = false;
     int single_level_ = 0;

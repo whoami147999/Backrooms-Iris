@@ -104,7 +104,7 @@ if(IRIS_BUILD_CLIENT)
       SceShaccCg_stub SceKernelDmacMgr_stub SceLibKernel_stub SceAppMgr_stub SceAppUtil_stub
       SceCommonDialog_stub SceGxm_stub SceDisplay_stub SceSysmodule_stub SceCtrl_stub
       SceTouch_stub SceHid_stub SceMotion_stub SceAudio_stub SceAudioIn_stub ScePower_stub
-      SceIme_stub SceIofilemgr_stub SceProcessmgr_stub
+      SceIme_stub SceIofilemgr_stub SceProcessmgr_stub SceSysmem_stub
       pthread m c
     )
     vita_create_self(eboot.bin iris_vita UNSAFE)

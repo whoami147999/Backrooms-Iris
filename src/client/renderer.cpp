@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdio>
+#include <exception>
 
 #include "../core/config.h"
 #include "../core/hash.h"
@@ -91,7 +93,14 @@ bool Renderer::init(const RenderSettings& s) {
     glFogi(GL_FOG_MODE, GL_EXP2);
     glHint(GL_FOG_HINT, GL_NICEST);
     glAlphaFunc(GL_GREATER, 0.02f);
-    worker_ = std::thread(&Renderer::worker_loop, this);
+    try {
+        worker_ = std::thread(&Renderer::worker_loop, this);
+        threaded_ = true;
+    } catch (const std::exception& e) {
+        std::printf("[iris] chunk worker thread failed (%s): building on the main thread\n", e.what());
+        threaded_ = false;
+    }
+    std::printf("[iris] renderer ready (%s)\n", threaded_ ? "worker thread" : "single thread");
     return true;
 }
 
@@ -148,9 +157,11 @@ void Renderer::set_world(const World& w) {
     inflight_.clear();
     if (level_ != w.id()) {
         if (tex_[0]) glDeleteTextures(MAT_COUNT, tex_);
+        std::printf("[iris] textures: level %s\n", level_info(w.id()).number);
         Image imgs[MAT_COUNT];
         make_level_textures(w.id(), s_.texture_size, imgs);
         for (int i = 0; i < MAT_COUNT; i++) tex_[i] = upload_texture(imgs[i], true, false, true);
+        std::printf("[iris] textures uploaded\n");
     }
     level_ = w.id();
     seed_ = w.seed();
@@ -197,9 +208,12 @@ void Renderer::update_chunks(const World& w, Vec3 eye, int budget) {
             if (d <= load && !chunks_.count(key(kx, kz))) want.push_back({d, kx, kz});
         }
     std::sort(want.begin(), want.end(), [](const Want& a, const Want& b) { return a.d < b.d; });
-    if (budget < 0) {
-        // build everything right now on this thread (level load, screenshots)
+    if (budget < 0 || !threaded_) {
+        // build right now on this thread: everything (level load, screenshots), or the closest
+        // few per frame when there's no worker thread
+        int n = 0;
         for (const Want& wn : want) {
+            if (budget >= 0 && n++ >= std::max(1, budget)) break;
             build_chunk_mesh(w, wn.kx, wn.kz, scratch_);
             GpuChunk g;
             g.kx = wn.kx;
@@ -207,7 +221,7 @@ void Renderer::update_chunks(const World& w, Vec3 eye, int budget) {
             upload(g, scratch_);
             chunks_[key(wn.kx, wn.kz)] = std::move(g);
         }
-        pending_ = 0;
+        pending_ = budget < 0 ? 0 : (int)want.size();
         return;
     }
     // hand the closest missing chunks to the worker (a few at a time so it stays responsive)

@@ -117,6 +117,7 @@ private:
     struct Job { int kx, kz; uint32_t gen; World world; };
     struct Done { int kx, kz; uint32_t gen; ChunkMesh mesh; };
     std::thread worker_;
+    bool threaded_ = false;      // false: the worker couldn't start, chunks build on the main thread
     std::mutex mu_;
     std::condition_variable cv_;
     bool stop_ = false;

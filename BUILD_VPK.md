@@ -46,10 +46,15 @@ The Vita target has never been compiled yet, so expect small fixes:
 Vita-specific code lives only in `src/platform/vita/`, `src/net/udp.cpp` (`#if defined(__vita__)`),
 `src/client/gl.h` and the `if(VITA)` block in `CMakeLists.txt`. Everything else is shared with PC.
 
+**Also hand back `build-vita/iris_vita`** (the unstripped ELF, next to the .vpk). It's what turns a Vita crash dump
+(`ux0:data/psp2core-*.psp2dmp`) into a file + line number. Without it crash dumps are nearly useless.
+
 ## 4. Run
 
-Install the .vpk with VitaShell. vitaGL apps usually need `libshacccg.suprx` on the console
-(install it with ShaRKF00D). Also runs in Vita3K.
+Install the .vpk with VitaShell. vitaGL needs `libshacccg.suprx` on the console (install it with ShaRKF00D).
+The game checks for it and shows a message instead of crashing. Also runs in Vita3K.
+
+Every boot writes `ux0:data/BackroomsIris/log.txt`. After a crash its last line shows how far startup got.
 
 ## Optional: PC build (Linux) to check the code compiles
 

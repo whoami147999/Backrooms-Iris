@@ -62,10 +62,13 @@ bool App::init(const DevOptions& dev) {
         rs_.chunk_builds_per_frame = 1;
         rs_.post_effects = false;
     }
+    std::printf("[iris] renderer init\n");
     ren_.init(rs_);
+    std::printf("[iris] net init\n");
     net_init();
     dev_setup();
     build_menu();
+    std::printf("[iris] init done\n");
     return true;
 }
 
@@ -484,6 +487,7 @@ void App::draw_menu() {
 // =================================================================== starting / leaving
 void App::start_session(std::unique_ptr<Session> s) {
     session_ = std::move(s);
+    std::printf("[iris] session started\n");
     // a fresh game starts with fresh action counters (the sim also ignores the first command's)
     float yaw = cmd_.yaw;
     cmd_ = InputCmd{};
@@ -883,6 +887,7 @@ void App::draw_game(bool overlay_menu) {
         level_title_t_ = now_;
         if (v.escaped && !v.multiplayer) { escaped_t_ = now_; session_->clear_escaped(); }
         ren_.update_chunks(v.world, v.me.pos + Vec3{0, v.me.eye_height(), 0}, -1);
+        std::printf("[iris] level %s loaded\n", v.world.info().number);
     }
     ren_.set_world(v.world); // no-op unless something else (a menu) changed it
 
@@ -992,6 +997,7 @@ void App::run() {
             ren_.end_2d();
         }
         platform_swap();
+        if (frames_total_ < 3 && ++frames_total_ <= 2) std::printf("[iris] frame %d drawn\n", frames_total_);
 
         if (in_.screenshot) {
             std::string path = data_dir_ + "iris_" + timestamp() + ".bmp";
