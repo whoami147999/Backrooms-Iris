@@ -1,0 +1,7 @@
+build*/
+dryrun-root/
+*.vpk
+*.bmp
+.vscode/
+.idea/
+compile_commands.json

@@ -1,0 +1,9 @@
+# Backrooms Iris dedicated server config
+# Edit, then: service iris_server restart
+
+name = "Backrooms Iris server"
+bind = 0.0.0.0          # listen on every interface
+port = 27315            # UDP; open/forward this port for online play
+max_players = 4         # 1-4
+seed = 0                # world seed, 0 = new random world every start
+tick_rate = 30          # simulation rate in Hz (20-60 is sensible on an X230)

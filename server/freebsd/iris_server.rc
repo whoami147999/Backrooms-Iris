@@ -1,0 +1,79 @@
+#!/bin/sh
+#
+# PROVIDE: iris_server
+# REQUIRE: LOGIN NETWORKING
+# KEYWORD: shutdown
+#
+# Backrooms Iris dedicated server. Installed by server/freebsd/install.sh.
+#
+# /etc/rc.conf settings (set with sysrc):
+#   iris_server_enable="YES"
+#   iris_server_config="/usr/local/etc/iris/server.conf"
+#   iris_server_user="iris"
+#   iris_server_logfile="/var/log/iris_server.log"
+
+. /etc/rc.subr
+
+name="iris_server"
+rcvar="iris_server_enable"
+load_rc_config $name
+
+: "${iris_server_enable:="NO"}"
+: "${iris_server_config:="/usr/local/etc/iris/server.conf"}"
+: "${iris_server_user:="iris"}"
+: "${iris_server_logfile:="/var/log/iris_server.log"}"
+
+pidfile="/var/run/${name}.pid"
+procname="/usr/local/bin/iris_server"
+
+start_cmd="${name}_start"
+stop_cmd="${name}_stop"
+status_cmd="${name}_status"
+
+iris_server_pid() {
+	[ -f "$pidfile" ] || return 1
+	_pid=$(cat "$pidfile" 2>/dev/null)
+	[ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null && echo "$_pid"
+}
+
+iris_server_start() {
+	if _p=$(iris_server_pid); then
+		echo "${name} is already running as pid ${_p}."
+		return 0
+	fi
+	touch "$iris_server_logfile"
+	chown "$iris_server_user" "$iris_server_logfile"
+	# daemon(8) supervises the server: restarts it 5 s after a crash, drops to the
+	# unprivileged user, sends stdout/stderr to the log and reopens it on SIGHUP
+	# (so newsyslog can rotate it).
+	/usr/sbin/daemon -r -R 5 -H -t "$name" -P "$pidfile" -o "$iris_server_logfile" \
+		-u "$iris_server_user" "$procname" --config "$iris_server_config"
+	echo "Starting ${name}."
+}
+
+iris_server_stop() {
+	if ! _p=$(iris_server_pid); then
+		echo "${name} is not running."
+		return 0
+	fi
+	echo "Stopping ${name}."
+	kill -TERM "$_p"
+	_i=0
+	while kill -0 "$_p" 2>/dev/null && [ $_i -lt 50 ]; do
+		sleep 0.2
+		_i=$((_i + 1))
+	done
+	kill -0 "$_p" 2>/dev/null && kill -KILL "$_p"
+	rm -f "$pidfile"
+}
+
+iris_server_status() {
+	if _p=$(iris_server_pid); then
+		echo "${name} is running as pid ${_p}."
+	else
+		echo "${name} is not running."
+		return 1
+	fi
+}
+
+run_rc_command "$1"
