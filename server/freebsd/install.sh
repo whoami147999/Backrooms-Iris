@@ -13,7 +13,7 @@
 #
 # What "Install / update" does:
 #   1. pkg install cmake + ninja if they're missing (clang is in base)
-#   2. asks for the server settings
+#   2. asks for the server settings (name, port, players, seed, starting level)
 #   3. builds iris_server from this checkout (server only, no SDL/GL needed)
 #   4. installs /usr/local/bin/iris_server, /usr/local/etc/iris/server.conf,
 #      the rc.d service, a newsyslog rule, and an unprivileged "iris" user
@@ -57,7 +57,7 @@ S_NAME="Backrooms Iris server"
 S_PORT="27315"
 S_MAX="4"
 S_SEED="0"
-S_TICK="30"
+S_LEVEL="0"
 S_AUTOSTART="YES"
 
 # ------------------------------------------------------------------ helpers
@@ -158,7 +158,7 @@ load_settings() {
 	_v=$(_get port); [ -n "$_v" ] && S_PORT="$_v"
 	_v=$(_get max_players); [ -n "$_v" ] && S_MAX="$_v"
 	_v=$(_get seed); [ -n "$_v" ] && S_SEED="$_v"
-	_v=$(_get tick_rate); [ -n "$_v" ] && S_TICK="$_v"
+	_v=$(_get start_level); [ -n "$_v" ] && S_LEVEL="$_v"
 	return 0
 }
 
@@ -177,9 +177,10 @@ validate_settings() {
 	if ! is_uint "$S_SEED" || [ "${#S_SEED}" -gt 10 ] || [ "$S_SEED" -gt 4294967295 ]; then
 		echo "Seed must be a number from 0 to 4294967295 (0 = random world each start)."; return 1
 	fi
-	if ! is_uint "$S_TICK" || [ "$S_TICK" -lt 10 ] || [ "$S_TICK" -gt 120 ]; then
-		echo "Tick rate must be from 10 to 120 Hz."; return 1
-	fi
+	case "$S_LEVEL" in
+		0|1|5|8|9|11) ;;
+		*) echo "Start level must be 0, 1, 5, 8, 9 or 11."; return 1 ;;
+	esac
 	return 0
 }
 
@@ -188,26 +189,26 @@ ask_settings() {
 	while :; do
 		if [ -n "$DIALOG" ]; then
 			_out=$($DIALOG --backtitle "$IRIS_TITLE" --title " Server settings " \
-				--form "Tab / arrows to move, Enter to confirm.\nSeed 0 = a fresh random world every start." 16 64 6 \
+				--form "Tab / arrows to move, Enter to confirm.\nSeed 0 = a fresh random world every start.\nLevels: 0 lobby, 1 warehouse, 5 hotel, 8 caves, 9 suburbs, 11 city." 17 70 6 \
 				"Server name:"        1 2 "$S_NAME" 1 22 34 48 \
 				"UDP port:"           2 2 "$S_PORT" 2 22 8 5 \
 				"Max players (1-4):"  3 2 "$S_MAX"  3 22 3 1 \
 				"World seed:"         4 2 "$S_SEED" 4 22 12 10 \
-				"Tick rate (Hz):"     5 2 "$S_TICK" 5 22 5 3 \
+				"Start level:"        5 2 "$S_LEVEL" 5 22 3 2 \
 				3>&1 1>&2 2>&3) || return 1
 			# one value per line, in field order
 			S_NAME=$(printf '%s\n' "$_out" | sed -n 1p)
 			S_PORT=$(printf '%s\n' "$_out" | sed -n 2p)
 			S_MAX=$(printf '%s\n' "$_out" | sed -n 3p)
 			S_SEED=$(printf '%s\n' "$_out" | sed -n 4p)
-			S_TICK=$(printf '%s\n' "$_out" | sed -n 5p)
+			S_LEVEL=$(printf '%s\n' "$_out" | sed -n 5p)
 		else
 			printf '\n== Server settings ==  (Enter keeps the value in [brackets])\n'
 			printf 'Server name [%s]: ' "$S_NAME"; read -r _v </dev/tty; [ -n "$_v" ] && S_NAME="$_v"
 			printf 'UDP port [%s]: ' "$S_PORT"; read -r _v </dev/tty; [ -n "$_v" ] && S_PORT="$_v"
 			printf 'Max players 1-4 [%s]: ' "$S_MAX"; read -r _v </dev/tty; [ -n "$_v" ] && S_MAX="$_v"
 			printf 'World seed, 0 = random [%s]: ' "$S_SEED"; read -r _v </dev/tty; [ -n "$_v" ] && S_SEED="$_v"
-			printf 'Tick rate Hz [%s]: ' "$S_TICK"; read -r _v </dev/tty; [ -n "$_v" ] && S_TICK="$_v"
+			printf 'Start level 0/1/5/8/9/11 [%s]: ' "$S_LEVEL"; read -r _v </dev/tty; [ -n "$_v" ] && S_LEVEL="$_v"
 		fi
 		_problem=$(validate_settings) && break
 		ui_msg "Check your settings" "$_problem"
@@ -231,7 +232,7 @@ bind = 0.0.0.0
 port = $S_PORT
 max_players = $S_MAX
 seed = $S_SEED          # 0 = new random world every start
-tick_rate = $S_TICK
+start_level = $S_LEVEL   # 0, 1, 5, 8, 9 or 11
 EOF
 	mv "$CONF.tmp" "$CONF" && chmod 644 "$CONF"
 }

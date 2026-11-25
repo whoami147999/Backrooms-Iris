@@ -6,4 +6,5 @@ bind = 0.0.0.0          # listen on every interface
 port = 27315            # UDP; open/forward this port for online play
 max_players = 4         # 1-4
 seed = 0                # world seed, 0 = new random world every start
-tick_rate = 30          # simulation rate in Hz (20-60 is sensible on an X230)
+start_level = 0         # 0 lobby, 1 warehouse, 5 hotel, 8 caves, 9 suburbs, 11 city
+snapshot_rate = 20      # state updates per second sent to each player (10-60)

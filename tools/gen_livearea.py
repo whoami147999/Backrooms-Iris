@@ -30,16 +30,17 @@ def font(size):
     return ImageFont.load_default()
 
 
-def render(game, w, h, pos, yaw, pitch=0, seed=1215):
+def render(game, w, h, level, *extra):
     fd, path = tempfile.mkstemp(suffix=".bmp")
     os.close(fd)
-    cmd = [game, "--seed", str(seed), "--width", str(w), "--height", str(h), "--shot", path,
-           "--pos", pos, "--yaw", str(yaw), "--pitch", str(pitch), "--walk", "0.2"]
-    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL)
+    cmd = [game, "--level", str(level), "--seed", "1215", "--nohud", "--after", "6",
+           "--shot", path] + list(extra)
+    env = dict(os.environ, HOME=tempfile.mkdtemp())  # don't touch the real settings file
+    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, env=env)
     img = Image.open(path).convert("RGB")
     img.load()
     os.remove(path)
-    return img
+    return img.resize((w, h), Image.LANCZOS)
 
 
 def vhs(img, strength=1.0):
@@ -84,14 +85,14 @@ def main():
     if len(sys.argv) < 2:
         sys.exit(__doc__)
     game = sys.argv[1]
-    bg = vhs(render(game, 840, 500, "1.25,26.25", 90), 1.2)           # long corridor
+    bg = vhs(render(game, 840, 500, 5, "--yaw", "0"), 1.2)                       # Level 5 corridor
     save_indexed(bg, "livearea/contents/bg.png")
 
-    st = vhs(render(game, 560, 316, "1.25,1.25", 23).resize((280, 158), Image.LANCZOS), 0.6)
+    st = vhs(render(game, 280, 158, 0, "--yaw", "23"), 0.6)                     # Level 0
     save_indexed(title(st, "BACKROOMS IRIS", 26, 58, "co-op horror"), "livearea/contents/startup.png")
 
-    ic = vhs(render(game, 256, 256, "-48.75,-73.75", 30).resize((128, 128), Image.LANCZOS), 0.5)
-    save_indexed(title(ic, "IRIS", 34, 44), "icon0.png")
+    ic = vhs(render(game, 128, 128, 8, "--yaw", "200", "--walk", "1.5", "--entity", "2", "--dist", "2.2"), 0.5)
+    save_indexed(title(ic, "IRIS", 30, 92), "icon0.png")                         # a Smiler in the caves
 
     with open(os.path.join(OUT, "livearea", "contents", "template.xml"), "w") as f:
         f.write('<?xml version="1.0" encoding="utf-8"?>\n'

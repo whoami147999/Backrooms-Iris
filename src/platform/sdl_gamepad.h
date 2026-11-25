@@ -9,7 +9,8 @@ namespace iris {
 
 void gamepad_init();
 void gamepad_event(const SDL_Event& e, InputState& in);
-void gamepad_poll(InputState& in);   // adds stick/button state into `in`
+void gamepad_poll(InputState& in, double now); // adds stick/button state into `in`
+bool gamepad_connected();
 void gamepad_shutdown();
 
 } // namespace iris

@@ -1,0 +1,55 @@
+// Backrooms Iris - a running game, seen from the client. Single player runs the GameSim
+// locally; multiplayer predicts the local player and renders server snapshots. The rest
+// of the client (renderer, HUD, effects) only ever looks at a GameView.
+#pragma once
+#include <atomic>
+#include <memory>
+#include <string>
+#include <thread>
+#include <unordered_set>
+#include <vector>
+
+#include "../core/sim.h"
+#include "../net/client.h"
+#include "../net/server.h"
+#include "renderer.h"
+
+namespace iris {
+
+struct GameView {
+    World world;
+    uint32_t epoch = 0;
+    PlayerState me, me_prev;         // render me_prev -> me with `alpha`
+    float alpha = 0;
+    std::vector<DrawPlayer> others;
+    std::vector<DrawEntity> ents;
+    const std::unordered_set<uint32_t>* picked = nullptr;
+    float level_time = 0;
+    bool escaped = false;
+    float respawn_t = 0;
+    bool multiplayer = false;
+    int my_id = 0;
+    float ping_ms = 0;
+    std::vector<std::string> roster;
+};
+
+class Session {
+public:
+    virtual ~Session() = default;
+    // Advance by frame_dt using this frame's command (look angles already applied).
+    virtual void update(const InputCmd& cmd, double now, float frame_dt, bool paused) = 0;
+    virtual const GameView& view() const = 0;
+    virtual std::vector<std::string> take_events() = 0;
+    virtual bool failed(std::string* why) const { (void)why; return false; }
+    virtual bool ready() const { return true; }        // multiplayer: connected + first snapshot
+    virtual void request_respawn() {}                  // single player: retry after death
+    virtual void clear_escaped() {}
+    virtual GameSim* debug_sim() { return nullptr; }  // single player only (dev tools)
+};
+
+std::unique_ptr<Session> make_single_player(LevelId level, uint32_t seed, const std::string& name);
+// host = true starts a server on this machine (own thread) and joins it.
+std::unique_ptr<Session> make_multiplayer(const std::string& host, uint16_t port, const std::string& name,
+                                          bool start_server, LevelId level, double now, std::string* error);
+
+} // namespace iris

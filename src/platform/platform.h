@@ -7,24 +7,30 @@
 namespace iris {
 
 struct InputState {
-    // movement, -1..1 (keyboard or left stick)
-    float move_x = 0, move_z = 0;
-    // mouse motion since last poll, in pixels
-    float mouse_dx = 0, mouse_dy = 0;
-    // right stick, -1..1, already dead-zoned
-    float look_x = 0, look_y = 0;
-    bool sprint = false, crouch = false;
+    // ----- held / continuous
+    float move_x = 0, move_z = 0;     // -1..1 (keyboard or left stick)
+    float mouse_dx = 0, mouse_dy = 0; // relative motion while the mouse is captured, pixels
+    float look_x = 0, look_y = 0;     // right stick, -1..1, dead-zoned
+    bool sprint = false;
+    bool crouch = false;              // held crouch (keyboard)
 
-    // one-shot events
-    bool quit = false;
-    bool screenshot = false;
-    bool toggle_fullscreen = false;
-    bool toggle_debug = false;
-    bool pause = false;
+    // ----- one-shot (true for the frame they happened)
+    bool up = false, down = false, left = false, right = false; // menu navigation (with repeat)
+    bool accept = false, back = false;  // Enter / A(Cross), Esc / B(Circle)
+    bool pause = false;                 // Esc / Start
+    bool interact = false;              // E / A(Cross)
+    bool crouch_toggle = false;         // B(Circle) on a gamepad
+    bool use[3] = {false, false, false}; // 1 2 3 / D-pad left up right
+    bool backspace = false;
+    bool click = false;                 // left mouse button (menus)
+    bool screenshot = false, toggle_fullscreen = false, toggle_debug = false, quit = false;
+    std::string text;                   // typed characters this frame
 
+    float mouse_x = 0, mouse_y = 0;     // absolute mouse position (menus)
+    bool mouse_moved = false;
     bool mouse_captured = false;
-    bool using_gamepad = false;   // last input came from a gamepad
-    int width = 0, height = 0;    // drawable size in pixels
+    bool using_gamepad = false;         // last input came from a gamepad (changes the hints)
+    int width = 0, height = 0;          // drawable size in pixels
 };
 
 struct PlatformConfig {
@@ -41,8 +47,11 @@ void platform_poll(InputState& in);   // fills `in`, clears one-shot events from
 void platform_swap();
 double platform_time();               // seconds, monotonic
 void platform_set_mouse_capture(bool on);
+void platform_set_fullscreen(bool on);
+void platform_set_vsync(bool on);
 bool platform_save_screenshot(const std::string& path); // false if unsupported
 const char* platform_name();
+bool platform_is_vita();
 std::string platform_data_dir();      // writable dir for screenshots/settings, ends with '/'
 void platform_shutdown();
 

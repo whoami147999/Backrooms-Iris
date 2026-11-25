@@ -42,17 +42,32 @@ endif()
 # Pure C++: world generation, collision, movement. Used by client AND server, so the
 # server simulates exactly what players see.
 add_library(iris_core STATIC
-  src/core/level0.cpp
+  src/core/world.cpp
   src/core/collision.cpp
   src/core/player.cpp
+  src/core/sim.cpp
 )
 target_include_directories(iris_core PUBLIC src)
+
+# networking (UDP): server core + client, used by the game and the dedicated server
+add_library(iris_net STATIC
+  src/net/udp.cpp
+  src/net/server.cpp
+  src/net/client.cpp
+)
+target_link_libraries(iris_net PUBLIC iris_core)
+if(WIN32)
+  target_link_libraries(iris_net PUBLIC ws2_32)
+endif()
+if(VITA)
+  target_link_libraries(iris_net PUBLIC SceNet_stub SceNetCtl_stub SceSysmodule_stub)
+endif()
 
 option(IRIS_BUILD_TESTS "Build the core tests (ctest)" ON)
 if(IRIS_BUILD_TESTS AND NOT VITA AND NOT CMAKE_CROSSCOMPILING)
   enable_testing()
   add_executable(iris_core_tests tests/core_tests.cpp)
-  target_link_libraries(iris_core_tests PRIVATE iris_core)
+  target_link_libraries(iris_core_tests PRIVATE iris_net)
   add_test(NAME core COMMAND iris_core_tests)
 endif()
 
@@ -60,6 +75,11 @@ endif()
 if(IRIS_BUILD_CLIENT)
   set(IRIS_CLIENT_SOURCES
     src/client/main.cpp
+    src/client/app.cpp
+    src/client/session.cpp
+    src/client/effects.cpp
+    src/client/settings.cpp
+    src/client/font.cpp
     src/client/gl.cpp
     src/client/textures.cpp
     src/client/chunk_mesh.cpp
@@ -78,7 +98,7 @@ if(IRIS_BUILD_CLIENT)
     add_executable(iris_vita ${IRIS_CLIENT_SOURCES} src/platform/vita/platform_vita.cpp)
     target_compile_options(iris_vita PRIVATE -O2 -ffast-math -mfpu=neon -mcpu=cortex-a9)
     target_link_libraries(iris_vita PRIVATE
-      iris_core
+      iris_net
       SDL2
       vitaGL vitashark SceShaccCgExt mathneon taihen_stub
       SceShaccCg_stub SceKernelDmacMgr_stub SceLibKernel_stub SceAppMgr_stub SceAppUtil_stub
@@ -108,7 +128,8 @@ if(IRIS_BUILD_CLIENT)
     find_package(OpenGL REQUIRED)
 
     add_executable(backrooms-iris ${IRIS_CLIENT_SOURCES} src/platform/pc/platform_pc.cpp)
-    target_link_libraries(backrooms-iris PRIVATE iris_core OpenGL::GL)
+    find_package(Threads REQUIRED)
+    target_link_libraries(backrooms-iris PRIVATE iris_net OpenGL::GL Threads::Threads)
     if(WIN32)
       # Release builds are GUI apps (no console window); Debug keeps the console for logs
       set_target_properties(backrooms-iris PROPERTIES WIN32_EXECUTABLE $<NOT:$<CONFIG:Debug>>)
@@ -135,7 +156,7 @@ endif()
 if(IRIS_BUILD_SERVER)
   find_package(Threads REQUIRED)
   add_executable(iris_server src/server/main.cpp)
-  target_link_libraries(iris_server PRIVATE iris_core Threads::Threads)
+  target_link_libraries(iris_server PRIVATE iris_net Threads::Threads)
   install(TARGETS iris_server RUNTIME DESTINATION bin)
 endif()
 

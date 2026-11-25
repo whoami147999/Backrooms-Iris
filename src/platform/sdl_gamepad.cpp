@@ -6,7 +6,9 @@ namespace iris {
 namespace {
 
 SDL_GameController* g_pad = nullptr;
-bool g_crouch_toggle = false;
+// stick-as-dpad repeat for menus
+int g_nav_dir = 0;
+double g_nav_next = 0;
 
 float axis(SDL_GameControllerAxis a) {
     if (!g_pad) return 0;
@@ -39,6 +41,8 @@ void gamepad_init() {
     open_first();
 }
 
+bool gamepad_connected() { return g_pad != nullptr; }
+
 void gamepad_event(const SDL_Event& e, InputState& in) {
     switch (e.type) {
         case SDL_CONTROLLERDEVICEADDED: open_first(); break;
@@ -52,9 +56,14 @@ void gamepad_event(const SDL_Event& e, InputState& in) {
         case SDL_CONTROLLERBUTTONDOWN:
             in.using_gamepad = true;
             switch (e.cbutton.button) {
-                case SDL_CONTROLLER_BUTTON_B: g_crouch_toggle = !g_crouch_toggle; break; // Circle
+                case SDL_CONTROLLER_BUTTON_A: in.accept = true; in.interact = true; break;          // Cross
+                case SDL_CONTROLLER_BUTTON_B: in.back = true; in.crouch_toggle = true; break;       // Circle
                 case SDL_CONTROLLER_BUTTON_START: in.pause = true; break;
-                case SDL_CONTROLLER_BUTTON_BACK: in.toggle_debug = true; break;         // Select
+                case SDL_CONTROLLER_BUTTON_BACK: in.toggle_debug = true; break;                    // Select
+                case SDL_CONTROLLER_BUTTON_DPAD_UP: in.up = true; in.use[1] = true; break;
+                case SDL_CONTROLLER_BUTTON_DPAD_DOWN: in.down = true; break;
+                case SDL_CONTROLLER_BUTTON_DPAD_LEFT: in.left = true; in.use[0] = true; break;
+                case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: in.right = true; in.use[2] = true; break;
                 default: break;
             }
             break;
@@ -62,27 +71,28 @@ void gamepad_event(const SDL_Event& e, InputState& in) {
     }
 }
 
-void gamepad_poll(InputState& in) {
+void gamepad_poll(InputState& in, double now) {
     if (!g_pad) return;
     float lx = axis(SDL_CONTROLLER_AXIS_LEFTX), ly = axis(SDL_CONTROLLER_AXIS_LEFTY);
     float rx = axis(SDL_CONTROLLER_AXIS_RIGHTX), ry = axis(SDL_CONTROLLER_AXIS_RIGHTY);
+    // menu navigation with the left stick, with key-repeat style timing
+    int dir = 0;
+    if (ly < -0.6f) dir = 1; else if (ly > 0.6f) dir = 2; else if (lx < -0.6f) dir = 3; else if (lx > 0.6f) dir = 4;
+    if (dir != g_nav_dir) { g_nav_dir = dir; g_nav_next = now; }
+    if (dir && now >= g_nav_next) {
+        if (dir == 1) in.up = true; else if (dir == 2) in.down = true; else if (dir == 3) in.left = true; else in.right = true;
+        g_nav_next = now + (g_nav_next == now ? 0.35 : 0.14);
+    }
     deadzone(lx, ly, 0.22f);
     deadzone(rx, ry, 0.18f);
     if (lx != 0 || ly != 0 || rx != 0 || ry != 0) in.using_gamepad = true;
-    // the stick wins over keys only when it's actually pushed
-    if (lx != 0 || ly != 0) {
-        in.move_x = lx;
-        in.move_z = -ly;
-    }
+    if (lx != 0 || ly != 0) { in.move_x = lx; in.move_z = -ly; }
     in.look_x = rx;
     in.look_y = ry;
-    // R / R2 to sprint (Vita has no analog triggers, so accept the shoulder too)
+    // R / R2 / L3 to sprint (Vita has no analog triggers, so accept the shoulder too)
     if (SDL_GameControllerGetButton(g_pad, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER) ||
-        axis(SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > 0.4f ||
-        SDL_GameControllerGetButton(g_pad, SDL_CONTROLLER_BUTTON_LEFTSTICK))
+        axis(SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > 0.4f || SDL_GameControllerGetButton(g_pad, SDL_CONTROLLER_BUTTON_LEFTSTICK))
         in.sprint = true;
-    if (g_crouch_toggle) in.crouch = true;
-    if (in.sprint && in.using_gamepad) g_crouch_toggle = false;
 }
 
 void gamepad_shutdown() {

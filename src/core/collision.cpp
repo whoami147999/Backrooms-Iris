@@ -1,7 +1,5 @@
 #include "collision.h"
 
-#include "config.h"
-
 namespace iris {
 namespace {
 
@@ -31,18 +29,23 @@ void push_out(Vec2& p, float r, const Box& b) {
 
 } // namespace
 
-void collide_circle(const Level0& L, Vec2& pos, float r) {
+void collide_circle(const World& W, Vec2& pos, float r) {
+    const float hw = WALL_T * 0.5f, hp = POST_T * 0.5f, hl = W.info().pillar_size * 0.5f;
     for (int pass = 0; pass < 3; pass++) {
         int cx0 = floor_to_int((pos.x - r) / CELL) - 1, cx1 = floor_to_int((pos.x + r) / CELL) + 1;
         int cz0 = floor_to_int((pos.z - r) / CELL) - 1, cz1 = floor_to_int((pos.z + r) / CELL) + 1;
-        const float hw = WALL_T * 0.5f, hp = POST_T * 0.5f, hl = PILLAR_T * 0.5f;
         for (int gx = cx0; gx <= cx1; gx++) {
             for (int gz = cz0; gz <= cz1; gz++) {
                 float x = gx * CELL, z = gz * CELL;
-                if (L.wall_x(gx, gz)) push_out(pos, r, {x - hw, z, x + hw, z + CELL});
-                if (L.wall_z(gx, gz)) push_out(pos, r, {x, z - hw, x + CELL, z + hw});
-                if (L.post(gx, gz)) push_out(pos, r, {x - hp, z - hp, x + hp, z + hp});
-                else if (L.pillar(gx, gz)) push_out(pos, r, {x - hl, z - hl, x + hl, z + hl});
+                if (W.solid(gx, gz)) push_out(pos, r, {x, z, x + CELL, z + CELL});
+                if (W.wall_x(gx, gz)) push_out(pos, r, {x - hw, z, x + hw, z + CELL});
+                if (W.wall_z(gx, gz)) push_out(pos, r, {x, z - hw, x + CELL, z + hw});
+                if (W.post(gx, gz)) push_out(pos, r, {x - hp, z - hp, x + hp, z + hp});
+                else if (W.pillar(gx, gz)) push_out(pos, r, {x - hl, z - hl, x + hl, z + hl});
+                if (W.exit_cell(gx, gz)) { // the exit door is a thin slab in the cell centre
+                    float mx = x + CELL * 0.5f, mz = z + CELL * 0.5f;
+                    push_out(pos, r, {mx - 0.7f, mz - 0.12f, mx + 0.7f, mz + 0.12f});
+                }
             }
         }
     }

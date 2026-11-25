@@ -1,39 +1,72 @@
 # Backrooms Iris
 
-Open-source co-op Backrooms horror. Up to 4 players, PvE: survive, avoid the entities, find the exits.
+Open-source co-op Backrooms horror. Up to 4 players, PvE: survive, keep your head together, find the exit.
 One C++ codebase for **Linux, Windows and PS Vita**, plus a headless dedicated server for **FreeBSD**.
 
-![Level 0](docs/screenshots/03-pillar-hall.png)
+![Level 5](docs/screenshots/04-level-5-terror-hotel.png)
 
-> Inspired by Backrooms games and community lore. All code, art and sound are original and generated in code:
-> no assets, names, maps or art from any other game.
+> Inspired by Backrooms games and the community wiki lore. All code, art and sound are original and generated
+> in code: no assets, maps or art copied from any other game.
 
-## Status: milestone 1
+## What's in 0.2
 
 | | |
 |---|---|
-| ✅ | Endless procedurally generated **Level 0**: rooms, pillar halls, mazes, long corridors |
-| ✅ | Walk around on PC: WASD + mouse or gamepad, sprint with stamina, crouch, head bob |
-| ✅ | Procedural textures (wallpaper, carpet, ceiling tiles, light panels), baked lighting with dead lights, fog |
-| ✅ | Builds on Linux and Windows from the same CMake project |
-| ✅ | Vita target + LiveArea art wired up (gets compiled and tested in milestone 2) |
-| ✅ | Headless server skeleton + FreeBSD TUI installer (real netcode is milestone 4) |
+| **6 levels** | Level 0 The Lobby, Level 1 Habitable Zone, Level 5 Terror Hotel, Level 8 Cave System, Level 9 The Suburbs, Level 11 The Endless City |
+| **5 entities** | Bacteria, Hounds, Smilers, Skin-Stealers, Partygoers |
+| **Items** | Almond Water, Energy Drink, Memory Juice |
+| **Sanity** | drains in the dark, near entities and over time; low sanity messes with your eyes; zero sanity hurts |
+| **Menus** | single player / multiplayer, settings (mouse + stick sensitivity, invert, FOV, head bob, fullscreen, vsync), controls |
+| **Multiplayer** | host from inside the game or run the FreeBSD server; LAN browser; join by IP; PC and Vita in the same game |
+| **Vita** | full build target: same game, same menus, controller-only UI, LiveArea art |
 
-| Milestone | |
+## Levels
+
+Every level is endless and generated from a seed, so the same seed gives the same world on every machine.
+Find the glowing green **EXIT** sign: the door takes everyone to the next level.
+
+| level | what it is | who lives there |
+|---|---|---|
+| **0 - The Lobby** | mono-yellow rooms, damp carpet, buzzing lights, some dead | Bacteria, a Smiler in the dark |
+| **1 - Habitable Zone** | huge concrete warehouse, columns, crates, puddles, misty, whole sections without power | Hounds, Bacteria |
+| **5 - Terror Hotel** | endless corridors of guest rooms, red carpet, wood panels, ballrooms | Partygoers, a Smiler |
+| **8 - Cave System** | pitch-black caves, lumpy ceilings, glowing fungus. You see a few metres | Smilers, Hounds |
+| **9 - The Suburbs** | streets of identical houses at night, half the streetlights dead | Skin-Stealers, Hounds |
+| **11 - The Endless City** | grey daytime city, endless towers. **Safe**: sanity recovers here | nobody |
+
+Level 11's exit loops you back to Level 0. Of course it does.
+
+## Entities
+
+| | how it acts | how to live |
+|---|---|---|
+| **Bacteria** | tall, thin, black. Freezes for a second when it spots you, then runs you down. Faster than your sprint in a straight line, but it turns slowly | break line of sight: corners, doorways. One touch kills |
+| **Hounds** | hunt by **sound**: sprinting is loud, walking less, crouching is nearly silent | look them in the eye and don't run: they hesitate and back off. Turn your back and they lunge |
+| **Smilers** | a grin in the dark, nothing else. Drifts closer while you're not looking | don't stare at it, don't sprint near it, get to the light. Looking too long makes it charge |
+| **Skin-Stealers** | patrol the streets of Level 9, chase on sight, hit hard | a full sprint barely outpaces them. Energy drinks help |
+| **Partygoers** | `=)` They want you at the party. Slower than you, but they never stop following | keep moving and find the exit. Being touched is final |
+
+## Items
+
+| | |
 |---|---|
-| 1 | Walk around a procedurally generated Level 0 on PC ← **here** |
-| 2 | Same build running on Vita (Vita3K, then hardware) |
-| 3 | Lighting, fog, audio, vibes: flicker, film grain, VHS shaders, procedural sound |
-| 4 | Dedicated server + LAN co-op |
-| 5 | Online PC ↔ Vita crossplay, entities (Bacteria, Hounds, carpet moss), more levels |
+| **Almond Water** | refills stamina and restores a chunk of sanity |
+| **Energy Drink** | ~14 s of moving much faster with no stamina cost, then a crash |
+| **Memory Juice** | don't. A long deliriant trip: shadow people, things on the floor that aren't there, a "friend" standing there staring, spiders on your eyes, whispers, double vision, then the dark closes in. Then you die |
+
+Everyone starts with one Almond Water. Dying drops your items.
 
 ## Screenshots
 
 | | |
 |---|---|
-| ![](docs/screenshots/01-spawn.png) | ![](docs/screenshots/02-corridor.png) |
-| ![](docs/screenshots/04-pillar-hall-2.png) | ![](docs/screenshots/06-dark-maze.png) |
-| ![](docs/screenshots/freebsd-installer-1-menu.png) | ![](docs/screenshots/freebsd-installer-2-form.png) |
+| ![](docs/screenshots/01-main-menu.png) | ![](docs/screenshots/02-level-0-lobby.png) |
+| ![](docs/screenshots/03-level-1-habitable-zone.png) | ![](docs/screenshots/05-level-8-cave-system.png) |
+| ![](docs/screenshots/06-level-9-suburbs.png) | ![](docs/screenshots/07-level-11-endless-city.png) |
+| ![](docs/screenshots/08-entity-bacteria.png) | ![](docs/screenshots/10-entity-smiler.png) |
+| ![](docs/screenshots/12-entity-partygoer.png) | ![](docs/screenshots/11-entity-skin-stealer.png) |
+| ![](docs/screenshots/16-memory-juice-figure.png) | ![](docs/screenshots/17-memory-juice-spiders.png) |
+| ![](docs/screenshots/14-exit-door.png) | ![](docs/screenshots/24-multiplayer-host-view.png) |
 
 ---
 
@@ -46,7 +79,6 @@ sudo pacman -S --needed base-devel git cmake ninja sdl2-compat mesa
 ```
 
 `sdl2-compat` is Arch's SDL2 package now (it replaced `sdl2`). If pacman asks to replace `sdl2`, say yes.
-NVIDIA users: your normal `nvidia` / `nvidia-open` driver is all you need.
 
 ### 2. Build
 
@@ -66,7 +98,7 @@ cmake --build build
 ./build/backrooms-iris
 ```
 
-Optional: `ctest --test-dir build` runs the world-generation and movement tests.
+Optional: `ctest --test-dir build` runs the world, sim, item and network tests.
 
 ---
 
@@ -86,8 +118,6 @@ pacman -S --needed git mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake min
 
 ### 3. Build
 
-Go to the project folder. Windows drives are under `/c/`, for example:
-
 ```bash
 cd /c/Users/BigG/Downloads/backrooms-iris
 ```
@@ -106,26 +136,15 @@ cmake --build build
 ./build/backrooms-iris.exe
 ```
 
-`SDL2.dll` gets copied next to the `.exe` automatically. To play on another PC, copy both files.
-
-<details>
-<summary>Visual Studio 2022 instead of MSYS2</summary>
-
-```bat
-git clone https://github.com/microsoft/vcpkg C:\vcpkg
-C:\vcpkg\bootstrap-vcpkg.bat
-C:\vcpkg\vcpkg install sdl2:x64-windows
-cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
-cmake --build build --config Release
-build\Release\backrooms-iris.exe
-```
-</details>
+`SDL2.dll` is copied next to the `.exe`. To play on another PC, copy both files.
+The first time you host a game, Windows Firewall asks about network access: allow it on private networks.
 
 ---
 
-## PS Vita (for milestone 2)
+## PS Vita
 
-The Vita build target is ready but hasn't been compiled yet. Getting it running is milestone 2.
+Same game, same menus. Controls on the Vita: left stick move, right stick look, R sprint, Circle crouch,
+Cross pick up / select, D-pad left/up/right use items, Start pause.
 
 ### 1. Install VitaSDK (on Arch)
 
@@ -167,18 +186,29 @@ Output: `build-vita/BackroomsIris.vpk`.
 
 ### 3. Run it
 
-- **Vita3K**: install `vita3k-bin` from the AUR (or the AppImage from vita3k.org), install the firmware, then
+- **Vita3K**: `vita3k-bin` from the AUR (or the AppImage from vita3k.org), install the firmware, then
   File → Install .pkg/.zip/.vpk.
-- **Real Vita**: copy the `.vpk` with VitaShell (FTP or USB) and install it.
-  vitaGL apps usually need `libshacccg.suprx` on the console. If it crashes at boot, install that with
+- **Real Vita**: copy the `.vpk` over with VitaShell (FTP or USB) and install it.
+  vitaGL apps usually need `libshacccg.suprx` on the console. If it crashes at boot, install it with
   [ShaRKF00D](https://github.com/Rinnegatamante/ShaRKF00D) first.
+- Multiplayer on the Vita: connect it to the same Wi-Fi as the PC/server, then Multiplayer → Join Game.
+  The LAN browser finds games automatically, or enter the IP with the D-pad.
 
 ---
 
-## FreeBSD dedicated server (your X230)
+## Multiplayer
 
-The server is headless (no SDL, no GL) and uses the same world-generation code as the game.
-Right now it runs, ticks and answers status queries. Players join in milestone 4.
+**From inside the game (easiest):** one player picks *Multiplayer → Host Game*. Everyone else on the same
+network picks *Multiplayer → Join Game* and the game shows up in the list. Or type the host's IP.
+
+**Dedicated server (your FreeBSD X230):** see below. Players join it the same way: it appears in the LAN list,
+or use its IP. For friends outside your house, forward **UDP 27315** on your router to the server.
+
+The server runs the real game (entities, items, sanity, exits); clients predict their own movement so it
+feels instant even on laggy Vita Wi-Fi. Dead players respawn after 10 seconds. When anyone reaches the exit,
+everyone goes to the next level.
+
+## FreeBSD dedicated server
 
 ### 1. Get the code onto the server
 
@@ -198,17 +228,17 @@ git clone <your repo url> backrooms-iris && cd backrooms-iris
 su -m root -c 'sh server/freebsd/install.sh'
 ```
 
-(`sudo sh server/freebsd/install.sh` works too if you have sudo.)
-
 It's a TUI (bsddialog, which ships in FreeBSD 14's base system). Pick **Install / update** and it will:
 
 1. `pkg install cmake ninja` if they're missing (clang is already in base)
-2. ask for the server name, UDP port, max players, world seed, tick rate and start-on-boot
+2. ask for the server name, UDP port, max players, world seed and starting level
 3. build `iris_server` from the checkout
 4. install the binary, config, rc.d service, log rotation and an unprivileged `iris` user
 5. start the service and check that it answers
 
 Run it again any time to update, change settings, start/stop, read the log, or uninstall.
+
+![installer](docs/screenshots/freebsd-installer-2-form.png)
 
 ### 3. Day-to-day
 
@@ -224,10 +254,8 @@ service iris_server restart
 tail -f /var/log/iris_server.log
 ```
 
-Check it from any machine that has a build of the server:
-
 ```bash
-iris_server --query <x230-ip>:27315
+iris_server --query 127.0.0.1
 ```
 
 | file | what |
@@ -236,61 +264,70 @@ iris_server --query <x230-ip>:27315
 | `/usr/local/etc/rc.d/iris_server` | service script (a crash means auto-restart after 5 s) |
 | `/var/log/iris_server.log` | log, rotated by newsyslog |
 
-For online play, forward **UDP 27315** on your router to the X230. If `pf` is enabled, the installer shows you the rule to add.
-
 ---
 
 ## Controls
 
-| action | keyboard + mouse | gamepad | PS Vita |
-|---|---|---|---|
-| move | WASD / arrows | left stick | left stick |
-| look | mouse | right stick | right stick |
-| sprint | Shift | R / R2 / click left stick | R |
-| crouch | Ctrl or C (hold) | B / Circle (toggle) | Circle (toggle) |
-| fullscreen | F11 or Alt+Enter | | |
-| screenshot | F12 | | |
-| debug info | F3 (prints to the terminal) | Select | Select |
-| release mouse / quit | Esc / Esc again | | |
+| action | keyboard + mouse | gamepad / PS Vita |
+|---|---|---|
+| move | WASD | left stick |
+| look | mouse | right stick |
+| sprint | Shift | R / R2 |
+| crouch | Ctrl or C (hold) | Circle / B (toggle) |
+| pick up | E | Cross / A |
+| almond water / energy drink / memory juice | 1 / 2 / 3 | D-pad left / up / right |
+| pause | Esc | Start |
+| screenshot | F12 | |
+| fullscreen | F11 or Alt+Enter | |
+| fps + position (terminal) | F3 | Select |
 
-Sprinting drains stamina (bar at the bottom). Run it dry and you're exhausted until it refills a bit.
+Menus: arrows or mouse + Enter + Esc, or D-pad/stick + Cross + Circle. To edit a text field (name, IP, seed)
+select it, then type, or use up/down to change the letter under the cursor and left/right to move.
 
 ## Command line
 
 ```
-backrooms-iris [--seed N] [--width W --height H] [--fullscreen] [--no-vsync]
+backrooms-iris [--level N] [--seed N] [--host] [--join IP]
 ```
 
-The same seed always gives the same world, on every platform.
+`--level` jumps straight into a level (0, 1, 5, 8, 9, 11) in single player. Settings live in
+`~/.local/share/BackroomsIris/BackroomsIris/settings.cfg` (Linux), `%APPDATA%\BackroomsIris\BackroomsIris\` (Windows),
+`ux0:data/BackroomsIris/` (Vita).
 
 ## Reporting bugs
 
-Paste these when something's off:
-
 1. what you did and what looked or felt wrong
-2. the terminal output (run the game from a terminal; press **F3** to add fps + position lines)
-3. the seed (printed at startup) and a screenshot (**F12**, saved to `~/.local/share/BackroomsIris/BackroomsIris/`
-   on Linux, `%APPDATA%\BackroomsIris\BackroomsIris\` on Windows)
+2. the terminal output (press **F3** in game to add fps/position/health lines)
+3. the level + seed (shown in single player setup) and a screenshot (**F12**)
 
 ## How it's built
 
 ```
-src/core/       shared by everything, no SDL/GL: world generation, collision, player movement
-src/client/     game: procedural textures, chunk meshing + baked light, renderer, main loop
-src/platform/   pc/ (SDL2 + OpenGL) and vita/ (vitaGL + SDL2 input), shared gamepad code
-src/server/     headless dedicated server (POSIX)
+src/core/       shared by everything, no SDL/GL: levels, collision, movement, entities, items, sanity, the game sim
+src/net/        UDP sockets (Linux, Windows, Vita, FreeBSD), server core, client
+src/client/     menus + HUD (app), sessions (single player / network), renderer, textures, effects, font
+src/platform/   pc/ (SDL2 + OpenGL) and vita/ (vitaGL + SDL2 input)
+src/server/     headless dedicated server
 server/freebsd/ install.sh TUI, rc.d script, sample config, newsyslog rule
 vita/sce_sys/   LiveArea images (regenerate: python3 tools/gen_livearea.py build/backrooms-iris)
-tests/          core tests (ctest)
-cmake/          MinGW toolchain for cross-compiling the Windows build from Linux
+tests/          ctest: every level, items, a 3-minute sim soak per level, a real UDP round trip
 ```
 
-- **The world isn't stored anywhere.** Every wall, pillar and light is a pure function of `(seed, grid position)`,
-  so chunks generate in any order, there are no seams, and the server knows the exact same walls as every client.
-- **Movement is a pure function** `(state, input, dt) -> state` in `src/core`. That's what lets the server be
-  authoritative while clients predict their own movement (milestone 4).
-- **One renderer for PC and Vita**: it sticks to the OpenGL subset vitaGL implements (fixed function + VBOs + fog).
-  Shaders arrive in milestone 3.
+- **Levels aren't stored.** Every wall, room, house, light, item and exit is a pure function of `(level, seed, position)`.
+- **One sim, three places.** `GameSim` runs in single player, in "Host game", and on the dedicated server.
+- **Server-authoritative + prediction.** Clients send inputs (with redundancy so lost packets don't matter), predict
+  their own movement with the same code the server runs, and replay unacknowledged inputs when a snapshot arrives.
+- **One renderer for PC and Vita**: the OpenGL subset vitaGL implements (fixed function + VBOs + fog), everything
+  drawn from procedural textures and box models. Screen warping for the memory juice is PC-only; the Vita gets
+  the overlays.
+
+## Roadmap
+
+- [x] 1. Walk around a procedurally generated Level 0 on PC
+- [~] 2. Vita build (target is complete; first hardware test is yours)
+- [ ] 3. Audio (procedural hum, footsteps, growls, drones), light flicker, VHS / film grain shaders
+- [~] 4. Dedicated server + LAN co-op (working; lag compensation for hits next)
+- [~] 5. Online PC ↔ Vita, entities, more levels (5 entities + 6 levels done; carpet moss next)
 
 ## License
 

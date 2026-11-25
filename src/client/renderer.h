@@ -1,48 +1,119 @@
-// Backrooms Iris - renderer: textures, chunk streaming, fog, simple HUD.
+// Backrooms Iris - renderer: level textures, chunk streaming, entities, items, effects, 2D.
 #pragma once
 #include <cstdint>
+#include <string>
 #include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
-#include "../core/level0.h"
 #include "../core/math.h"
+#include "../core/sim.h"
+#include "../core/world.h"
 #include "chunk_mesh.h"
+#include "textures.h"
 
 namespace iris {
 
 struct RenderSettings {
-    float fov_deg = 68.0f;
-    float view_dist = 34.0f;     // chunks beyond this aren't drawn (fog hides the edge)
-    float fog_density = 0.055f;
+    float view_dist = 34.0f;      // chunks beyond this aren't drawn (fog hides the edge)
+    int texture_size = 512;       // 256 on Vita
     int chunk_builds_per_frame = 2;
+    bool post_effects = true;     // screen-grab distortion (PC only)
+};
+
+struct Camera {
+    Vec3 eye;
+    float yaw = 0, pitch = 0, roll = 0;
+    float fov_deg = 70;
+};
+
+struct DrawEntity {
+    uint16_t id;
+    EntityType type;
+    EntState state;
+    Vec2 pos;
+    float yaw, anim, speed;
+};
+
+struct DrawPlayer {
+    int id;
+    Vec3 pos;
+    float yaw, crouch, anim;
+    bool alive;
+    std::string name;
+};
+
+// hallucinations
+enum class PhantomKind : uint8_t { Shadow, FakeItem, Figure };
+struct Phantom {
+    PhantomKind kind;
+    Vec3 pos;
+    float alpha;
+    int variant;
 };
 
 class Renderer {
 public:
+    int width = 1, height = 1;
+
     bool init(const RenderSettings& s);
     void shutdown();
+    void set_level(const World& w);   // regenerate this level's textures, drop chunks
+    LevelId level() const { return level_; }
 
     // Streams chunks around `eye`. budget < 0 = build everything needed right now.
-    void update_chunks(const Level0& level, Vec3 eye, int budget);
-    void draw_world(Vec3 eye, float yaw, float pitch, int width, int height);
-    void draw_hud(float stamina, bool exhausted, int width, int height);
-
+    void update_chunks(const World& w, Vec3 eye, int budget);
+    bool chunks_ready() const { return pending_ == 0; }
     int chunks_loaded() const { return (int)chunks_.size(); }
-    int chunks_drawn() const { return drawn_; }
+
+    void begin_frame(int w, int h);
+    void draw_world(const World& w, const Camera& cam, float time, float fog_mult,
+                    const std::unordered_set<uint32_t>& picked, const std::vector<DrawEntity>& ents,
+                    const std::vector<DrawPlayer>& players, const std::vector<Phantom>& phantoms);
+    // Full-screen distortion of what was just drawn. amount 0 = off.
+    void post_warp(float wobble, float ghost, float time);
+
+    // ---- 2D (pixel coordinates, origin top-left). Colours are 0xRRGGBBAA.
+    void begin_2d();
+    void rect(float x, float y, float w, float h, uint32_t rgba);
+    void sprite(Sprite s, float x, float y, float w, float h, uint32_t rgba, float rot = 0, bool additive = false);
+    float text(float x, float y, float px, const std::string& s, uint32_t rgba, int align = 0); // align: 0 left, 1 centre, 2 right
+    void tiled(Sprite s, float x, float y, float w, float h, uint32_t rgba, float tile_px, float ox, float oy); // repeating texture
+    float text_w(float px, const std::string& s) const { return text_width_px_f(s) * px; }
+    void end_2d();
+    bool project(Vec3 p, float& sx, float& sy) const;
 
 private:
     struct GpuChunk {
         uint32_t vbo = 0, ibo = 0;
         uint32_t first[MAT_COUNT] = {}, count[MAT_COUNT] = {};
         int kx = 0, kz = 0;
+        std::vector<Vec3> exits;
+        std::vector<uint32_t> items;
     };
     RenderSettings s_;
+    LevelId level_ = LevelId::COUNT;
     uint32_t tex_[MAT_COUNT] = {};
+    uint32_t spr_[SPR_COUNT] = {};
     std::unordered_map<uint64_t, GpuChunk> chunks_;
     ChunkMesh scratch_;
-    int drawn_ = 0;
+    int pending_ = 1;
+    float view_[16], proj_[16];
+    std::vector<Vertex> dyn_;
+    uint32_t grab_tex_ = 0;
+    int grab_w_ = 0, grab_h_ = 0;
+    Camera cam_;
 
     static uint64_t key(int kx, int kz) { return ((uint64_t)(uint32_t)kx << 32) | (uint32_t)kz; }
+    static float text_width_px_f(const std::string& s) { return s.empty() ? 0.0f : (float)s.size() * 6 - 1; }
     void upload(GpuChunk& g, const ChunkMesh& m);
+    void flush_dyn(uint32_t tex, bool additive = false, bool fog = true);
+    void push_quad(Vec3 a, Vec3 b, Vec3 c, Vec3 d, uint32_t rgba, float u0 = 0, float v0 = 0, float u1 = 1, float v1 = 1);
+    void billboard(Vec3 center, float w, float h, uint32_t rgba, float u0 = 0, float v0 = 0, float u1 = 1, float v1 = 1);
+    void draw_entity(const World& w, const DrawEntity& e, float time);
+    void draw_player(const World& w, const DrawPlayer& p, float time);
 };
+
+uint32_t rgba(float r, float g, float b, float a = 1);
 
 } // namespace iris

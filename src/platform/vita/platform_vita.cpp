@@ -2,6 +2,7 @@
 // Milestone 2 is when this gets tested for real (Vita3K, then hardware).
 #include <SDL.h>
 #include <psp2/kernel/processmgr.h>
+#include <psp2/io/stat.h>
 #include <psp2/power.h>
 #include <vitaGL.h>
 
@@ -35,21 +36,24 @@ bool platform_init(const PlatformConfig&) {
 }
 
 void platform_poll(InputState& in) {
-    in.mouse_dx = in.mouse_dy = 0;
-    in.quit = in.screenshot = in.toggle_fullscreen = in.toggle_debug = in.pause = false;
-    in.move_x = in.move_z = in.look_x = in.look_y = 0;
-    in.sprint = in.crouch = false;
+    InputState prev = in;
+    in = InputState{};
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
         gamepad_event(e, in);
         if (e.type == SDL_QUIT) in.quit = true;
     }
-    gamepad_poll(in);
+    gamepad_poll(in, platform_time());
     in.using_gamepad = true;
     in.mouse_captured = false;
     in.width = 960;
     in.height = 544;
+    (void)prev;
 }
+
+void platform_set_fullscreen(bool) {}
+void platform_set_vsync(bool) {}
+bool platform_is_vita() { return true; }
 
 void platform_swap() { vglSwapBuffers(GL_FALSE); }
 
@@ -60,7 +64,10 @@ double platform_time() {
 void platform_set_mouse_capture(bool) {}
 bool platform_save_screenshot(const std::string&) { return false; }
 const char* platform_name() { return "PS Vita"; }
-std::string platform_data_dir() { return "ux0:data/BackroomsIris/"; }
+std::string platform_data_dir() {
+    sceIoMkdir("ux0:data/BackroomsIris", 0777);
+    return "ux0:data/BackroomsIris/";
+}
 
 void platform_shutdown() {
     gamepad_shutdown();

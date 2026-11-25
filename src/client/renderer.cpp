@@ -2,27 +2,31 @@
 
 #include <algorithm>
 #include <cstddef>
-#include <vector>
 
 #include "../core/config.h"
+#include "../core/hash.h"
+#include "font.h"
 #include "gl.h"
-#include "textures.h"
 
 #ifndef GL_TEXTURE_MAX_ANISOTROPY_EXT
 #define GL_TEXTURE_MAX_ANISOTROPY_EXT 0x84FE
 #endif
 
 namespace iris {
+
+uint32_t rgba(float r, float g, float b, float a) {
+    auto c = [](float v) { return (uint32_t)(clampf(v, 0, 1) * 255.0f + 0.5f); };
+    return (c(r) << 24) | (c(g) << 16) | (c(b) << 8) | c(a);
+}
+
 namespace {
 
-const float FOG_COLOR[4] = {0.24f, 0.21f, 0.12f, 1.0f};
+void unpack(uint32_t c, uint8_t& r, uint8_t& g, uint8_t& b, uint8_t& a) {
+    r = (uint8_t)(c >> 24); g = (uint8_t)(c >> 16); b = (uint8_t)(c >> 8); a = (uint8_t)c;
+}
 
-// Halve an RGBA8 image with a box filter (for mip levels).
 Image half(const Image& src) {
-    Image d;
-    d.w = std::max(1, src.w / 2);
-    d.h = std::max(1, src.h / 2);
-    d.rgba.resize((size_t)d.w * d.h * 4);
+    Image d(std::max(1, src.w / 2), std::max(1, src.h / 2));
     for (int y = 0; y < d.h; y++)
         for (int x = 0; x < d.w; x++)
             for (int c = 0; c < 4; c++) {
@@ -35,40 +39,47 @@ Image half(const Image& src) {
     return d;
 }
 
-uint32_t upload_texture(const Image& img) {
+uint32_t upload_texture(const Image& img, bool mips, bool nearest, bool repeat) {
     GLuint t = 0;
     glGenTextures(1, &t);
     glBindTexture(GL_TEXTURE_2D, t);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, repeat ? GL_REPEAT : GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, repeat ? GL_REPEAT : GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, nearest ? GL_NEAREST : GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, nearest ? GL_NEAREST : (mips ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR));
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, img.w, img.h, 0, GL_RGBA, GL_UNSIGNED_BYTE, img.rgba.data());
+    if (mips) {
 #if defined(IRIS_GL_VITA)
-    glGenerateMipmap(GL_TEXTURE_2D);
+        glGenerateMipmap(GL_TEXTURE_2D);
 #else
-    // build the mip chain on the CPU: works on every GL version, no extension needed
-    Image cur = img;
-    int level = 0;
-    while (cur.w > 1 || cur.h > 1) {
-        cur = half(cur);
-        glTexImage2D(GL_TEXTURE_2D, ++level, GL_RGBA, cur.w, cur.h, 0, GL_RGBA, GL_UNSIGNED_BYTE, cur.rgba.data());
-    }
-    if (g_glcaps.anisotropic)
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, std::min(8.0f, g_glcaps.max_aniso));
+        Image cur = img;
+        int level = 0;
+        while (cur.w > 1 || cur.h > 1) {
+            cur = half(cur);
+            glTexImage2D(GL_TEXTURE_2D, ++level, GL_RGBA, cur.w, cur.h, 0, GL_RGBA, GL_UNSIGNED_BYTE, cur.rgba.data());
+        }
+        if (g_glcaps.anisotropic)
+            glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, std::min(8.0f, g_glcaps.max_aniso));
 #endif
+    }
     return t;
+}
+
+void set_pointers(const Vertex* base) {
+    glVertexPointer(3, GL_FLOAT, sizeof(Vertex), (const char*)base + offsetof(Vertex, x));
+    glTexCoordPointer(2, GL_FLOAT, sizeof(Vertex), (const char*)base + offsetof(Vertex, u));
+    glColorPointer(4, GL_UNSIGNED_BYTE, sizeof(Vertex), (const char*)base + offsetof(Vertex, r));
 }
 
 } // namespace
 
+// =================================================================== setup
 bool Renderer::init(const RenderSettings& s) {
     s_ = s;
-    tex_[MAT_WALL] = upload_texture(make_wallpaper());
-    tex_[MAT_FLOOR] = upload_texture(make_carpet());
-    tex_[MAT_CEIL] = upload_texture(make_ceiling_tiles());
-    tex_[MAT_LIGHT] = upload_texture(make_light_panel());
-
+    for (int i = 0; i < SPR_COUNT; i++) {
+        bool nearest = i == SPR_FONT || i == SPR_PARTY_FACE || i == SPR_EXIT_SIGN;
+        spr_[i] = upload_texture(make_sprite((Sprite)i), false, nearest, i == SPR_NOISE || i == SPR_SKIN);
+    }
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
     glEnable(GL_CULL_FACE);
@@ -77,12 +88,9 @@ bool Renderer::init(const RenderSettings& s) {
     glEnable(GL_TEXTURE_2D);
     glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
     glShadeModel(GL_SMOOTH);
-
-    glEnable(GL_FOG);
     glFogi(GL_FOG_MODE, GL_EXP2);
-    glFogf(GL_FOG_DENSITY, s_.fog_density);
-    glFogfv(GL_FOG_COLOR, FOG_COLOR);
     glHint(GL_FOG_HINT, GL_NICEST);
+    glAlphaFunc(GL_GREATER, 0.02f);
     return true;
 }
 
@@ -92,7 +100,25 @@ void Renderer::shutdown() {
         glDeleteBuffers(1, &kv.second.ibo);
     }
     chunks_.clear();
-    glDeleteTextures(MAT_COUNT, tex_);
+    if (tex_[0]) glDeleteTextures(MAT_COUNT, tex_);
+    glDeleteTextures(SPR_COUNT, spr_);
+    if (grab_tex_) glDeleteTextures(1, &grab_tex_);
+}
+
+void Renderer::set_level(const World& w) {
+    for (auto& kv : chunks_) {
+        glDeleteBuffers(1, &kv.second.vbo);
+        glDeleteBuffers(1, &kv.second.ibo);
+    }
+    chunks_.clear();
+    if (level_ != w.id()) {
+        if (tex_[0]) glDeleteTextures(MAT_COUNT, tex_);
+        Image imgs[MAT_COUNT];
+        make_level_textures(w.id(), s_.texture_size, imgs);
+        for (int i = 0; i < MAT_COUNT; i++) tex_[i] = upload_texture(imgs[i], true, false, true);
+        level_ = w.id();
+    }
+    pending_ = 1;
 }
 
 void Renderer::upload(GpuChunk& g, const ChunkMesh& m) {
@@ -102,26 +128,23 @@ void Renderer::upload(GpuChunk& g, const ChunkMesh& m) {
     glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(m.verts.size() * sizeof(Vertex)), m.verts.data(), GL_STATIC_DRAW);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g.ibo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)(m.idx.size() * sizeof(uint16_t)), m.idx.data(), GL_STATIC_DRAW);
-    for (int i = 0; i < MAT_COUNT; i++) {
-        g.first[i] = m.first[i];
-        g.count[i] = m.count[i];
-    }
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    for (int i = 0; i < MAT_COUNT; i++) { g.first[i] = m.first[i]; g.count[i] = m.count[i]; }
+    g.exits = m.exits;
+    g.items = m.items;
 }
 
-void Renderer::update_chunks(const Level0& level, Vec3 eye, int budget) {
+void Renderer::update_chunks(const World& w, Vec3 eye, int budget) {
     const float load = s_.view_dist + CHUNK_SIZE * 0.75f;
     int ekx = floor_to_int(eye.x / CHUNK_SIZE), ekz = floor_to_int(eye.z / CHUNK_SIZE);
     int r = (int)(load / CHUNK_SIZE) + 1;
-
-    // distance from the eye to a chunk's square footprint
     auto dist = [&](int kx, int kz) {
         float x0 = kx * CHUNK_SIZE, z0 = kz * CHUNK_SIZE;
         float dx = std::max(std::max(x0 - eye.x, eye.x - (x0 + CHUNK_SIZE)), 0.0f);
         float dz = std::max(std::max(z0 - eye.z, eye.z - (z0 + CHUNK_SIZE)), 0.0f);
         return std::sqrt(dx * dx + dz * dz);
     };
-
-    // unload chunks well outside the radius (hysteresis avoids thrashing at the edge)
     for (auto it = chunks_.begin(); it != chunks_.end();) {
         if (dist(it->second.kx, it->second.kz) > load + CHUNK_SIZE) {
             glDeleteBuffers(1, &it->second.vbo);
@@ -129,7 +152,6 @@ void Renderer::update_chunks(const Level0& level, Vec3 eye, int budget) {
             it = chunks_.erase(it);
         } else ++it;
     }
-
     struct Want { float d; int kx, kz; };
     std::vector<Want> want;
     for (int kz = ekz - r; kz <= ekz + r; kz++)
@@ -139,69 +161,468 @@ void Renderer::update_chunks(const Level0& level, Vec3 eye, int budget) {
         }
     std::sort(want.begin(), want.end(), [](const Want& a, const Want& b) { return a.d < b.d; });
     int built = 0;
-    for (const Want& w : want) {
+    for (const Want& wn : want) {
         if (budget >= 0 && built >= budget) break;
-        build_chunk_mesh(level, w.kx, w.kz, scratch_);
+        build_chunk_mesh(w, wn.kx, wn.kz, scratch_);
         GpuChunk g;
-        g.kx = w.kx;
-        g.kz = w.kz;
+        g.kx = wn.kx;
+        g.kz = wn.kz;
         upload(g, scratch_);
-        chunks_[key(w.kx, w.kz)] = g;
+        chunks_[key(wn.kx, wn.kz)] = std::move(g);
         built++;
+    }
+    pending_ = (int)want.size() - built;
+}
+
+// =================================================================== dynamic geometry
+void Renderer::push_quad(Vec3 a, Vec3 b, Vec3 c, Vec3 d, uint32_t col, float u0, float v0, float u1, float v1) {
+    uint8_t r, g, bl, al;
+    unpack(col, r, g, bl, al);
+    Vertex va{a.x, a.y, a.z, u0, v1, r, g, bl, al}, vb{b.x, b.y, b.z, u1, v1, r, g, bl, al};
+    Vertex vc{c.x, c.y, c.z, u1, v0, r, g, bl, al}, vd{d.x, d.y, d.z, u0, v0, r, g, bl, al};
+    dyn_.insert(dyn_.end(), {va, vb, vc, va, vc, vd});
+}
+
+void Renderer::billboard(Vec3 c, float w, float h, uint32_t col, float u0, float v0, float u1, float v1) {
+    Vec2 r2 = yaw_right(cam_.yaw);
+    Vec3 r{r2.x * w * 0.5f, 0, r2.z * w * 0.5f};
+    Vec3 up{0, h * 0.5f, 0};
+    push_quad(c - r - up, c + r - up, c + r + up, c - r + up, col, u0, v0, u1, v1);
+}
+
+void Renderer::flush_dyn(uint32_t tex, bool additive, bool fog) {
+    if (dyn_.empty()) return;
+    glBindTexture(GL_TEXTURE_2D, tex);
+    if (additive) glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+    if (!fog) glDisable(GL_FOG);
+    set_pointers(dyn_.data());
+    glDrawArrays(GL_TRIANGLES, 0, (GLsizei)dyn_.size());
+    if (additive) glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    if (!fog) glEnable(GL_FOG);
+    dyn_.clear();
+}
+
+// A box in an entity's local space: x right, y up, z forward. Optional limb swing around
+// the box's top (pivot) by `swing` radians.
+struct Part { float x, y, z, w, h, d; float r, g, b; float swing; };
+
+static void add_part(std::vector<Vertex>& out, const Part& p, Vec2 pos, float yaw, float light) {
+    float cy = std::cos(yaw), sy = std::sin(yaw);
+    float cs = std::cos(p.swing), ss = std::sin(p.swing);
+    float hx = p.w * 0.5f, hz = p.d * 0.5f;
+    auto xf = [&](float lx, float ly, float lz) {
+        // swing around the pivot at the top of the part (rotation about local x)
+        float py = p.y + p.h; // pivot
+        float ry = ly - py, rz = lz - p.z;
+        float sy2 = ry * cs - rz * ss, sz2 = ry * ss + rz * cs;
+        ly = py + sy2;
+        lz = p.z + sz2;
+        // local x = right, local z = forward; world: right = (cos, -sin), forward = (-sin, -cos)
+        float wx = lx * cy - lz * sy;
+        float wz = -lx * sy - lz * cy;
+        return Vec3{pos.x + wx, ly, pos.z + wz};
+    };
+    float x0 = p.x - hx, x1 = p.x + hx, y0 = p.y, y1 = p.y + p.h, z0 = p.z - hz, z1 = p.z + hz;
+    Vec3 c[8] = {xf(x0, y0, z0), xf(x1, y0, z0), xf(x1, y1, z0), xf(x0, y1, z0),
+                 xf(x0, y0, z1), xf(x1, y0, z1), xf(x1, y1, z1), xf(x0, y1, z1)};
+    const int F[6][4] = {{1, 0, 3, 2}, {4, 5, 6, 7}, {0, 4, 7, 3}, {5, 1, 2, 6}, {3, 7, 6, 2}, {0, 1, 5, 4}};
+    const float shade[6] = {0.75f, 0.85f, 0.7f, 0.8f, 1.0f, 0.5f};
+    for (int f = 0; f < 6; f++) {
+        float k = shade[f] * light;
+        uint8_t r = (uint8_t)clampf(p.r * k * 255, 0, 255), g = (uint8_t)clampf(p.g * k * 255, 0, 255), b = (uint8_t)clampf(p.b * k * 255, 0, 255);
+        Vertex v[4];
+        const float uv[4][2] = {{0, 1}, {1, 1}, {1, 0}, {0, 0}};
+        for (int i = 0; i < 4; i++) {
+            Vec3 q = c[F[f][i]];
+            v[i] = {q.x, q.y, q.z, uv[i][0], uv[i][1], r, g, b, 255};
+        }
+        out.insert(out.end(), {v[0], v[1], v[2], v[0], v[2], v[3]});
     }
 }
 
-void Renderer::draw_world(Vec3 eye, float yaw, float pitch, int width, int height) {
+void Renderer::draw_entity(const World& w, const DrawEntity& e, float time) {
+    float light = clampf(w.light_level({e.pos.x, 1.2f, e.pos.z}) * 0.9f + 0.10f, 0.08f, 1.3f);
+    float sw = std::sin(e.anim) * std::min(1.0f, e.speed / 2.0f);
+    std::vector<Part> parts;
+    switch (e.type) {
+        case EntityType::Bacteria: {
+            // tall, thin, black; twitches when it notices you
+            float tw = e.state == EntState::Notice ? (hash01(e.id, (int)(time * 30), 0, 1) - 0.5f) * 0.12f : 0.0f;
+            float k = 0.05f;
+            parts = {
+                {-0.09f, 0, 0, 0.07f, 1.35f, 0.07f, k, k, k, sw * 0.9f},
+                {0.09f, 0, 0, 0.07f, 1.35f, 0.07f, k, k, k, -sw * 0.9f},
+                {tw, 1.3f, 0.05f, 0.24f, 0.85f, 0.14f, k, k, k, 0.15f},
+                {-0.19f + tw, 0.85f, 0.05f, 0.05f, 1.25f, 0.05f, k, k, k, -sw * 0.7f},
+                {0.19f + tw, 0.85f, 0.05f, 0.05f, 1.25f, 0.05f, k, k, k, sw * 0.7f},
+                {tw * 2, 2.12f, 0.1f, 0.17f, 0.38f, 0.17f, k * 1.4f, k * 1.4f, k * 1.4f, 0.2f},
+            };
+            break;
+        }
+        case EntityType::Hound: {
+            // a person on all fours, grey skin, a mat of black hair; head comes up when staring
+            float sk[3] = {0.55f, 0.52f, 0.48f};
+            float head_up = e.state == EntState::Stare ? 0.18f : 0.0f;
+            parts = {
+                {0, 0.52f, 0, 0.36f, 0.26f, 0.95f, sk[0], sk[1], sk[2], 0},
+                {-0.15f, 0, 0.38f, 0.09f, 0.56f, 0.09f, sk[0], sk[1], sk[2], sw},
+                {0.15f, 0, 0.38f, 0.09f, 0.56f, 0.09f, sk[0], sk[1], sk[2], -sw},
+                {-0.15f, 0, -0.38f, 0.09f, 0.56f, 0.09f, sk[0], sk[1], sk[2], -sw},
+                {0.15f, 0, -0.38f, 0.09f, 0.56f, 0.09f, sk[0], sk[1], sk[2], sw},
+                {0, 0.55f + head_up, 0.58f, 0.26f, 0.26f, 0.26f, sk[0], sk[1], sk[2], 0},
+                {0, 0.72f + head_up, 0.52f, 0.32f, 0.12f, 0.36f, 0.03f, 0.03f, 0.03f, 0},
+                {0, 0.62f, 0.15f, 0.3f, 0.18f, 0.5f, 0.03f, 0.03f, 0.03f, 0},
+            };
+            break;
+        }
+        case EntityType::SkinStealer: {
+            float sk[3] = {0.82f, 0.62f, 0.55f};
+            parts = {
+                {-0.12f, 0, 0, 0.12f, 1.0f, 0.12f, sk[0], sk[1], sk[2], sw * 0.8f},
+                {0.12f, 0, 0, 0.12f, 1.0f, 0.12f, sk[0], sk[1], sk[2], -sw * 0.8f},
+                {0, 0.98f, 0, 0.42f, 0.75f, 0.22f, sk[0] * 0.9f, sk[1] * 0.85f, sk[2] * 0.85f, 0.1f},
+                {-0.27f, 0.75f, 0, 0.09f, 1.0f, 0.09f, sk[0], sk[1], sk[2], -sw},
+                {0.27f, 0.75f, 0, 0.09f, 1.0f, 0.09f, sk[0], sk[1], sk[2], sw},
+                {0, 1.73f, 0.02f, 0.26f, 0.32f, 0.26f, sk[0], sk[1], sk[2], 0},
+                {-0.06f, 1.88f, 0.14f, 0.06f, 0.05f, 0.02f, 0.02f, 0.0f, 0.0f, 0},
+                {0.06f, 1.88f, 0.14f, 0.06f, 0.05f, 0.02f, 0.02f, 0.0f, 0.0f, 0},
+                {0, 1.77f, 0.14f, 0.14f, 0.03f, 0.02f, 0.3f, 0.05f, 0.05f, 0},
+            };
+            break;
+        }
+        case EntityType::Partygoer: {
+            float y[3] = {0.92f, 0.78f, 0.22f};
+            parts = {
+                {-0.11f, 0, 0, 0.13f, 0.85f, 0.13f, y[0], y[1], y[2], sw * 0.5f},
+                {0.11f, 0, 0, 0.13f, 0.85f, 0.13f, y[0], y[1], y[2], -sw * 0.5f},
+                {0, 0.83f, 0, 0.42f, 0.62f, 0.24f, y[0], y[1], y[2], 0},
+                {-0.27f, 0.62f, 0, 0.1f, 0.8f, 0.1f, y[0], y[1], y[2], -sw * 0.4f},
+                {0.27f, 0.62f, 0, 0.1f, 0.8f, 0.1f, y[0], y[1], y[2], sw * 0.4f - 0.3f},
+                {0, 1.45f, 0, 0.34f, 0.34f, 0.3f, y[0], y[1], y[2], 0},
+                {0, 1.79f, 0, 0.16f, 0.22f, 0.16f, 0.85f, 0.15f, 0.2f, 0}, // party hat
+            };
+            break;
+        }
+        case EntityType::Smiler: break;
+        default: break;
+    }
+    if (!parts.empty()) {
+        for (const Part& p : parts) add_part(dyn_, p, e.pos, e.yaw, light);
+        flush_dyn(spr_[SPR_WHITE]);
+    }
+    Vec2 f = yaw_forward(e.yaw);
+    if (e.type == EntityType::Partygoer) {
+        // the =) face, and a balloon on a string
+        Vec2 r = yaw_right(e.yaw);
+        Vec3 c{e.pos.x + f.x * 0.155f, 1.62f, e.pos.z + f.z * 0.155f};
+        Vec3 rr{r.x * 0.16f, 0, r.z * 0.16f}, up{0, 0.16f, 0};
+        uint32_t lc = rgba(light, light, light);
+        // the entity faces you, so its right is your left: wind the quad from its left
+        push_quad(c + rr - up, c - rr - up, c - rr + up, c + rr + up, lc);
+        flush_dyn(spr_[SPR_PARTY_FACE]);
+        Vec3 hand{e.pos.x + r.x * 0.3f, 1.0f, e.pos.z + r.z * 0.3f};
+        Vec3 bal{hand.x + std::sin(time * 1.3f + e.id) * 0.1f, 2.45f, hand.z};
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        billboard(bal, 0.38f, 0.46f, rgba(0.85f * light + 0.15f, 0.08f, 0.12f, 1));
+        flush_dyn(spr_[SPR_BALLOON]);
+        // the string
+        push_quad({hand.x - 0.005f, hand.y, hand.z}, {hand.x + 0.005f, hand.y, hand.z}, {bal.x + 0.005f, bal.y - 0.22f, bal.z}, {bal.x - 0.005f, bal.y - 0.22f, bal.z}, rgba(0.8f, 0.8f, 0.8f));
+        flush_dyn(spr_[SPR_WHITE]);
+        glDisable(GL_BLEND);
+    } else if (e.type == EntityType::Smiler) {
+        // just the face: full bright, no fog, so it's the only thing you see in the dark
+        float charge = e.state == EntState::Charge ? 1.0f : 0.0f;
+        float flick = 0.85f + 0.15f * std::sin(time * 11 + e.id);
+        float size = 1.35f + charge * 0.6f;
+        Vec3 c{e.pos.x, 1.6f + std::sin(time * 1.7f + e.id) * 0.05f, e.pos.z};
+        glDepthMask(GL_FALSE);
+        billboard(c, size, size, rgba(1, 1, 1, 0.9f * flick));
+        flush_dyn(spr_[SPR_SMILER], false, false);
+        glDepthMask(GL_TRUE);
+    } else if (e.type == EntityType::Hound && e.state == EntState::Stare) {
+        // eyes catch the light when it's staring back at you
+        Vec2 r = yaw_right(e.yaw);
+        for (int s = -1; s <= 1; s += 2) {
+            Vec3 c{e.pos.x + f.x * 0.72f + r.x * 0.06f * s, 0.85f, e.pos.z + f.z * 0.72f + r.z * 0.06f * s};
+            billboard(c, 0.07f, 0.07f, rgba(1, 0.9f, 0.6f, 0.9f));
+        }
+        flush_dyn(spr_[SPR_GLOW], true, false);
+    }
+}
+
+void Renderer::draw_player(const World& w, const DrawPlayer& p, float time) {
+    static const float COLORS[4][3] = {{0.95f, 0.55f, 0.15f}, {0.2f, 0.75f, 0.7f}, {0.65f, 0.35f, 0.85f}, {0.45f, 0.8f, 0.3f}};
+    const float* c = COLORS[p.id & 3];
+    float light = clampf(w.light_level(p.pos + Vec3{0, 1.2f, 0}) * 0.9f + 0.15f, 0.12f, 1.3f);
+    if (!p.alive) light *= 0.4f;
+    float sw = std::sin(p.anim) * 0.6f;
+    float crouch = p.crouch * 0.45f;
+    float down = p.alive ? 0.0f : 1.4f; // dead players lie on the floor
+    std::vector<Part> parts = {
+        {-0.11f, 0, 0, 0.13f, 0.85f - crouch, 0.14f, 0.2f, 0.2f, 0.22f, sw},
+        {0.11f, 0, 0, 0.13f, 0.85f - crouch, 0.14f, 0.2f, 0.2f, 0.22f, -sw},
+        {0, 0.83f - crouch, 0, 0.42f, 0.62f, 0.25f, c[0], c[1], c[2], 0},
+        {-0.27f, 0.82f - crouch, 0, 0.1f, 0.62f, 0.1f, c[0], c[1], c[2], -sw * 0.8f},
+        {0.27f, 0.82f - crouch, 0, 0.1f, 0.62f, 0.1f, c[0], c[1], c[2], sw * 0.8f},
+        {0, 1.45f - crouch, 0, 0.26f, 0.28f, 0.26f, 0.85f, 0.7f, 0.6f, 0},
+        {0, 1.55f - crouch, 0.13f, 0.2f, 0.08f, 0.02f, 0.1f, 0.1f, 0.12f, 0},
+    };
+    if (down > 0) for (auto& part : parts) { part.y *= 0.15f; part.h *= 0.4f; }
+    for (const Part& part : parts) add_part(dyn_, part, {p.pos.x, p.pos.z}, p.yaw, light);
+    flush_dyn(spr_[SPR_WHITE]);
+    (void)time;
+}
+
+// =================================================================== frame
+void Renderer::begin_frame(int w, int h) {
+    width = std::max(1, w);
+    height = std::max(1, h);
     glViewport(0, 0, width, height);
-    glClearColor(FOG_COLOR[0], FOG_COLOR[1], FOG_COLOR[2], 1.0f);
+}
+
+bool Renderer::project(Vec3 p, float& sx, float& sy) const {
+    float v[4] = {p.x, p.y, p.z, 1}, e[4], c[4];
+    for (int r = 0; r < 4; r++) e[r] = view_[r] * v[0] + view_[4 + r] * v[1] + view_[8 + r] * v[2] + view_[12 + r] * v[3];
+    for (int r = 0; r < 4; r++) c[r] = proj_[r] * e[0] + proj_[4 + r] * e[1] + proj_[8 + r] * e[2] + proj_[12 + r] * e[3];
+    if (c[3] <= 0.05f) return false;
+    sx = (c[0] / c[3] * 0.5f + 0.5f) * width;
+    sy = (1 - (c[1] / c[3] * 0.5f + 0.5f)) * height;
+    return true;
+}
+
+void Renderer::draw_world(const World& w, const Camera& cam, float time, float fog_mult,
+                          const std::unordered_set<uint32_t>& picked, const std::vector<DrawEntity>& ents,
+                          const std::vector<DrawPlayer>& players, const std::vector<Phantom>& phantoms) {
+    cam_ = cam;
+    const LevelInfo& li = w.info();
+    glClearColor(li.fog[0], li.fog[1], li.fog[2], 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    Mat4 proj = Mat4::perspective(s_.fov_deg * PI / 180.0f, (float)width / (float)std::max(1, height), 0.05f, s_.view_dist + 20.0f);
-    Mat4 view = Mat4::fps_view(eye, yaw, pitch);
+    float far_z = li.outdoor ? s_.view_dist + 60.0f : s_.view_dist + 20.0f;
+    Mat4 proj = Mat4::perspective(cam.fov_deg * PI / 180.0f, (float)width / (float)height, 0.05f, far_z);
+    Mat4 view = Mat4::fps_view(cam.eye, cam.yaw, cam.pitch);
+    if (cam.roll != 0) { // tilt the horizon (sanity effects): rotate around the view axis
+        float c = std::cos(cam.roll), s = std::sin(cam.roll);
+        Mat4 r = Mat4::identity();
+        r.m[0] = c; r.m[1] = s; r.m[4] = -s; r.m[5] = c;
+        Mat4 out{};
+        for (int i = 0; i < 4; i++)
+            for (int j = 0; j < 4; j++) {
+                float sum = 0;
+                for (int k = 0; k < 4; k++) sum += r.m[k * 4 + j] * view.m[i * 4 + k];
+                out.m[i * 4 + j] = sum;
+            }
+        view = out;
+    }
+    std::copy(proj.m, proj.m + 16, proj_);
+    std::copy(view.m, view.m + 16, view_);
     glMatrixMode(GL_PROJECTION);
     glLoadMatrixf(proj.m);
     glMatrixMode(GL_MODELVIEW);
     glLoadMatrixf(view.m);
 
     glEnable(GL_DEPTH_TEST);
+    glEnable(GL_CULL_FACE);
     glEnable(GL_FOG);
+    glFogfv(GL_FOG_COLOR, li.fog);
+#if defined(IRIS_GL_VITA)
+    glFogf(GL_FOG_DENSITY, li.fog_density_vita * fog_mult);
+#else
+    glFogf(GL_FOG_DENSITY, li.fog_density * fog_mult);
+#endif
     glEnable(GL_TEXTURE_2D);
+    glDisable(GL_BLEND);
     glEnableClientState(GL_VERTEX_ARRAY);
     glEnableClientState(GL_TEXTURE_COORD_ARRAY);
     glEnableClientState(GL_COLOR_ARRAY);
 
-    Vec2 fwd = yaw_forward(yaw);
+    // ----- static chunks
+    Vec2 fwd = yaw_forward(cam.yaw);
     const float half_diag = CHUNK_SIZE * 0.7072f;
-    drawn_ = 0;
+    std::vector<const GpuChunk*> visible;
+    for (auto& kv : chunks_) {
+        const GpuChunk& g = kv.second;
+        float cx = (g.kx + 0.5f) * CHUNK_SIZE - cam.eye.x, cz = (g.kz + 0.5f) * CHUNK_SIZE - cam.eye.z;
+        float d = std::sqrt(cx * cx + cz * cz);
+        if (d - half_diag > s_.view_dist) continue;
+        if (cx * fwd.x + cz * fwd.z < -half_diag) continue; // behind the camera
+        visible.push_back(&g);
+    }
     for (int mat = 0; mat < MAT_COUNT; mat++) {
         glBindTexture(GL_TEXTURE_2D, tex_[mat]);
-        for (auto& kv : chunks_) {
-            const GpuChunk& g = kv.second;
-            if (!g.count[mat]) continue;
-            float cx = (g.kx + 0.5f) * CHUNK_SIZE - eye.x, cz = (g.kz + 0.5f) * CHUNK_SIZE - eye.z;
-            float d = std::sqrt(cx * cx + cz * cz);
-            if (d - half_diag > s_.view_dist) continue;
-            // behind the camera (generous, so looking up/down never culls what you see)
-            if (cx * fwd.x + cz * fwd.z < -half_diag) continue;
-            glBindBuffer(GL_ARRAY_BUFFER, g.vbo);
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g.ibo);
-            glVertexPointer(3, GL_FLOAT, sizeof(Vertex), (const void*)offsetof(Vertex, x));
-            glTexCoordPointer(2, GL_FLOAT, sizeof(Vertex), (const void*)offsetof(Vertex, u));
-            glColorPointer(4, GL_UNSIGNED_BYTE, sizeof(Vertex), (const void*)offsetof(Vertex, r));
-            glDrawElements(GL_TRIANGLES, (GLsizei)g.count[mat], GL_UNSIGNED_SHORT,
-                           (const void*)(uintptr_t)(g.first[mat] * sizeof(uint16_t)));
-            if (mat == 0) drawn_++;
+        bool emissive = mat == MAT_LIGHT;
+        if (emissive) glDisable(GL_FOG); // lights shine through the haze
+        for (const GpuChunk* g : visible) {
+            if (!g->count[mat]) continue;
+            glBindBuffer(GL_ARRAY_BUFFER, g->vbo);
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g->ibo);
+            set_pointers(nullptr);
+            glDrawElements(GL_TRIANGLES, (GLsizei)g->count[mat], GL_UNSIGNED_SHORT,
+                           (const void*)(uintptr_t)(g->first[mat] * sizeof(uint16_t)));
         }
+        if (emissive) glEnable(GL_FOG);
     }
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+    // ----- entities and other players (opaque; box models are drawn without culling)
+    glDisable(GL_CULL_FACE);
+    for (const DrawEntity& e : ents)
+        if (e.type != EntityType::Smiler) draw_entity(w, e, time);
+    for (const DrawPlayer& p : players) draw_player(w, p, time);
+    glEnable(GL_CULL_FACE);
+
+    // ----- transparent stuff
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_ALPHA_TEST);
+    glDisable(GL_CULL_FACE);
+
+    // items: little bobbing billboards with a faint glow so you can spot them
+    for (const GpuChunk* g : visible) {
+        for (uint32_t id : g->items) {
+            if (picked.count(id)) continue;
+            int cx, cz;
+            World::item_cell(id, cx, cz);
+            ItemType t = w.item(cx, cz);
+            Vec2 p = w.item_pos(cx, cz);
+            float bob = std::sin(time * 2.2f + (float)(id & 255)) * 0.04f;
+            float l = clampf(w.light_level({p.x, 0.5f, p.z}) * 0.8f + 0.35f, 0.3f, 1.2f);
+            billboard({p.x, 0.26f + bob, p.z}, 0.36f, 0.36f, rgba(l, l, l));
+            Sprite s = t == ItemType::AlmondWater ? SPR_ALMOND : (t == ItemType::EnergyDrink ? SPR_ENERGY : SPR_JUICE);
+            flush_dyn(spr_[s]);
+            float pulse = 0.25f + 0.1f * std::sin(time * 3 + (float)(id & 63));
+            billboard({p.x, 0.25f, p.z}, 0.9f, 0.9f, t == ItemType::MemoryJuice ? rgba(0.8f, 0.3f, 1, pulse) : rgba(1, 0.95f, 0.7f, pulse));
+            flush_dyn(spr_[SPR_GLOW], true, false);
+        }
+    }
+    // exit signs: glowing green, visible through the fog: the one thing to follow
+    glDepthMask(GL_FALSE);
+    for (const GpuChunk* g : visible)
+        for (const Vec3& ex : g->exits) {
+            for (int side = -1; side <= 1; side += 2) {
+                float z = ex.z + side * 0.145f;
+                Vec3 a{ex.x - 0.36f, 2.4f, z}, b{ex.x + 0.36f, 2.4f, z}, c{ex.x + 0.36f, 2.66f, z}, d{ex.x - 0.36f, 2.66f, z};
+                if (side > 0) std::swap(a, b), std::swap(c, d); // keep the text readable from both sides
+                push_quad(a, b, c, d, rgba(1, 1, 1));
+            }
+            flush_dyn(spr_[SPR_EXIT_SIGN], false, false);
+            billboard({ex.x, 2.53f, ex.z}, 2.2f, 1.2f, rgba(0.3f, 1, 0.4f, 0.22f));
+            flush_dyn(spr_[SPR_GLOW], true, false);
+        }
+    // smilers last: their faces float in the dark
+    for (const DrawEntity& e : ents)
+        if (e.type == EntityType::Smiler) draw_entity(w, e, time);
+    // hallucinations
+    for (const Phantom& ph : phantoms) {
+        if (ph.alpha <= 0.01f) continue;
+        switch (ph.kind) {
+            case PhantomKind::Shadow:
+                billboard(ph.pos + Vec3{0, 1.0f, 0}, 0.9f, 2.0f, rgba(1, 1, 1, ph.alpha));
+                flush_dyn(spr_[SPR_SHADOW]);
+                break;
+            case PhantomKind::FakeItem: {
+                Sprite s = ph.variant == 0 ? SPR_ALMOND : (ph.variant == 1 ? SPR_ENERGY : SPR_JUICE);
+                billboard(ph.pos + Vec3{0, 0.26f, 0}, 0.36f, 0.36f, rgba(1, 1, 1, ph.alpha));
+                flush_dyn(spr_[s]);
+                break;
+            }
+            case PhantomKind::Figure: {
+                DrawPlayer fake{ph.variant, ph.pos, std::atan2(-(cam.eye.x - ph.pos.x), -(cam.eye.z - ph.pos.z)), 0, 0, true, ""};
+                glDisable(GL_BLEND);
+                draw_player(w, fake, time);
+                glEnable(GL_BLEND);
+                break;
+            }
+        }
+    }
+    glDepthMask(GL_TRUE);
+    glDisable(GL_ALPHA_TEST);
+    glEnable(GL_CULL_FACE);
+    glDisable(GL_BLEND);
     glDisableClientState(GL_TEXTURE_COORD_ARRAY);
     glDisableClientState(GL_COLOR_ARRAY);
     glDisableClientState(GL_VERTEX_ARRAY);
 }
 
-void Renderer::draw_hud(float stamina, bool exhausted, int width, int height) {
-    if (stamina >= 0.999f) return; // only show while it matters
+void Renderer::post_warp(float wobble, float ghost, float time) {
+#if defined(IRIS_GL_VITA)
+    (void)wobble; (void)ghost; (void)time; // overlays only on Vita (keeps the GPU budget sane)
+#else
+    if (!s_.post_effects || (wobble <= 0.001f && ghost <= 0.001f)) return;
+    int tw = 1, th = 1;
+    while (tw < width) tw <<= 1;
+    while (th < height) th <<= 1;
+    if (!grab_tex_ || tw != grab_w_ || th != grab_h_) {
+        if (grab_tex_) glDeleteTextures(1, &grab_tex_);
+        glGenTextures(1, &grab_tex_);
+        glBindTexture(GL_TEXTURE_2D, grab_tex_);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        std::vector<uint8_t> zero((size_t)tw * th * 4, 0);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tw, th, 0, GL_RGBA, GL_UNSIGNED_BYTE, zero.data());
+        grab_w_ = tw;
+        grab_h_ = th;
+    }
+    glBindTexture(GL_TEXTURE_2D, grab_tex_);
+    glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, width, height);
+    float umax = (float)width / tw, vmax = (float)height / th;
+
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glOrtho(0, 1, 0, 1, -1, 1);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_FOG);
+    glDisable(GL_CULL_FACE);
+    glEnable(GL_TEXTURE_2D);
+    glEnableClientState(GL_VERTEX_ARRAY);
+    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+    glEnableClientState(GL_COLOR_ARRAY);
+    // a warped grid: wavy, breathing, slightly swimming
+    const int N = 24;
+    auto pass = [&](float ox, float oy, float alpha) {
+        dyn_.clear();
+        uint8_t a = (uint8_t)(clampf(alpha, 0, 1) * 255);
+        for (int y = 0; y < N; y++)
+            for (int x = 0; x < N; x++) {
+                Vertex q[4];
+                for (int k = 0; k < 4; k++) {
+                    int gx = x + (k == 1 || k == 2), gy = y + (k >= 2);
+                    float u = (float)gx / N, v = (float)gy / N;
+                    float edge = std::sin(u * PI) * std::sin(v * PI); // keep the screen border fixed
+                    float du = std::sin(v * 9 + time * 1.7f) * 0.012f * wobble * edge + std::sin(v * 23 + time * 3.1f) * 0.004f * wobble * edge;
+                    float dv = std::cos(u * 7 + time * 1.3f) * 0.012f * wobble * edge;
+                    float breathe = 1.0f + std::sin(time * 1.1f) * 0.015f * wobble;
+                    float su = (u - 0.5f) * breathe + 0.5f + du + ox, sv = (v - 0.5f) * breathe + 0.5f + dv + oy;
+                    q[k] = {u, v, 0, clampf(su, 0, 1) * umax, clampf(sv, 0, 1) * vmax, 255, 255, 255, a};
+                }
+                dyn_.insert(dyn_.end(), {q[0], q[1], q[2], q[0], q[2], q[3]});
+            }
+        set_pointers(dyn_.data());
+        glDrawArrays(GL_TRIANGLES, 0, (GLsizei)dyn_.size());
+        dyn_.clear();
+    };
+    pass(0, 0, 1.0f);
+    if (ghost > 0.001f) { // double vision
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        pass(std::sin(time * 0.7f) * 0.02f * ghost, std::cos(time * 0.5f) * 0.006f * ghost, 0.45f * ghost);
+        glDisable(GL_BLEND);
+    }
+    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+    glDisableClientState(GL_COLOR_ARRAY);
+    glDisableClientState(GL_VERTEX_ARRAY);
+    glEnable(GL_DEPTH_TEST);
+#endif
+}
+
+// =================================================================== 2D
+void Renderer::begin_2d() {
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
     glOrtho(0, width, height, 0, -1, 1);
@@ -209,39 +630,64 @@ void Renderer::draw_hud(float stamina, bool exhausted, int width, int height) {
     glLoadIdentity();
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_FOG);
-    glDisable(GL_TEXTURE_2D);
+    glDisable(GL_CULL_FACE);
+    glEnable(GL_TEXTURE_2D);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    float bw = width * 0.18f, bh = std::max(3.0f, height * 0.006f);
-    float x = (width - bw) * 0.5f, y = height * 0.92f;
-    float fill = bw * clampf(stamina, 0, 1);
-    float a = 0.55f;
-    float verts[] = {
-        x - 2, y - 2, x + bw + 2, y - 2, x + bw + 2, y + bh + 2, x - 2, y + bh + 2,
-        x, y, x + fill, y, x + fill, y + bh, x, y + bh,
-    };
-    float cols[] = {
-        0, 0, 0, a * 0.6f, 0, 0, 0, a * 0.6f, 0, 0, 0, a * 0.6f, 0, 0, 0, a * 0.6f,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    };
-    for (int i = 4; i < 8; i++) {
-        float* c = &cols[i * 4];
-        if (exhausted) { c[0] = 0.75f; c[1] = 0.25f; c[2] = 0.18f; }
-        else { c[0] = 0.92f; c[1] = 0.86f; c[2] = 0.62f; }
-        c[3] = a;
-    }
-    unsigned short quad[] = {0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7};
     glEnableClientState(GL_VERTEX_ARRAY);
+    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
     glEnableClientState(GL_COLOR_ARRAY);
-    glVertexPointer(2, GL_FLOAT, 0, verts);
-    glColorPointer(4, GL_FLOAT, 0, cols);
-    glDisable(GL_CULL_FACE);
-    glDrawElements(GL_TRIANGLES, 12, GL_UNSIGNED_SHORT, quad);
-    glEnable(GL_CULL_FACE);
+}
+
+void Renderer::end_2d() {
+    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
     glDisableClientState(GL_COLOR_ARRAY);
     glDisableClientState(GL_VERTEX_ARRAY);
     glDisable(GL_BLEND);
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_CULL_FACE);
+}
+
+void Renderer::rect(float x, float y, float w, float h, uint32_t c) { sprite(SPR_WHITE, x, y, w, h, c); }
+
+void Renderer::tiled(Sprite s, float x, float y, float w, float h, uint32_t c, float tile_px, float ox, float oy) {
+    push_quad({x, y + h, 0}, {x + w, y + h, 0}, {x + w, y, 0}, {x, y, 0}, c, ox, oy, ox + w / tile_px, oy + h / tile_px);
+    flush_dyn(spr_[s], false, true);
+}
+
+void Renderer::sprite(Sprite s, float x, float y, float w, float h, uint32_t c, float rot, bool additive) {
+    float cx = x + w * 0.5f, cy = y + h * 0.5f, co = std::cos(rot), si = std::sin(rot);
+    auto P = [&](float lx, float ly) { return Vec3{cx + lx * co - ly * si, cy + lx * si + ly * co, 0}; };
+    Vec3 a = P(-w / 2, h / 2), b = P(w / 2, h / 2), cc = P(w / 2, -h / 2), d = P(-w / 2, -h / 2);
+    // push_quad maps a/b to v1 (bottom); in screen space y grows down, so flip v
+    push_quad(a, b, cc, d, c, 0, 0, 1, 1);
+    for (size_t i = dyn_.size() - 6; i < dyn_.size(); i++) dyn_[i].v = 1 - dyn_[i].v;
+    flush_dyn(spr_[s], additive, true);
+}
+
+float Renderer::text(float x, float y, float px, const std::string& s, uint32_t c, int align) {
+    float w = text_width_px_f(s) * px;
+    if (align == 1) x -= w * 0.5f;
+    else if (align == 2) x -= w;
+    x = std::floor(x);
+    y = std::floor(y);
+    for (size_t i = 0; i < s.size(); i++) {
+        int ch = (unsigned char)s[i];
+        if (ch >= 'a' && ch <= 'z') ch -= 32;
+        ch -= 32;
+        if (ch <= 0 || ch >= FONT_COLS * FONT_ROWS) continue;
+        float u0 = (float)(ch % FONT_COLS) * FONT_CELL / FONT_ATLAS_W, v0 = (float)(ch / FONT_COLS) * FONT_CELL / FONT_ATLAS_H;
+        float u1 = u0 + 5.0f / FONT_ATLAS_W, v1 = v0 + 7.0f / FONT_ATLAS_H;
+        float gx = x + i * 6 * px;
+        Vec3 a{gx, y + 7 * px, 0}, b{gx + 5 * px, y + 7 * px, 0}, cc{gx + 5 * px, y, 0}, d{gx, y, 0};
+        uint8_t r, g, bl, al;
+        unpack(c, r, g, bl, al);
+        Vertex va{a.x, a.y, 0, u0, v1, r, g, bl, al}, vb{b.x, b.y, 0, u1, v1, r, g, bl, al};
+        Vertex vc{cc.x, cc.y, 0, u1, v0, r, g, bl, al}, vd{d.x, d.y, 0, u0, v0, r, g, bl, al};
+        dyn_.insert(dyn_.end(), {va, vb, vc, va, vc, vd});
+    }
+    flush_dyn(spr_[SPR_FONT], false, true);
+    return w;
 }
 
 } // namespace iris

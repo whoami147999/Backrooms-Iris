@@ -65,7 +65,7 @@ bool platform_init(const PlatformConfig& cfg) {
     g_fullscreen = cfg.fullscreen;
     g_t0 = SDL_GetPerformanceCounter();
     gamepad_init();
-    if (!cfg.hidden) platform_set_mouse_capture(true);
+    SDL_StartTextInput();
     return true;
 }
 
@@ -75,62 +75,100 @@ void platform_set_mouse_capture(bool on) {
 }
 
 void platform_poll(InputState& in) {
-    in.mouse_dx = in.mouse_dy = 0;
-    in.quit = in.screenshot = in.toggle_fullscreen = in.toggle_debug = in.pause = false;
+    InputState prev = in;
+    in = InputState{};
+    in.using_gamepad = prev.using_gamepad;
+    in.mouse_x = prev.mouse_x;
+    in.mouse_y = prev.mouse_y;
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
         gamepad_event(e, in);
         switch (e.type) {
             case SDL_QUIT: in.quit = true; break;
             case SDL_MOUSEMOTION:
+                in.mouse_moved = true;
                 if (g_captured) {
                     in.mouse_dx += (float)e.motion.xrel;
                     in.mouse_dy += (float)e.motion.yrel;
-                    if (e.motion.xrel || e.motion.yrel) in.using_gamepad = false;
+                } else {
+                    // menus use absolute positions in drawable pixels (HiDPI aware)
+                    int ww, wh, dw, dh;
+                    SDL_GetWindowSize(g_win, &ww, &wh);
+                    SDL_GL_GetDrawableSize(g_win, &dw, &dh);
+                    in.mouse_x = e.motion.x * (float)dw / (float)(ww > 0 ? ww : 1);
+                    in.mouse_y = e.motion.y * (float)dh / (float)(wh > 0 ? wh : 1);
                 }
+                if (e.motion.xrel || e.motion.yrel) in.using_gamepad = false;
                 break;
             case SDL_MOUSEBUTTONDOWN:
-                if (!g_captured) platform_set_mouse_capture(true);
+                if (e.button.button == SDL_BUTTON_LEFT) in.click = true;
+                in.using_gamepad = false;
                 break;
             case SDL_WINDOWEVENT:
-                if (e.window.event == SDL_WINDOWEVENT_FOCUS_LOST) platform_set_mouse_capture(false);
+                if (e.window.event == SDL_WINDOWEVENT_FOCUS_LOST && g_captured) in.pause = true;
                 break;
-            case SDL_KEYDOWN:
-                if (e.key.repeat) break;
+            case SDL_TEXTINPUT:
+                in.text += e.text.text;
+                break;
+            case SDL_KEYDOWN: {
                 in.using_gamepad = false;
-                switch (e.key.keysym.sym) {
-                    case SDLK_ESCAPE:
-                        if (g_captured) platform_set_mouse_capture(false);
-                        else in.quit = true; // second Esc quits
-                        break;
-                    case SDLK_F11: in.toggle_fullscreen = true; break;
+                SDL_Keycode k = e.key.keysym.sym;
+                // navigation and editing keys repeat when held
+                switch (k) {
+                    case SDLK_UP: in.up = true; break;
+                    case SDLK_DOWN: in.down = true; break;
+                    case SDLK_LEFT: in.left = true; break;
+                    case SDLK_RIGHT: in.right = true; break;
+                    case SDLK_BACKSPACE: in.backspace = true; break;
+                    default: break;
+                }
+                if (e.key.repeat) break;
+                switch (k) {
+                    case SDLK_ESCAPE: in.back = true; in.pause = true; break;
                     case SDLK_RETURN:
+                    case SDLK_KP_ENTER:
                         if (e.key.keysym.mod & KMOD_ALT) in.toggle_fullscreen = true;
+                        else in.accept = true;
                         break;
+                    case SDLK_e: in.interact = true; break;
+                    case SDLK_1: in.use[0] = true; break;
+                    case SDLK_2: in.use[1] = true; break;
+                    case SDLK_3: in.use[2] = true; break;
+                    case SDLK_F11: in.toggle_fullscreen = true; break;
                     case SDLK_F12: in.screenshot = true; break;
                     case SDLK_F3: in.toggle_debug = true; break;
                     default: break;
                 }
                 break;
+            }
             default: break;
         }
     }
-    if (in.toggle_fullscreen) {
-        g_fullscreen = !g_fullscreen;
-        SDL_SetWindowFullscreen(g_win, g_fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
-    }
 
     const Uint8* k = SDL_GetKeyboardState(nullptr);
-    in.move_x = (float)((k[SDL_SCANCODE_D] || k[SDL_SCANCODE_RIGHT]) - (k[SDL_SCANCODE_A] || k[SDL_SCANCODE_LEFT]));
-    in.move_z = (float)((k[SDL_SCANCODE_W] || k[SDL_SCANCODE_UP]) - (k[SDL_SCANCODE_S] || k[SDL_SCANCODE_DOWN]));
-    in.sprint = k[SDL_SCANCODE_LSHIFT] || k[SDL_SCANCODE_RSHIFT];
-    in.crouch = k[SDL_SCANCODE_LCTRL] || k[SDL_SCANCODE_C];
-    in.look_x = in.look_y = 0;
-    gamepad_poll(in);
+    if (g_captured) {
+        in.move_x = (float)((k[SDL_SCANCODE_D] || k[SDL_SCANCODE_RIGHT]) - (k[SDL_SCANCODE_A] || k[SDL_SCANCODE_LEFT]));
+        in.move_z = (float)((k[SDL_SCANCODE_W] || k[SDL_SCANCODE_UP]) - (k[SDL_SCANCODE_S] || k[SDL_SCANCODE_DOWN]));
+        in.sprint = k[SDL_SCANCODE_LSHIFT] || k[SDL_SCANCODE_RSHIFT];
+        in.crouch = k[SDL_SCANCODE_LCTRL] || k[SDL_SCANCODE_C];
+    }
+    gamepad_poll(in, platform_time());
 
     in.mouse_captured = g_captured;
     SDL_GL_GetDrawableSize(g_win, &in.width, &in.height);
 }
+
+void platform_set_fullscreen(bool on) {
+    g_fullscreen = on;
+    SDL_SetWindowFullscreen(g_win, on ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
+}
+
+void platform_set_vsync(bool on) {
+    if (on) { if (SDL_GL_SetSwapInterval(-1) != 0) SDL_GL_SetSwapInterval(1); }
+    else SDL_GL_SetSwapInterval(0);
+}
+
+bool platform_is_vita() { return false; }
 
 void platform_swap() { SDL_GL_SwapWindow(g_win); }
 
