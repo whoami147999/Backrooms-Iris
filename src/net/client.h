@@ -31,8 +31,10 @@ struct Snapshot {
     uint32_t tick = 0;
     LevelId level = LevelId::L0;
     uint32_t seed = 0, epoch = 0;
+    Difficulty difficulty = Difficulty::Medium;
     float level_time = 0;
     bool escaped = false;
+    Objective objective;
     int my_id = 0;
     uint32_t ack = 0;
     struct P { bool active = false; std::string name; PlayerState st; float respawn_t = 0; } players[IRIS_MAX_PLAYERS];

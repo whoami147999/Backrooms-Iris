@@ -27,6 +27,7 @@ bool Server::start(const ServerConfig& cfg, std::string* error) {
     uint32_t seed = cfg_.seed ? cfg_.seed : (uint32_t)std::time(nullptr) * 2654435761u;
     sim = GameSim(seed);
     sim.multiplayer = true;
+    sim.difficulty = cfg_.difficulty;
     sim.start_level(cfg_.level, seed);
     for (auto& c : clients_) c = Client{};
     start_ = clock::now();
@@ -34,7 +35,7 @@ bool Server::start(const ServerConfig& cfg, std::string* error) {
     next_snap_ = start_;
     tick_ = 0;
     running_ = true;
-    say("listening on UDP %u | %s | seed %u", (unsigned)cfg_.port, level_label(cfg_.level), seed);
+    say("listening on UDP %u | %s | %s | seed %u", (unsigned)cfg_.port, level_label(cfg_.level), diff_info(cfg_.difficulty).name, seed);
     return true;
 }
 
@@ -61,9 +62,9 @@ void Server::handle(const NetAddr& from, const uint8_t* data, int len) {
     if (len == 5 && std::memcmp(data, "IRIS?", 5) == 0) {
         char reply[400];
         int n = std::snprintf(reply, sizeof reply,
-                              "IRIS! name=\"%s\" version=%s protocol=%d players=%d/%d level=\"%s\" seed=%u uptime=%ds",
+                              "IRIS! name=\"%s\" version=%s protocol=%d players=%d/%d level=\"%s\" difficulty=%s seed=%u uptime=%ds",
                               cfg_.name.c_str(), IRIS_VERSION, IRIS_PROTOCOL_VERSION, player_count(), cfg_.max_players,
-                              level_label(sim.world.id()), sim.world.seed(), (int)now());
+                              level_label(sim.world.id()), diff_info(sim.difficulty).name, sim.world.seed(), (int)now());
         sock_.send(from, reply, n);
         return;
     }
@@ -134,15 +135,26 @@ void Server::handle(const NetAddr& from, const uint8_t* data, int len) {
 }
 
 void Server::send_snapshot(Client& c) {
+    // full detail first; if that doesn't fit in one packet, again with fewer entities/props
+    if (!send_snapshot_sized(c, 16, 16, 3)) send_snapshot_sized(c, 8, 8, 1);
+}
+
+bool Server::send_snapshot_sized(Client& c, int max_ents, int max_props, int max_events) {
     const GameSim& s = sim;
     Writer w;
     w.header(PKT_SNAPSHOT);
     w.u32(tick_);
     w.u8((uint8_t)s.world.id());
     w.u32(s.world.seed());
+    w.u8((uint8_t)s.world.difficulty());
     w.u32(s.epoch);
     w.f32(s.level_time);
     w.u8(s.escaped);
+    w.u8((uint8_t)s.objective.type);
+    w.u8(s.objective.have);
+    w.u8(s.objective.need);
+    w.u8(s.objective.done);
+    w.u8((uint8_t)s.objective.reward);
     w.u8((uint8_t)c.pid);
     w.u32(c.last_seq);
     int np = 0;
@@ -160,7 +172,7 @@ void Server::send_snapshot(Client& c) {
     int ne = 0;
     const Entity* close_ents[16];
     for (const Entity& e : s.ents) {
-        if ((e.pos - me).len() > 60.0f || ne >= 16) continue;
+        if ((e.pos - me).len() > 60.0f || ne >= max_ents) continue;
         close_ents[ne++] = &e;
     }
     w.u8((uint8_t)ne);
@@ -171,7 +183,7 @@ void Server::send_snapshot(Client& c) {
         w.u8((uint8_t)e.state);
         w.f32(e.pos.x);
         w.f32(e.pos.z);
-        w.f32(e.yaw);
+        w.u16((uint16_t)(int)std::lround(std::remainder(e.yaw, 2 * PI) / PI * 32767.0f));
         w.f32(e.anim);
         w.u8((uint8_t)std::min(255.0f, e.speed * 20.0f));
     }
@@ -179,7 +191,7 @@ void Server::send_snapshot(Client& c) {
     int np2 = 0;
     const Prop* pr[16];
     for (const Prop& p : s.props) {
-        if ((p.pos - me).len() > 50.0f || np2 >= 16) continue;
+        if ((p.pos - me).len() > 50.0f || np2 >= max_props) continue;
         pr[np2++] = &p;
     }
     w.u8((uint8_t)np2);
@@ -205,13 +217,15 @@ void Server::send_snapshot(Client& c) {
     w.u32(s.players[c.pid].toast_seq);
     w.str(s.players[c.pid].toast);
     // newest events (the client drops ones it has already shown)
-    int nev = (int)std::min<size_t>(s.events.size(), 3);
+    int nev = (int)std::min<size_t>(s.events.size(), (size_t)max_events);
     w.u8((uint8_t)nev);
     for (int j = (int)s.events.size() - nev; j < (int)s.events.size(); j++) {
         w.u32(s.events[(size_t)j].seq);
         w.str(s.events[(size_t)j].text);
     }
-    if (!w.overflow) sock_.send(c.addr, w.buf, w.n);
+    if (w.overflow) return false;
+    sock_.send(c.addr, w.buf, w.n);
+    return true;
 }
 
 void Server::poll() {

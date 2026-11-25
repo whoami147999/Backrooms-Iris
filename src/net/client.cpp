@@ -23,6 +23,8 @@ bool parse_server_info(const char* t, FoundServer& out) {
     };
     out.name = field("name=");
     out.level = field("level=");
+    std::string diff = field("difficulty=");
+    if (!diff.empty()) out.level += "  " + diff;
     out.protocol = std::atoi(field("protocol=").c_str());
     std::string pl = field("players=");
     out.players = std::atoi(pl.c_str());
@@ -99,9 +101,15 @@ void NetClient::handle(const uint8_t* data, int len, double now) {
         if (got_snapshot && s.tick <= snap.tick) return; // late / duplicate
         s.level = (LevelId)r.u8();
         s.seed = r.u32();
+        s.difficulty = (Difficulty)std::min<int>(r.u8(), (int)Difficulty::COUNT - 1);
         s.epoch = r.u32();
         s.level_time = r.f32();
         s.escaped = r.u8() != 0;
+        s.objective.type = (ObjType)std::min<int>(r.u8(), (int)ObjType::COUNT - 1);
+        s.objective.have = r.u8();
+        s.objective.need = r.u8();
+        s.objective.done = r.u8() != 0;
+        s.objective.reward = (Perk)std::min<int>(r.u8(), PERK_COUNT - 1);
         s.my_id = r.u8();
         s.ack = r.u32();
         int np = r.u8();
@@ -122,7 +130,7 @@ void NetClient::handle(const uint8_t* data, int len, double now) {
             e.state = (EntState)r.u8();
             e.pos.x = r.f32();
             e.pos.z = r.f32();
-            e.yaw = r.f32();
+            e.yaw = (int16_t)r.u16() / 32767.0f * PI;
             e.anim = r.f32();
             e.speed = r.u8() / 20.0f;
             if ((int)e.type < (int)EntityType::COUNT) s.ents.push_back(e);

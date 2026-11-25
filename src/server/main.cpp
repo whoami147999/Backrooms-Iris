@@ -61,6 +61,8 @@ bool load_config(const std::string& path, ServerConfig& c) {
         else if (k == "seed") c.seed = (uint32_t)std::strtoul(v.c_str(), nullptr, 10);
         else if (k == "start_level") {
             if (!parse_level(v, c.level)) { std::snprintf(msg, sizeof msg, "config %s:%d: unknown level '%s'", path.c_str(), n, v.c_str()); log_line(msg); }
+        } else if (k == "difficulty") {
+            if (!difficulty_from_name(v.c_str(), c.difficulty)) { std::snprintf(msg, sizeof msg, "config %s:%d: unknown difficulty '%s'", path.c_str(), n, v.c_str()); log_line(msg); }
         } else if (k == "tick_rate" || k == "snapshot_rate") {
             int r = std::atoi(v.c_str());
             if (r >= 10 && r <= 60) c.snapshot_rate = r;
@@ -98,6 +100,7 @@ void usage() {
         "  --port N          UDP port (default %d)\n"
         "  --seed N          world seed (0 = random)\n"
         "  --level N         starting level: 0 1 2 4 5 6 8 9 11 37 fun\n"
+        "  --difficulty D    easy, medium, hard, nightmare\n"
         "  --name TEXT       server name\n"
         "  --query HOST[:P]  ask a running server for its status and exit\n"
         "  --version         print the version\n",
@@ -129,6 +132,8 @@ int main(int argc, char** argv) {
         else if (a == "--name") cfg.name = next();
         else if (a == "--level") {
             if (!parse_level(next(), cfg.level)) { std::fprintf(stderr, "levels: 0 1 2 4 5 6 8 9 11 37 fun\n"); return 2; }
+        } else if (a == "--difficulty") {
+            if (!difficulty_from_name(next().c_str(), cfg.difficulty)) { std::fprintf(stderr, "difficulty: easy medium hard nightmare\n"); return 2; }
         } else { std::fprintf(stderr, "unknown option %s (try --help)\n", a.c_str()); return 2; }
     }
 

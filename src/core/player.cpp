@@ -18,6 +18,18 @@ const char* death_text(DeathCause c) {
     }
 }
 
+const PerkInfo& perk_info(Perk p) {
+    static const PerkInfo P[PERK_COUNT] = {
+        {"BIG LUNGS", "+25% STAMINA"},
+        {"SECOND WIND", "+35% STAMINA RECOVERY"},
+        {"STEADY NERVES", "-20% SANITY LOSS"},
+        {"THICK SKIN", "-15% DAMAGE TAKEN"},
+        {"LIGHT FEET", "-20% NOISE"},
+        {"SPARE CELLS", "+40% FLASHLIGHT BATTERY"},
+    };
+    return P[(int)p < PERK_COUNT ? (int)p : 0];
+}
+
 float PlayerState::eye_height() const { return lerpf(EYE_STAND, EYE_CROUCH, crouch); }
 
 static float raw_noise(float speed, float crouch) {
@@ -29,7 +41,7 @@ static float raw_noise(float speed, float crouch) {
 
 float PlayerState::noise() const {
     if (!alive) return 0;
-    return raw_noise(speed, crouch) * (lucky > 0 ? 0.3f : 1.0f); // lucky o' milk: nobody notices you
+    return raw_noise(speed, crouch) * (lucky > 0 ? 0.3f : 1.0f) * std::pow(0.8f, (float)perk(Perk::Quiet)); // lucky o' milk: nobody notices you
 }
 
 void player_tick(PlayerState& p, const InputCmd& cmd, const World& world, float dt) {
@@ -49,10 +61,10 @@ void player_tick(PlayerState& p, const InputCmd& cmd, const World& world, float 
     if (p.exhausted && p.stamina > 0.35f) p.exhausted = false;
     bool sprinting = wants_sprint && !p.exhausted;
     if (sprinting && !boosted) {
-        p.stamina -= STAMINA_DRAIN * dt;
+        p.stamina -= STAMINA_DRAIN * dt / (1.0f + 0.25f * p.perk(Perk::Stamina));
         if (p.stamina <= 0) { p.stamina = 0; p.exhausted = true; }
     } else if (!sprinting) {
-        p.stamina = std::min(1.0f, p.stamina + STAMINA_REGEN * dt * (mag < 0.1f ? 1.6f : 1.0f));
+        p.stamina = std::min(1.0f, p.stamina + STAMINA_REGEN * dt * (mag < 0.1f ? 1.6f : 1.0f) * (1.0f + 0.35f * p.perk(Perk::Lungs)));
     }
 
     float speed = crouching ? CROUCH_SPEED : (sprinting ? SPRINT_SPEED : WALK_SPEED);

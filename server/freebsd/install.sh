@@ -58,6 +58,7 @@ S_PORT="27315"
 S_MAX="4"
 S_SEED="0"
 S_LEVEL="0"
+S_DIFF="medium"
 S_AUTOSTART="YES"
 
 # ------------------------------------------------------------------ helpers
@@ -159,6 +160,7 @@ load_settings() {
 	_v=$(_get max_players); [ -n "$_v" ] && S_MAX="$_v"
 	_v=$(_get seed); [ -n "$_v" ] && S_SEED="$_v"
 	_v=$(_get start_level); [ -n "$_v" ] && S_LEVEL="$_v"
+	_v=$(_get difficulty); [ -n "$_v" ] && S_DIFF="$_v"
 	return 0
 }
 
@@ -181,6 +183,10 @@ validate_settings() {
 		0|1|2|4|5|6|8|9|11|37|fun|FUN) ;;
 		*) echo "Start level must be one of: 0 1 2 4 5 6 8 9 11 37 fun"; return 1 ;;
 	esac
+	case "$S_DIFF" in
+		easy|medium|hard|nightmare|EASY|MEDIUM|HARD|NIGHTMARE) ;;
+		*) echo "Difficulty must be one of: easy medium hard nightmare"; return 1 ;;
+	esac
 	return 0
 }
 
@@ -189,12 +195,13 @@ ask_settings() {
 	while :; do
 		if [ -n "$DIALOG" ]; then
 			_out=$($DIALOG --backtitle "$IRIS_TITLE" --title " Server settings " \
-				--form "Tab / arrows to move, Enter to confirm.\nSeed 0 = a fresh random world every start.\nLevels: 0 1 2 4 5 6 8 9 11 37 fun (see the README)." 17 70 6 \
+				--form "Tab / arrows to move, Enter to confirm.\nSeed 0 = a fresh random world every start.\nLevels: 0 1 2 4 5 6 8 9 11 37 fun. Difficulty: easy medium hard nightmare." 18 74 7 \
 				"Server name:"        1 2 "$S_NAME" 1 22 34 48 \
 				"UDP port:"           2 2 "$S_PORT" 2 22 8 5 \
 				"Max players (1-4):"  3 2 "$S_MAX"  3 22 3 1 \
 				"World seed:"         4 2 "$S_SEED" 4 22 12 10 \
 				"Start level:"        5 2 "$S_LEVEL" 5 22 4 3 \
+				"Difficulty:"         6 2 "$S_DIFF" 6 22 10 9 \
 				3>&1 1>&2 2>&3) || return 1
 			# one value per line, in field order
 			S_NAME=$(printf '%s\n' "$_out" | sed -n 1p)
@@ -202,6 +209,7 @@ ask_settings() {
 			S_MAX=$(printf '%s\n' "$_out" | sed -n 3p)
 			S_SEED=$(printf '%s\n' "$_out" | sed -n 4p)
 			S_LEVEL=$(printf '%s\n' "$_out" | sed -n 5p)
+			S_DIFF=$(printf '%s\n' "$_out" | sed -n 6p)
 		else
 			printf '\n== Server settings ==  (Enter keeps the value in [brackets])\n'
 			printf 'Server name [%s]: ' "$S_NAME"; read -r _v </dev/tty; [ -n "$_v" ] && S_NAME="$_v"
@@ -209,6 +217,7 @@ ask_settings() {
 			printf 'Max players 1-4 [%s]: ' "$S_MAX"; read -r _v </dev/tty; [ -n "$_v" ] && S_MAX="$_v"
 			printf 'World seed, 0 = random [%s]: ' "$S_SEED"; read -r _v </dev/tty; [ -n "$_v" ] && S_SEED="$_v"
 			printf 'Start level 0 1 2 4 5 6 8 9 11 37 fun [%s]: ' "$S_LEVEL"; read -r _v </dev/tty; [ -n "$_v" ] && S_LEVEL="$_v"
+			printf 'Difficulty easy medium hard nightmare [%s]: ' "$S_DIFF"; read -r _v </dev/tty; [ -n "$_v" ] && S_DIFF="$_v"
 		fi
 		_problem=$(validate_settings) && break
 		ui_msg "Check your settings" "$_problem"
@@ -233,6 +242,7 @@ port = $S_PORT
 max_players = $S_MAX
 seed = $S_SEED          # 0 = new random world every start
 start_level = $S_LEVEL   # 0 1 2 4 5 6 8 9 11 37 fun
+difficulty = $S_DIFF     # easy medium hard nightmare
 EOF
 	mv "$CONF.tmp" "$CONF" && chmod 644 "$CONF"
 }

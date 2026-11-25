@@ -48,6 +48,8 @@ bool App::init(const DevOptions& dev) {
     cfg_.load(data_dir_ + "settings.cfg");
     single_level_ = std::clamp(cfg_.start_level, 0, (int)LevelId::COUNT - 1);
     join_ip_ = cfg_.last_ip;
+    if (dev.camcorder >= 0) cfg_.camcorder = dev.camcorder != 0;
+    if (dev.film >= 0) cfg_.film = dev.film != 0;
 
     PlatformConfig pc;
     pc.fullscreen = cfg_.fullscreen && dev.shot_path.empty();
@@ -61,7 +63,14 @@ bool App::init(const DevOptions& dev) {
         rs_.texture_size = 512;     // sharper than before; generated once per level
         rs_.chunk_builds_per_frame = 1;
         rs_.post_effects = false;
+        rs_.mesh_detail = 1;
+    } else {
+        rs_.texture_size = 1024;    // PC: double resolution textures
+        rs_.mesh_detail = 2;        // and finer lighting grids
     }
+    rs_.film = cfg_.film;
+    rs_.camcorder = cfg_.camcorder;
+    rs_.atmosphere = cfg_.atmosphere;
     std::printf("[iris] renderer init\n");
     ren_.init(rs_);
     std::printf("[iris] net init\n");
@@ -83,12 +92,13 @@ void App::shutdown() {
 void App::apply_display_settings() {
     platform_set_fullscreen(cfg_.fullscreen);
     platform_set_vsync(cfg_.vsync);
+    ren_.set_style(cfg_.film, cfg_.camcorder, cfg_.atmosphere);
 }
 
 // Command-line shortcuts for testing: jump straight into a level / screen / state.
 void App::dev_setup() {
     if (!dev_.name.empty()) cfg_.name = dev_.name;
-    if (dev_.host) { host_level_ = std::max(0, dev_.level); start_host(); }
+    if (dev_.host) { host_level_ = std::max(0, dev_.level); if (dev_.difficulty >= 0) cfg_.difficulty = dev_.difficulty; start_host(); }
     else if (!dev_.join.empty()) start_join(dev_.join);
     else if (!dev_.screen.empty() && dev_.screen != "pause" && dev_.screen != "pause-settings") {
         const std::string& s = dev_.screen;
@@ -101,7 +111,8 @@ void App::dev_setup() {
         else if (s == "controls") go(Screen::Controls);
         return;
     } else if (dev_.level >= 0 || dev_.screen == "pause" || dev_.screen == "pause-settings") {
-        start_session(make_single_player((LevelId)std::max(dev_.level, 0), dev_.seed ? dev_.seed : 1215, cfg_.name, dev_.sandbox));
+        start_session(make_single_player((LevelId)std::max(dev_.level, 0), dev_.seed ? dev_.seed : 1215, cfg_.name, dev_.sandbox,
+                                         dev_.difficulty >= 0 ? (Difficulty)dev_.difficulty : (Difficulty)cfg_.difficulty));
         stack_ = {Screen::Title, Screen::Playing};
     }
     cmd_.yaw = dev_.yaw_deg * PI / 180.0f;
@@ -110,6 +121,17 @@ void App::dev_setup() {
     if (GameSim* sim = session_->sim()) { // poke the sim directly (screenshots / testing)
         PlayerState& p = sim->players[0].st;
         if (dev_.has_pos) { p.pos.x = dev_.pos_x; p.pos.z = dev_.pos_z; }
+        if (dev_.at_exit >= 0) {
+            Vec2 at;
+            ExitDoor door;
+            if (sim->nearest_exit({p.pos.x, p.pos.z}, at, &door)) {
+                Vec2 s = door.pos + door.normal * dev_.at_exit;
+                p.pos.x = s.x;
+                p.pos.z = s.z;
+                cmd_.yaw = std::atan2(door.normal.x, door.normal.z);
+                std::printf("[iris] dev: exit door at %.1f,%.1f side %d\n", door.pos.x, door.pos.z, door.side);
+            }
+        }
         InputCmd walk = cmd_;
         walk.move_z = dev_.walk > 0 ? 1.0f : 0.0f;
         for (int t = 0; t < (int)(std::max(dev_.walk, 0.05f) * TICK_RATE); t++) sim->apply_input(0, walk);
@@ -171,6 +193,14 @@ void App::build_menu() {
     auto level_choice = [&](int* v) {
         Item lv; lv.kind = Item::Choice; lv.label = "START IN"; lv.choices = level_names(); lv.choice = v; m.items.push_back(lv);
     };
+    auto diff_choice = [&]() {
+        Item d; d.kind = Item::Choice; d.label = "DIFFICULTY"; d.choice = &cfg_.difficulty;
+        for (int i = 0; i < (int)Difficulty::COUNT; i++) {
+            d.choices.push_back(diff_info((Difficulty)i).name);
+            d.hints.push_back(diff_info((Difficulty)i).blurb);
+        }
+        m.items.push_back(d);
+    };
 
     switch (screen()) {
         case Screen::Title:
@@ -187,6 +217,7 @@ void App::build_menu() {
             m.title = "SINGLE PLAYER";
             m.subtitle = "FIND THE EXIT. DON'T GET FOUND.";
             level_choice(&single_level_);
+            diff_choice();
             Item sd; sd.kind = Item::Text; sd.label = "SEED"; sd.text = &single_seed_; sd.charset = "0123456789"; sd.maxlen = 10;
             sd.hint = "EMPTY = RANDOM WORLD";
             m.items.push_back(sd);
@@ -199,6 +230,7 @@ void App::build_menu() {
             m.title = "SANDBOX";
             m.subtitle = std::string("PRESS ") + key_hint("TAB", "SELECT") + " IN GAME TO SPAWN THINGS";
             level_choice(&sandbox_level_);
+            diff_choice();
             spacer();
             button("START", [this] { start_single(true); });
             button("BACK", [this] { back(); });
@@ -220,6 +252,7 @@ void App::build_menu() {
             m.title = "HOST GAME";
             m.subtitle = "UDP PORT " + std::to_string(IRIS_DEFAULT_PORT);
             level_choice(&host_level_);
+            diff_choice();
             spacer();
             button("START HOSTING", [this] { start_host(); });
             button("BACK", [this] { back(); });
@@ -259,6 +292,12 @@ void App::build_menu() {
                 toggle("FULLSCREEN", &cfg_.fullscreen, [this] { apply_display_settings(); });
                 toggle("VSYNC", &cfg_.vsync, [this] { apply_display_settings(); });
             }
+            toggle("FILM EFFECTS", &cfg_.film, [this] { apply_display_settings(); });
+            m.items.back().hint = platform_is_vita() ? "FILM GRAIN AND A DARK VIGNETTE" : "BLOOM, FILM GRAIN, LENS FRINGING, COLOUR GRADING";
+            toggle("CAMCORDER LOOK", &cfg_.camcorder, [this] { apply_display_settings(); });
+            m.items.back().hint = "FOUND FOOTAGE: SCANLINES, TRACKING NOISE, REC";
+            toggle("LIGHT HALOS + DUST", &cfg_.atmosphere, [this] { apply_display_settings(); });
+            m.items.back().hint = "GLOWING LAMPS, LIGHT SHAFTS, FLICKERING TUBES, DUST";
             toggle("SHOW FPS", &cfg_.show_fps);
             spacer();
             button("BACK", [this] { back(); });
@@ -474,6 +513,7 @@ void App::draw_menu() {
     const Item* cur = menu_.items.empty() ? nullptr : &menu_.items[(size_t)menu_.sel];
     std::string help;
     if (editing_) help = key_hint("TYPE  -  ENTER: DONE", "UP DOWN: CHANGE LETTER  LEFT RIGHT: MOVE  CROSS: DONE");
+    else if (cur && cur->choice && !cur->hints.empty()) help = cur->hints[(size_t)std::clamp(*cur->choice, 0, (int)cur->hints.size() - 1)];
     else if (cur && !cur->hint.empty()) help = cur->hint;
     else help = key_hint("ARROWS / MOUSE: CHOOSE  -  ENTER: SELECT  -  ESC: BACK", "D-PAD: CHOOSE  -  CROSS: SELECT  -  CIRCLE: BACK");
     ren_.text(W / 2, H - 14 * s, s, help, rgba(0.7f, 0.66f, 0.55f, 0.9f), 1);
@@ -508,15 +548,17 @@ void App::start_single(bool sandbox) {
     save_settings();
     uint32_t seed = (sandbox || single_seed_.empty()) ? random_seed() : (uint32_t)std::strtoul(single_seed_.c_str(), nullptr, 10);
     if (seed == 0) seed = 1;
-    start_session(make_single_player((LevelId)level, seed, cfg_.name, sandbox));
-    std::printf("[iris] %s: %s, seed %u\n", sandbox ? "sandbox" : "single player", level_label((LevelId)level), seed);
+    start_session(make_single_player((LevelId)level, seed, cfg_.name, sandbox, (Difficulty)cfg_.difficulty));
+    std::printf("[iris] %s: %s, %s, seed %u\n", sandbox ? "sandbox" : "single player", level_label((LevelId)level),
+                diff_info((Difficulty)cfg_.difficulty).name, seed);
     stack_ = {Screen::Title, Screen::Playing};
     build_menu();
 }
 
 void App::start_host() {
     std::string err;
-    auto s = make_multiplayer("", IRIS_DEFAULT_PORT, cfg_.name, true, (LevelId)host_level_, now_, &err);
+    save_settings();
+    auto s = make_multiplayer("", IRIS_DEFAULT_PORT, cfg_.name, true, (LevelId)host_level_, (Difficulty)cfg_.difficulty, now_, &err);
     if (!s) { error_ = err.empty() ? "COULDN'T HOST" : err; return; }
     start_session(std::move(s));
     stack_ = {Screen::Title, Screen::Connecting};
@@ -527,7 +569,7 @@ void App::start_join(const std::string& addr) {
     std::string err;
     cfg_.last_ip = addr;
     save_settings();
-    auto s = make_multiplayer(addr, IRIS_DEFAULT_PORT, cfg_.name, false, LevelId::L0, now_, &err);
+    auto s = make_multiplayer(addr, IRIS_DEFAULT_PORT, cfg_.name, false, LevelId::L0, Difficulty::Medium, now_, &err);
     if (!s) { error_ = err.empty() ? "COULDN'T CONNECT" : err; return; }
     start_session(std::move(s));
     stack_.push_back(Screen::Connecting);
@@ -647,7 +689,7 @@ void App::sandbox_input() {
             case 5: me.health = 100; me.sanity = 100; me.stamina = 1; me.juice = -1; feed_.push_back({"HEALED", now_}); break;
             case 6: {
                 Vec2 ex;
-                if (sim->nearest_exit(here, ex)) { me.pos.x = ex.x; me.pos.z = ex.z + 1.3f; session_->resync(); }
+                if (sim->nearest_exit(here, ex)) { me.pos.x = ex.x; me.pos.z = ex.z; session_->resync(); }
                 break;
             }
             case 7: sim->next_level(); sb_open_ = false; break;
@@ -798,7 +840,18 @@ void App::draw_hud(const GameView& v, const ScreenFx& fx) {
             float d = (p.pos - Vec2{me.pos.x, me.pos.z}).len();
             if (d < best) { best = d; t = p.item; }
         }
-        if (t != ItemType::None) {
+        // objective things take priority (same as the sim)
+        std::string obj_prompt;
+        for (const DrawProp& p : v.props) {
+            float d = (p.pos - Vec2{me.pos.x, me.pos.z}).len();
+            if (p.kind == PropKind::Tape && d < PICKUP_RANGE) obj_prompt = "PICK UP LOST TAPE";
+            if (p.kind == PropKind::Breaker && d < 1.7f && p.life < 0.5f) obj_prompt = "SWITCH ON THE BREAKER";
+        }
+        if (!obj_prompt.empty()) {
+            std::string key = pad ? (platform_is_vita() ? "CROSS" : "A") : "E";
+            ren_.rect(W / 2 - s, H / 2 - s, 2 * s, 2 * s, rgba(1, 1, 1, 0.8f));
+            ren_.text(W / 2, H * 0.60f, s, key + "  " + obj_prompt, rgba(0.7f, 0.9f, 1.0f), 1);
+        } else if (t != ItemType::None) {
             std::string key = pad ? (platform_is_vita() ? "CROSS" : "A") : "E";
             ren_.rect(W / 2 - s, H / 2 - s, 2 * s, 2 * s, rgba(1, 1, 1, 0.8f));
             ren_.text(W / 2, H * 0.60f, s, key + "  PICK UP " + item_info(t).name, rgba(1, 0.95f, 0.75f), 1);
@@ -817,23 +870,43 @@ void App::draw_hud(const GameView& v, const ScreenFx& fx) {
         const LevelInfo& li = v.world.info();
         ren_.text(W / 2, H * 0.26f, s * 3, li.code, rgba(0.95f, 0.9f, 0.7f, a), 1);
         ren_.text(W / 2, H * 0.26f + 26 * s, s * 1.5f, li.name, rgba(0.85f, 0.8f, 0.6f, a * 0.9f), 1);
+        ren_.text(W / 2, H * 0.26f + 40 * s, s, diff_info(v.world.difficulty()).name, rgba(0.75f, 0.45f, 0.35f, a * 0.8f), 1);
     }
 
     // ----- event feed, top right (top left in multiplayer is the player list)
     for (size_t i = 0; i < feed_.size(); i++) {
         float a = clampf(6.0f - (float)(now_ - feed_[i].t), 0, 1);
         if (a <= 0) continue;
-        ren_.text(W - 8 * s, 8 * s + i * 9 * s, s, feed_[i].text, rgba(0.9f, 0.85f, 0.7f, a * 0.9f), 2);
+        ren_.text(W - 8 * s, (cfg_.camcorder ? 28 * s : 8 * s) + i * 9 * s, s, feed_[i].text, rgba(0.9f, 0.85f, 0.7f, a * 0.9f), 2);
     }
     if (v.multiplayer)
         for (size_t i = 0; i < v.roster.size(); i++) ren_.text(8 * s, 8 * s + i * 9 * s, s, v.roster[i], rgba(0.8f, 0.78f, 0.7f, 0.7f));
+    float oy = 8 * s + (v.multiplayer ? v.roster.size() * 9 * s + 4 * s : 0);
     if (session_->sim() && session_->sim()->sandbox) {
         GameSim* sim = session_->sim();
         std::string tag = "SANDBOX";
         if (sim->god) tag += "  GOD";
         if (me.noclip) tag += "  NOCLIP";
-        ren_.text(8 * s, 8 * s, s, tag + "  -  " + key_hint("TAB", "SELECT") + ": SPAWN MENU", rgba(1, 0.85f, 0.4f, 0.8f));
+        ren_.text(8 * s, oy, s, tag + "  -  " + key_hint("TAB", "SELECT") + ": SPAWN MENU", rgba(1, 0.85f, 0.4f, 0.8f));
+        oy += 12 * s;
     }
+    // ----- objective + perks, top left
+    if (v.objective.type != ObjType::None) {
+        const Objective& o = v.objective;
+        const PerkInfo& pk = perk_info(o.reward);
+        std::string l2 = o.done ? std::string("FIND THE EXIT WHEN YOU'RE READY") : objective_text(o);
+        std::string l3 = std::string(o.done ? "GOT: " : "REWARD: ") + pk.name + "  " + pk.text;
+        float bw = std::max(ren_.text_w(s, l2), ren_.text_w(s, l3)) + 8 * s;
+        ren_.rect(6 * s, oy - 3 * s, bw, 30 * s, rgba(0, 0, 0, 0.4f));
+        ren_.text(9 * s, oy, s, o.done ? "OBJECTIVE COMPLETE" : "OBJECTIVE", o.done ? rgba(0.5f, 1, 0.55f, 0.9f) : rgba(0.95f, 0.8f, 0.45f, 0.9f));
+        ren_.text(9 * s, oy + 9 * s, s, l2, rgba(0.95f, 0.93f, 0.85f, 0.9f));
+        ren_.text(9 * s, oy + 18 * s, s, l3, rgba(0.6f, 0.85f, 1.0f, 0.75f));
+        oy += 32 * s;
+    }
+    std::string perks;
+    for (int k = 0; k < PERK_COUNT; k++)
+        if (me.perks[k]) perks += std::string(perks.empty() ? "" : "  ") + perk_info((Perk)k).name + (me.perks[k] > 1 ? " X" + std::to_string(me.perks[k]) : "");
+    if (!perks.empty()) ren_.text(9 * s, oy, s, perks, rgba(0.6f, 0.85f, 1.0f, 0.6f));
     // name tags over other players
     for (const DrawPlayer& p : v.others) {
         float sx, sy;
@@ -922,8 +995,43 @@ void App::draw_game(bool overlay_menu) {
     float beam = li.dark ? (li.ambient[0] < 0.4f ? 1.3f : 1.1f) : (dark ? 0.9f : 0.5f);
     if (v.me.light_on && v.me.alive) ren_.flashlight_overlay(beam, flick);
 
+    // film look: grading per level, more fringing and grain as your mind goes
+    FilmParams film;
+    film.time = (float)now_;
+    float insanity = clampf((60.0f - v.me.sanity) / 60.0f, 0, 1);
+    film.grain = 0.045f + insanity * 0.08f + fx.grain * 0.2f;
+    film.aberration = 1.2f + insanity * 4.0f + fx.wobble * 3.0f;
+    film.vignette = 0.38f + insanity * 0.25f;
+    film.bloom = li.ambient[0] > 0.4f ? 0.12f : (li.outdoor ? 0.35f : (v.me.light_on && li.dark ? 0.45f : 0.85f));
+    film.saturation = 0.88f - insanity * 0.3f;
+    film.contrast = 0.32f;
+    film.distort = 0.06f + insanity * 0.08f;
+    for (int k = 0; k < 3; k++) film.lift[k] = li.fog[k] * 0.12f + 0.006f;
+    film.dim = ren_.flicker_dim();
+    film.camcorder = cfg_.camcorder;
+    film_on_ = ren_.post_film(film);
+
     ren_.begin_2d();
+    if (!film_on_) { // no shader (Vita): the cheap version of the same look
+        float W = (float)ren_.width, H = (float)ren_.height;
+        if (cfg_.film) {
+            float ox = hash01(13, (int)(now_ * 24), 0, 1), oy = hash01(13, (int)(now_ * 24), 1, 1);
+            ren_.tiled(SPR_NOISE, 0, 0, W, H, rgba(1, 1, 1, 0.05f), 128 * ui() * 0.5f, ox, oy);
+            ren_.sprite(SPR_VIGNETTE, 0, 0, W, H, rgba(1, 1, 1, 0.55f));
+        }
+        if (cfg_.camcorder) ren_.tiled(SPR_SCANLINES, 0, 0, W, H, rgba(1, 1, 1, 0.6f), 4, 0, 0);
+        if (ren_.flicker_dim() > 0) ren_.rect(0, 0, W, H, rgba(0, 0, 0, ren_.flicker_dim()));
+    }
     draw_fx_overlays(fx);
+    if (cfg_.camcorder && dev_.hud) { // REC and a running clock, top right
+        float s = ui(), W = (float)ren_.width;
+        int t = (int)v.level_time;
+        char buf[32];
+        std::snprintf(buf, sizeof buf, "%02d:%02d:%02d", t / 3600, (t / 60) % 60, t % 60);
+        if (std::fmod(now_, 1.0) < 0.6) ren_.sprite(SPR_GLOW, W - 62 * s, 6 * s, 7 * s, 7 * s, rgba(1, 0.1f, 0.05f, 1));
+        ren_.text(W - 52 * s, 7 * s, s, "REC", rgba(1, 0.95f, 0.9f, 0.9f));
+        ren_.text(W - 8 * s, 16 * s, s, buf, rgba(1, 0.95f, 0.9f, 0.8f), 2);
+    }
     if (dev_.hud) draw_hud(v, fx);
     if (overlay_menu) draw_menu();
     ren_.end_2d();

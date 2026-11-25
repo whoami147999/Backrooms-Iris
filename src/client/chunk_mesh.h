@@ -22,13 +22,15 @@ struct ChunkMesh {
     std::vector<uint16_t> idx;
     uint32_t first[MAT_COUNT] = {};   // index range of each material inside `idx`
     uint32_t count[MAT_COUNT] = {};
-    std::vector<Vec3> exits;          // exit door positions (centre of the door, floor level)
+    std::vector<ExitDoor> exits;      // exit doors in this chunk (for the signs)
     std::vector<uint32_t> items;      // item ids lying in this chunk
     std::vector<Vec3> balloons;       // Level Fun decorations
+    struct LightMark { Vec3 pos; float sx, sz; LightState state; };
+    std::vector<LightMark> lights;    // light fixtures (halos, light shafts, flicker)
 };
 
 // Builds chunk (kx, kz): cells [kx*CHUNK_CELLS, (kx+1)*CHUNK_CELLS) on each axis.
-void build_chunk_mesh(const World& world, int kx, int kz, ChunkMesh& out);
+void build_chunk_mesh(const World& world, int kx, int kz, ChunkMesh& out, int detail = 1);
 
 // Cave ceilings are lumpy: height of the ceiling at a world position (level 8).
 float ceiling_y(const World& world, float x, float z);

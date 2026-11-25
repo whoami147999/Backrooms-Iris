@@ -7,4 +7,5 @@ port = 27315            # UDP; open/forward this port for online play
 max_players = 4         # 1-4
 seed = 0                # world seed, 0 = new random world every start
 start_level = 0         # 0 1 2 4 5 6 8 9 11 37 fun
+difficulty = medium     # easy medium hard nightmare
 snapshot_rate = 20      # state updates per second sent to each player (10-60)

@@ -34,6 +34,7 @@ enum Material : int {
     MAT_ROOF,    // tops of solid cells (outdoors / crates)
     MAT_DOOR,    // the exit door
     MAT_PROP,    // poles, frames
+    MAT_FURN,    // furniture atlas (Level 5 rooms): 4 quadrants, see furniture_atlas()
     MAT_COUNT
 };
 
@@ -56,6 +57,8 @@ enum Sprite : int {
     SPR_ROYAL, SPR_PAIN, SPR_CASHEW, SPR_LUCKY, SPR_FIRESALT, SPR_FLASHLIGHT, SPR_CROWBAR, // more items
     SPR_BEAM,          // flashlight cookie
     SPR_FLAME,         // burning firesalt
+    SPR_CONE,          // light shaft: bright at the top, fading down and to the sides
+    SPR_SCANLINES,     // camcorder look on the Vita (no shaders there)
     SPR_COUNT
 };
 Image make_sprite(Sprite s);

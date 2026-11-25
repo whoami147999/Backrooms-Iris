@@ -18,6 +18,7 @@ struct ServerConfig {
     uint16_t port = IRIS_DEFAULT_PORT;
     int max_players = IRIS_MAX_PLAYERS;
     LevelId level = LevelId::L0;
+    Difficulty difficulty = Difficulty::Medium;
     uint32_t seed = 0;       // 0 = random
     int snapshot_rate = 20;  // Hz
 };
@@ -56,6 +57,7 @@ private:
     double now() const { return std::chrono::duration<double>(clock::now() - start_).count(); }
     void handle(const NetAddr& from, const uint8_t* data, int len);
     void send_snapshot(Client& c);
+    bool send_snapshot_sized(Client& c, int max_ents, int max_props, int max_events);
     void say(const char* fmt, ...);
 };
 

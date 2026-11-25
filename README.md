@@ -3,12 +3,48 @@
 Open-source co-op Backrooms horror. Up to 4 players, PvE: survive, keep your head together, find the exit.
 One C++ codebase for **Linux, Windows and PS Vita**, plus a headless dedicated server for **FreeBSD**.
 
-![Level 6 with a flashlight](docs/screenshots/v03/05-level-6-flashlight.jpg)
+![Level 0 in 0.4](docs/screenshots/v04/03-level0-new-look.jpg)
 
 > Inspired by Backrooms games and the community wiki lore. All code, art and sound are original and generated
 > in code: no assets, maps or art copied from any other game.
 
-## What's in 0.3
+## What's in 0.4
+
+| | |
+|---|---|
+| **Difficulty** | Easy, Medium, Hard, Nightmare (single player, sandbox, hosting and the dedicated server, PC and Vita) |
+| **Objectives** | every level has one: find the lost tapes, turn on the breakers, or survive. Finishing it gives everyone a **perk for the rest of the run** |
+| **Perks** | Big Lungs (+25% stamina), Second Wind (faster recovery), Steady Nerves (less sanity loss), Thick Skin (less damage), Light Feet (quieter), Spare Cells (longer flashlight). They stack up to 3 |
+| **Exit doors** | set into real walls now, with a small sign over them, no longer standing in the open. Fewer of them on harder difficulties, and on Hard/Nightmare the signs barely glow |
+| **Level 5 rooms** | hotel blocks you can walk into: guest rooms with a bed, nightstands, a lamp, a dresser, a wardrobe, a painting. More loot inside |
+| **Graphics** | film look on PC (bloom, grain, lens fringing, colour grading, vignette), optional camcorder look, light halos and shafts, flickering tubes, dust in the air, contact shadows, 2x textures and finer lighting on PC, new entity and player models |
+
+### Difficulty
+
+| | entities | speed | damage | sanity loss | items | exits | grace period | healing |
+|---|---|---|---|---|---|---|---|---|
+| **Easy** | 0.6x | 0.85x | 0.6x, and a touch only hurts | 0.6x | 1.5x | many | 60 s | 2x |
+| **Medium** | 1x | 1x | 1x | 1x | 1x | normal | 35 s | 1x |
+| **Hard** | 1.5x | 1.08x | 1.35x | 1.3x | 0.75x | fewer, dim signs | 20 s | 0.5x |
+| **Nightmare** | 2x | 1.18x | 1.8x | 1.7x | 0.5x | few, dim signs | 8 s | none |
+
+Entities also hear and see further on Hard and Nightmare. Pick it under DIFFICULTY in the single player, sandbox or
+host menu. Dedicated server: `difficulty = nightmare` in the config, or `--difficulty nightmare`.
+
+### Objectives
+
+Shown top left. **Lost tapes** lie on the floor (look for the faint blue glint) and **breaker boxes** hang on walls with
+a blinking red light: walk up and press E / Cross. **Survive** just counts down. Objective things are always somewhere
+you can reach from where you start. The reward is listed before you start, and in multiplayer everyone gets it.
+Perks stay through deaths and level changes until you quit the run.
+
+### Graphics settings
+
+Settings menu: **FILM EFFECTS** (bloom, grain, fringing, grading; on the Vita, grain and a vignette), **CAMCORDER LOOK**
+(scanlines, a rolling tracking band, REC and a clock), **LIGHT HALOS + DUST** (glowing lamps, light shafts, flickering
+tubes, dust). The film look needs GLSL 1.20 on PC; without it the game falls back to the Vita-style overlays.
+
+## What was in 0.3
 
 | | |
 |---|---|
@@ -19,7 +55,7 @@ One C++ codebase for **Linux, Windows and PS Vita**, plus a headless dedicated s
 | **Textures** | redone without seams or stretching; every new level has its own set |
 | **Fixes** | pause menu no longer turns the level into Level 0; items can always be picked up; plus a pile of smaller ones (see below) |
 
-### Bugs fixed in 0.3
+### Bugs fixed in 0.3 
 
 - **Pause menu made everything Level 0.** The menu background re-pointed the renderer at the title screen world.
   Pausing now draws the real game behind the menu and never touches the level.
@@ -45,13 +81,13 @@ One C++ codebase for **Linux, Windows and PS Vita**, plus a headless dedicated s
 ## Levels
 
 Every level is endless and generated from a seed, so the same seed gives the same world on every machine.
-Find the glowing green **EXIT** sign: the door takes everyone to the next level.
+Find the **EXIT** door: it's set into a wall somewhere, with a small green sign over it. Walk into it and everyone goes to the next level.
 
 | level | what it is | who lives there |
 |---|---|---|
 | **0 - The Lobby** | mono-yellow rooms, damp carpet, buzzing lights, some dead | Bacteria, a Smiler in the dark |
 | **1 - Habitable Zone** | huge concrete warehouse, columns, crates, puddles, misty, whole sections without power | Hounds, Bacteria |
-| **5 - Terror Hotel** | endless corridors of guest rooms, red carpet, wood panels, ballrooms | Partygoers, a Smiler |
+| **5 - Terror Hotel** | endless corridors, red carpet, wood panels, ballrooms, and guest rooms you can walk into (beds, lamps, loot) | Partygoers, a Smiler |
 | **8 - Cave System** | pitch-black caves, lumpy ceilings, glowing fungus. You see a few metres | Smilers, Hounds |
 | **9 - The Suburbs** | streets of identical houses at night, half the streetlights dead | Skin-Stealers, Hounds |
 | **2 - Pipe Dreams** | narrow maintenance tunnels, pipes everywhere, hot boiler rooms, caged bulbs | Hounds, Bacteria, a Smiler |
@@ -102,6 +138,15 @@ Main menu → **Sandbox**, pick a level, then press **Tab** (Select on Vita) in 
 
 
 ## Screenshots
+
+0.4:
+
+| | |
+|---|---|
+| ![](docs/screenshots/v04/05-level5-hotel-room.jpg) | ![](docs/screenshots/v04/06-exit-in-wall.jpg) |
+| ![](docs/screenshots/v04/08-breaker-objective.jpg) | ![](docs/screenshots/v04/13-camcorder.jpg) |
+| ![](docs/screenshots/v04/09-bacteria.jpg) | ![](docs/screenshots/v04/12-partygoer.jpg) |
+| ![](docs/screenshots/v04/04-level5-corridor.jpg) | ![](docs/screenshots/v04/16-lights-out-flashlight.jpg) |
 
 0.3:
 
@@ -287,7 +332,7 @@ su -m root -c 'sh server/freebsd/install.sh'
 It's a TUI (bsddialog, which ships in FreeBSD 14's base system). Pick **Install / update** and it will:
 
 1. `pkg install cmake ninja` if they're missing (clang is already in base)
-2. ask for the server name, UDP port, max players, world seed and starting level
+2. ask for the server name, UDP port, max players, world seed, starting level and difficulty
 3. build `iris_server` from the checkout
 4. install the binary, config, rc.d service, log rotation and an unprivileged `iris` user
 5. start the service and check that it answers
@@ -330,7 +375,7 @@ iris_server --query 127.0.0.1
 | look | mouse | right stick |
 | sprint | Shift | R / R2 |
 | crouch | Ctrl or C (hold) | Circle / B (toggle) |
-| pick up | E | Cross / A |
+| pick up / use (tapes, breakers) | E | Cross / A |
 | use selected item / swing crowbar | left click or Q | Square / L / D-pad up |
 | pick item | 1-9 or mouse wheel | D-pad left / right |
 | flashlight | F | Triangle |
@@ -346,7 +391,7 @@ select it, then type, or use up/down to change the letter under the cursor and l
 ## Command line
 
 ```
-backrooms-iris [--level N] [--seed N] [--sandbox] [--host] [--join IP]
+backrooms-iris [--level N] [--seed N] [--difficulty easy|medium|hard|nightmare] [--sandbox] [--host] [--join IP]
 ```
 
 `--level` jumps straight into a level (0 1 2 4 5 6 8 9 11 37 fun) in single player; add `--sandbox` for sandbox mode. Settings live in
@@ -384,9 +429,9 @@ tests/          ctest: every level, items, a 3-minute sim soak per level, a real
 
 - [x] 1. Walk around a procedurally generated Level 0 on PC
 - [~] 2. Vita build (target is complete; first hardware test is yours)
-- [ ] 3. Audio (procedural hum, footsteps, growls, drones), light flicker, VHS / film grain shaders
+- [~] 3. Audio (procedural hum, footsteps, growls, drones) still to do; light flicker, film grain and VHS look are in
 - [~] 4. Dedicated server + LAN co-op (working; lag compensation for hits next)
-- [~] 5. Online PC ↔ Vita, entities, more levels (5 entities + 11 levels + 10 items + sandbox done; carpet moss next)
+- [~] 5. Online PC ↔ Vita, entities, more levels (5 entities + 11 levels + 10 items + sandbox + objectives + difficulty done; carpet moss next)
 
 ## License
 

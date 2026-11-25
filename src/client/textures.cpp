@@ -315,6 +315,72 @@ Image plaster(int N) {
     });
 }
 
+// Worn guest-room carpet: muddy olive with a faded trellis and old stains.
+Image guest_carpet(int N) {
+    return paint(N, N, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
+        int T = N / 8;
+        float px = (float)(x % T) / T, py = (float)(y % T) / T;
+        float tre = std::min(std::fabs(px - py), std::fabs(px + py - 1.0f));
+        float pat = tre < 0.05f ? 0.08f : 0.0f;
+        float stain = std::max(0.0f, fbm(u, v, 3, 3, 4, 1171) - 0.62f) * 1.4f;
+        float l = 0.86f + pat + grain(x, y, 1172) * 0.16f - stain;
+        r = 0.42f * l; g = 0.38f * l; b = 0.22f * l;
+    });
+}
+
+// Furniture atlas, four quadrants (u, v from the top left):
+//   [0.0-0.5, 0.0-0.5] dark wood           [0.5-1.0, 0.0-0.5] bed sheets
+//   [0.0-0.5, 0.5-1.0] red velvet          [0.5-1.0, 0.5-0.75] drawer fronts, [0.75-1.0] painting
+Image furniture_atlas(int N) {
+    const int Q = N / 2;
+    Image im(N, N);
+    for (int y = 0; y < N; y++)
+        for (int x = 0; x < N; x++) {
+            float u = (float)(x % Q) / Q, v = (float)(y % Q) / Q;
+            int qx = x / Q, qy = y / Q;
+            float r, g, b;
+            if (qx == 0 && qy == 0) { // wood
+                float ring = vnoise(u * 3, v * 40, 3, 40, 1181);
+                float gr = std::sin((u * 18 + ring * 3.0f) * 2 * PI) * 0.04f + (ring - 0.5f) * 0.10f;
+                float l = 0.30f + gr + grain(x, y, 1182) * 0.03f;
+                r = l * 0.95f; g = l * 0.58f; b = l * 0.34f;
+            } else if (qx == 1 && qy == 0) { // sheets: off-white, rumpled, a few stains
+                float fold = std::sin((u * 3 + vnoise(u * 4, v * 4, 4, 4, 1183) * 1.5f) * 2 * PI) * 0.05f;
+                float stain = std::max(0.0f, fbm(u, v, 3, 3, 4, 1184) - 0.66f) * 1.2f;
+                float l = 0.80f + fold + grain(x, y, 1185) * 0.03f;
+                r = l * 0.97f - stain * 0.2f; g = l * 0.93f - stain * 0.3f; b = l * 0.82f - stain * 0.5f;
+            } else if (qx == 0 && qy == 1) { // velvet: deep red with a soft diamond tuft pattern
+                float px = std::fmod(u * 6, 1.0f) - 0.5f, py = std::fmod(v * 6, 1.0f) - 0.5f;
+                float tuft = std::fabs(px) + std::fabs(py) < 0.08f ? -0.12f : 0.0f;
+                float sheen = (vnoise(u * 8, v * 8, 8, 8, 1186) - 0.5f) * 0.12f;
+                float l = 0.9f + tuft + sheen + grain(x, y, 1187) * 0.05f;
+                r = 0.42f * l; g = 0.08f * l; b = 0.09f * l;
+            } else if (v < 0.5f) { // drawer fronts: two rows of drawers, brass pulls
+                float dv = v * 2.0f;
+                float gap = (std::fabs(dv - 0.5f) < 0.025f || dv < 0.03f || dv > 0.97f || u < 0.02f || u > 0.98f) ? -0.14f : 0.0f;
+                float ring = vnoise(u * 30, dv * 3, 30, 3, 1188);
+                float l = 0.32f + (ring - 0.5f) * 0.08f + gap + grain(x, y, 1189) * 0.03f;
+                r = l * 0.95f; g = l * 0.58f; b = l * 0.34f;
+                float kx = std::fabs(u - 0.5f), ky = std::min(std::fabs(dv - 0.25f), std::fabs(dv - 0.75f));
+                if (kx < 0.08f && ky < 0.035f) { r = 0.75f; g = 0.6f; b = 0.3f; }
+            } else { // a dark, muddy painting of a hallway in a gold frame
+                float pv = (v - 0.5f) * 2.0f;
+                bool frame = u < 0.07f || u > 0.93f || pv < 0.1f || pv > 0.9f;
+                if (frame) {
+                    float l = 0.55f + (vnoise(u * 20, pv * 20, 20, 20, 1190) - 0.5f) * 0.3f;
+                    r = l; g = l * 0.78f; b = l * 0.35f;
+                } else {
+                    float cx = std::fabs(u - 0.5f), horizon = std::fabs(pv - 0.55f);
+                    float hall = (cx < 0.08f + horizon * 0.5f) ? 0.10f : 0.0f; // a corridor vanishing into the dark
+                    float l = 0.12f + hall + (fbm(u, pv, 4, 4, 3, 1191) - 0.5f) * 0.1f;
+                    r = l * 1.2f; g = l * 1.0f; b = l * 0.6f;
+                }
+            }
+            im.set(x, y, r, g, b);
+        }
+    return im;
+}
+
 // ------------------------------------------------------------------ Level 8
 Image rock(int N, float base, uint32_t seed) {
     return paint(N, N, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
@@ -611,6 +677,8 @@ void make_level_textures(LevelId level, int N, Image out[MAT_COUNT]) {
             out[MAT_CEIL] = plaster(N / 2);
             out[MAT_LIGHT] = light_panel(N / 8, N / 8, 1.0f);
             out[MAT_PROP] = parquet(N / 4);
+            out[MAT_FLOOR3] = guest_carpet(N);
+            out[MAT_FURN] = furniture_atlas(N);
             break;
         case LevelId::L8:
             out[MAT_WALL] = rock(N, 0.36f, 311);
@@ -690,6 +758,7 @@ void make_level_textures(LevelId level, int N, Image out[MAT_COUNT]) {
         default: break;
     }
     // anything a level doesn't use still gets a valid texture
+    if (out[MAT_FURN].w == 0) out[MAT_FURN] = Image(4, 4, 0xff808080u); // only Level 5 has furniture
     for (int i = 0; i < MAT_COUNT; i++)
         if (out[i].w == 0) out[i] = out[MAT_FLOOR].w ? out[MAT_FLOOR] : Image(4, 4, 0xff808080u);
 }
@@ -928,6 +997,25 @@ Image make_sprite(Sprite s) {
             im.line(52, 10, 54, 16, 3, 0.6f, 0.1f, 0.1f, 1);
             im.line(16, 54, 12, 56, 4, 0.6f, 0.1f, 0.1f, 1);
             im.line(18, 52, 44, 14, 1.5f, 1, 0.5f, 0.5f, 0.4f);
+            return im;
+        }
+        case SPR_CONE: {
+            Image im(64, 128, 0);
+            for (int y = 0; y < 128; y++)
+                for (int x = 0; x < 64; x++) {
+                    float v = y / 127.0f;                       // 0 top (the lamp) .. 1 floor
+                    float half = 0.18f + 0.32f * v;             // widens toward the floor
+                    float u = std::fabs(x - 31.5f) / 32.0f;
+                    float side = clampf(1.0f - u / (half * 2.0f), 0, 1);
+                    float a = side * side * std::pow(1.0f - v, 1.6f) * (0.6f + 0.4f * clampf(v * 8, 0, 1));
+                    im.set(x, y, 1, 1, 1, a);
+                }
+            return im;
+        }
+        case SPR_SCANLINES: {
+            Image im(4, 4, 0);
+            for (int y = 0; y < 4; y++)
+                for (int x = 0; x < 4; x++) im.set(x, y, 0, 0, 0, y < 2 ? 0.0f : 0.35f);
             return im;
         }
         case SPR_BEAM: { // flashlight cookie: bright hot centre, soft edge, a ring

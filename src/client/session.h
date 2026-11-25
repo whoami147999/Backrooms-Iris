@@ -27,6 +27,7 @@ struct GameView {
     const std::unordered_set<uint32_t>* picked = nullptr;
     float level_time = 0;
     bool escaped = false;
+    Objective objective;
     float respawn_t = 0;
     bool multiplayer = false;
     int my_id = 0;
@@ -51,9 +52,10 @@ public:
     virtual void resync() {}                    // after poking the sim directly
 };
 
-std::unique_ptr<Session> make_single_player(LevelId level, uint32_t seed, const std::string& name, bool sandbox = false);
+std::unique_ptr<Session> make_single_player(LevelId level, uint32_t seed, const std::string& name, bool sandbox = false,
+                                            Difficulty diff = Difficulty::Medium);
 // host = true starts a server on this machine (own thread) and joins it.
 std::unique_ptr<Session> make_multiplayer(const std::string& host, uint16_t port, const std::string& name,
-                                          bool start_server, LevelId level, double now, std::string* error);
+                                          bool start_server, LevelId level, Difficulty diff, double now, std::string* error);
 
 } // namespace iris

@@ -26,8 +26,10 @@ cmake --build build-vita -j
 
 Output: `build-vita/BackroomsIris.vpk` (title ID BKIR00001).
 
-Version 0.3.0 (network protocol 3). 0.3 adds a chunk-building worker thread (std::thread, so the Vita target links
-`pthread`) and more procedural textures (all power-of-two, generated at level load: expect ~2-3 s per level on the Vita).
+Version 0.4.0 (network protocol 4). The renderer uses a chunk-building worker thread (std::thread, so the Vita target
+links `pthread`) and procedural textures (all power-of-two, 512 px on the Vita, generated at level load: expect
+~2-3 s per level). The film-look GLSL shader is PC only (`#if !defined(IRIS_GL_VITA)`): the Vita draws grain, vignette
+and scanlines as plain textured quads, so vitaGL only ever sees fixed-function GL.
 
 ## 3. If it fails
 

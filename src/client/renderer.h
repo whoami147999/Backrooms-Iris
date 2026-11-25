@@ -24,6 +24,20 @@ struct RenderSettings {
     int texture_size = 512;       // 256 on Vita
     int chunk_builds_per_frame = 2;
     bool post_effects = true;     // screen-grab distortion (PC only)
+    int mesh_detail = 1;          // 2 on PC: finer baked lighting
+    bool film = true;             // film look: bloom, grain, aberration, grading (PC shader; overlays on Vita)
+    bool camcorder = false;       // found-footage look: scanlines, tracking noise, REC
+    bool atmosphere = true;       // light halos and shafts, dust, flicker
+};
+
+// Parameters for the film post-process (PC).
+struct FilmParams {
+    float time = 0;
+    float grain = 0.05f, aberration = 1.5f, vignette = 0.4f, bloom = 0.8f;
+    float saturation = 0.9f, contrast = 0.3f, distort = 0.06f;
+    float lift[3] = {0.02f, 0.02f, 0.015f};
+    float dim = 0;                // extra darkening (flickering lights)
+    bool camcorder = false;
 };
 
 struct Camera {
@@ -91,6 +105,11 @@ public:
     void flashlight_overlay(float strength, float flicker);
     // Full-screen distortion of what was just drawn. amount 0 = off.
     void post_warp(float wobble, float ghost, float time);
+    // Film look over the finished 3D frame (PC with GLSL). Returns false if it couldn't run.
+    bool post_film(const FilmParams& f);
+    void set_style(bool film, bool camcorder, bool atmosphere) { s_.film = film; s_.camcorder = camcorder; s_.atmosphere = atmosphere; }
+    // How much a nearby flickering light is darkening the view right now (0..1), set by draw_world.
+    float flicker_dim() const { return flicker_dim_; }
 
     // ---- 2D (pixel coordinates, origin top-left). Colours are 0xRRGGBBAA.
     void begin_2d();
@@ -108,9 +127,10 @@ private:
         uint32_t vbo = 0, ibo = 0;
         uint32_t first[MAT_COUNT] = {}, count[MAT_COUNT] = {};
         int kx = 0, kz = 0;
-        std::vector<Vec3> exits;
+        std::vector<ExitDoor> exits;
         std::vector<uint32_t> items;
         std::vector<Vec3> balloons;
+        std::vector<ChunkMesh::LightMark> lights;
     };
     // background chunk building: the worker thread turns (world, chunk) into a ChunkMesh,
     // the main thread uploads it to the GPU
@@ -141,6 +161,13 @@ private:
     uint32_t grab_tex_ = 0;
     int grab_w_ = 0, grab_h_ = 0;
     Camera cam_;
+    float flicker_dim_ = 0;
+    uint32_t film_prog_ = 0;
+    bool film_failed_ = false;
+    int film_loc_[16] = {};
+    void grab_screen();
+    void draw_atmosphere(const World& w, const std::vector<const GpuChunk*>& visible, float time);
+    void blob_shadow(Vec2 p, float r, float a);
 
     static uint64_t key(int kx, int kz) { return ((uint64_t)(uint32_t)kx << 32) | (uint32_t)kz; }
     static float text_width_px_f(const std::string& s) { return s.empty() ? 0.0f : (float)s.size() * 6 - 1; }

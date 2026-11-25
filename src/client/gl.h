@@ -23,6 +23,25 @@ extern PFNGLBUFFERDATAPROC iris_glBufferData;
 #define glDeleteBuffers iris_glDeleteBuffers
 #define glBindBuffer iris_glBindBuffer
 #define glBufferData iris_glBufferData
+
+// GLSL (PC only, optional): the film post-process. Null when the driver has no shaders.
+extern PFNGLCREATESHADERPROC iris_glCreateShader;
+extern PFNGLSHADERSOURCEPROC iris_glShaderSource;
+extern PFNGLCOMPILESHADERPROC iris_glCompileShader;
+extern PFNGLGETSHADERIVPROC iris_glGetShaderiv;
+extern PFNGLGETSHADERINFOLOGPROC iris_glGetShaderInfoLog;
+extern PFNGLCREATEPROGRAMPROC iris_glCreateProgram;
+extern PFNGLATTACHSHADERPROC iris_glAttachShader;
+extern PFNGLLINKPROGRAMPROC iris_glLinkProgram;
+extern PFNGLGETPROGRAMIVPROC iris_glGetProgramiv;
+extern PFNGLUSEPROGRAMPROC iris_glUseProgram;
+extern PFNGLGETUNIFORMLOCATIONPROC iris_glGetUniformLocation;
+extern PFNGLUNIFORM1IPROC iris_glUniform1i;
+extern PFNGLUNIFORM1FPROC iris_glUniform1f;
+extern PFNGLUNIFORM2FPROC iris_glUniform2f;
+extern PFNGLUNIFORM3FPROC iris_glUniform3f;
+extern PFNGLDELETEPROGRAMPROC iris_glDeleteProgram;
+extern PFNGLDELETESHADERPROC iris_glDeleteShader;
 #endif
 
 namespace iris {
@@ -30,6 +49,7 @@ namespace iris {
 struct GLCaps {
     bool anisotropic = false;
     float max_aniso = 1;
+    bool shaders = false;  // GLSL 1.20 available (PC)
 };
 extern GLCaps g_glcaps;
 

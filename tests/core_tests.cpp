@@ -305,6 +305,144 @@ static void test_network() {
     srv.stop();
 }
 
+// Every difficulty still has reachable exits, harder ones have fewer; exits are always on a wall.
+static void test_difficulty_exits() {
+    for (int li = 0; li < (int)LevelId::COUNT; li++) {
+        int prev = 1 << 30;
+        for (int d = 0; d < (int)Difficulty::COUNT; d++) {
+            World L((LevelId)li, 777, (Difficulty)d);
+            int n = 0;
+            for (int z = -80; z < 80; z++)
+                for (int x = -80; x < 80; x++) {
+                    ExitDoor door;
+                    if (!L.exit_door(x, z, &door)) continue;
+                    n++;
+                    CHECK(L.wall_face(x, z, door.side), "%s %s: exit door at %d,%d is not on a wall", level_info((LevelId)li).code,
+                          diff_info((Difficulty)d).name, x, z);
+                    CHECK(!L.solid(x, z), "exit opens into a solid cell");
+                }
+            CHECK(n >= 3, "%s %s: only %d exits in a 400 m square", level_info((LevelId)li).code, diff_info((Difficulty)d).name, n);
+            CHECK(n <= prev + 2, "%s: %s has more exits (%d) than an easier difficulty (%d)", level_info((LevelId)li).code,
+                  diff_info((Difficulty)d).name, n, prev);
+            prev = n;
+        }
+    }
+    // the sim walks you into a door and on to the next level
+    GameSim sim(31);
+    sim.start_level(LevelId::L0, 31);
+    sim.add_player("A");
+    Vec2 at;
+    ExitDoor door;
+    CHECK(sim.nearest_exit({0, 0}, at, &door), "no exit near spawn");
+    sim.players[0].st.pos = {at.x, 0, at.z};
+    InputCmd cmd;
+    cmd.yaw = std::atan2(door.normal.x, door.normal.z); // face the door
+    cmd.move_z = 1;
+    for (int t = 0; t < 120 && sim.world.id() == LevelId::L0; t++) { sim.apply_input(0, cmd); sim.tick(1.0f / TICK_RATE); }
+    CHECK(sim.world.id() == LevelId::L1, "walking into the exit door should lead to level 1");
+}
+
+// Level 5: rooms can be entered, furniture collides, and the room block next to spawn exists.
+static void test_hotel_rooms() {
+    World L(LevelId::L5, 1215);
+    CHECK(L.guest_room(1, 1) && L.guest_room(4, 4), "the block next to spawn should be guest rooms");
+    int rooms = 0, doors = 0;
+    for (int bz = -6; bz < 6; bz++)
+        for (int bx = -6; bx < 6; bx++)
+            for (int q = 0; q < 4; q++) {
+                int cx = bx * 5 + 1 + (q & 1) * 2, cz = bz * 5 + 1 + (q >> 1) * 2;
+                if (!L.guest_room(cx, cz)) continue;
+                rooms++;
+                // exactly one doorway out of the room's 8 outer edges, opening onto a corridor
+                int open_edges = 0;
+                for (int k = 0; k < 2; k++) {
+                    open_edges += !L.wall_x(cx, cz + k) + !L.wall_x(cx + 2, cz + k);
+                    open_edges += !L.wall_z(cx + k, cz) + !L.wall_z(cx + k, cz + 2);
+                }
+                CHECK(open_edges == 1, "room at %d,%d has %d doorways", cx, cz, open_edges);
+                doors += open_edges;
+                Furn f[MAX_FURN];
+                int n = L.furniture(cx, cz, f);
+                bool bed = false;
+                for (int k = 0; k < n; k++) bed |= f[k].kind == FurnKind::Bed;
+                CHECK(bed, "room at %d,%d has no bed", cx, cz);
+            }
+    CHECK(rooms > 100, "only %d guest rooms", rooms);
+    // walk into the bed: you stop at it
+    Furn f[MAX_FURN];
+    int n = L.furniture(1, 1, f);
+    for (int k = 0; k < n; k++) {
+        if (f[k].kind != FurnKind::Bed) continue;
+        Vec2 c{(f[k].x0 + f[k].x1) * 0.5f, (f[k].z0 + f[k].z1) * 0.5f};
+        collide_circle(L, c, PLAYER_RADIUS);
+        bool inside = c.x > f[k].x0 && c.x < f[k].x1 && c.z > f[k].z0 && c.z < f[k].z1;
+        CHECK(!inside, "the bed should push you out");
+    }
+    std::printf("  hotel: %d guest rooms, %d doorways\n", rooms, doors);
+}
+
+// Objectives: tapes/breakers are placed and reachable, finishing gives everyone a perk that
+// survives death and level changes, and perks actually change things.
+static void test_objectives() {
+    int types[4] = {0, 0, 0, 0};
+    for (uint32_t seed = 1; seed < 40; seed++) {
+        GameSim sim(seed);
+        sim.start_level((LevelId)(seed % (uint32_t)LevelId::COUNT), seed);
+        sim.add_player("A");
+        const Objective& o = sim.objective;
+        types[(int)o.type]++;
+        CHECK(o.type != ObjType::None && o.need > 0, "seed %u: no objective", seed);
+        int things = 0;
+        for (const Prop& p : sim.props) things += p.kind == PropKind::Tape || p.kind == PropKind::Breaker;
+        if (o.type == ObjType::Tapes || o.type == ObjType::Breakers) CHECK(things == o.need, "seed %u: %d props for %d needed", seed, things, o.need);
+        if (o.type == ObjType::Tapes || o.type == ObjType::Breakers) {
+            // collect them all by standing next to each one
+            InputCmd cmd;
+            sim.apply_input(0, cmd);
+            for (size_t k = 0; k < sim.props.size();) {
+                Prop pr = sim.props[k];
+                if (pr.kind != PropKind::Tape && (pr.kind != PropKind::Breaker || pr.life > 0.5f)) { k++; continue; }
+                sim.players[0].st.pos = {pr.pos.x, 0, pr.pos.z};
+                cmd.pickup_ctr++;
+                sim.apply_input(0, cmd);
+                if (pr.kind == PropKind::Breaker) k++;
+            }
+            CHECK(o.done, "seed %u: objective not complete after collecting everything (%d/%d)", seed, o.have, o.need);
+            int total = 0;
+            for (int k = 0; k < PERK_COUNT; k++) total += sim.players[0].st.perks[k];
+            CHECK(total == 1, "seed %u: should have one perk (%d)", seed, total);
+            sim.respawn(0);
+            total = 0;
+            for (int k = 0; k < PERK_COUNT; k++) total += sim.players[0].st.perks[k];
+            CHECK(total == 1, "perks should survive respawning");
+        }
+    }
+    CHECK(types[1] && types[2] && types[3], "every objective type should show up (%d %d %d)", types[1], types[2], types[3]);
+    // survive
+    GameSim sim(5);
+    sim.start_level(LevelId::L11, 5);
+    sim.add_player("A");
+    sim.objective = Objective{};
+    sim.objective.type = ObjType::Survive;
+    sim.objective.need = 3;
+    for (int t = 0; t < 4 * 60; t++) sim.tick(1.0f / 60);
+    CHECK(sim.objective.done, "survive objective should complete");
+    // big lungs: sprint lasts longer
+    World W(LevelId::L11, 1);
+    auto sprint_time = [&](int lv) {
+        PlayerState p;
+        p.perks[(int)Perk::Stamina] = (uint8_t)lv;
+        InputCmd c;
+        c.move_z = 1;
+        c.buttons = BTN_SPRINT;
+        int t = 0;
+        while (!p.exhausted && t < 6000) { player_tick(p, c, W, 1.0f / 60); t++; }
+        return t;
+    };
+    CHECK(sprint_time(2) > sprint_time(0) * 1.4f, "big lungs should make stamina last longer");
+    std::printf("  objectives: tapes %d breakers %d survive %d\n", types[1], types[2], types[3]);
+}
+
 int main() {
     test_determinism();
     test_connectivity();
@@ -315,6 +453,9 @@ int main() {
     test_all_levels();
     test_items();
     test_pickup();
+    test_difficulty_exits();
+    test_hotel_rooms();
+    test_objectives();
     test_sim_soak();
     test_network();
     if (g_fail) { std::printf("%d check(s) failed\n", g_fail); return 1; }

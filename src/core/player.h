@@ -26,6 +26,13 @@ struct InputCmd {
     uint8_t attack_ctr = 0; // crowbar swing
 };
 
+// Rewards for objectives: they last the whole run (and stack up to PERK_MAX).
+enum class Perk : uint8_t { Stamina, Lungs, Nerves, Tough, Quiet, Battery, COUNT };
+constexpr int PERK_COUNT = (int)Perk::COUNT;
+constexpr int PERK_MAX = 3;
+struct PerkInfo { const char* name; const char* text; };
+const PerkInfo& perk_info(Perk p);
+
 enum class DeathCause : uint8_t { None, Bacteria, Hound, Smiler, SkinStealer, Partygoer, Sanity, MemoryJuice };
 const char* death_text(DeathCause c);
 
@@ -52,12 +59,14 @@ struct PlayerState {
     bool light_on = false; // flashlight
     bool noclip = false;   // sandbox: walk through walls
     uint8_t inv[ITEM_COUNT] = {};
+    uint8_t perks[PERK_COUNT] = {};
     bool alive = true;
     DeathCause cause = DeathCause::None;
 
     float eye_height() const;
     float noise() const;   // how far away hounds can hear you, metres
     bool has(ItemType t) const { return inv[(int)t] > 0; }
+    int perk(Perk p) const { return perks[(int)p]; }
 };
 
 void player_tick(PlayerState& p, const InputCmd& cmd, const World& world, float dt);

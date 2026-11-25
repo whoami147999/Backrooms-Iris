@@ -38,6 +38,10 @@ struct DevOptions {          // command-line switches used for testing / screens
     int select = -1;         // select this item type in the hotbar
     int flare = -1;          // drop a burning firesalt this far ahead
     bool stun = false;       // the dev entity starts knocked down
+    int difficulty = -1;
+    int camcorder = -1;      // force the camcorder look on/off
+    int film = -1;
+    float at_exit = -1;      // stand this far in front of the nearest exit door, facing it
 };
 
 class App {
@@ -62,6 +66,7 @@ private:
         std::string charset;
         int maxlen = 16;
         std::string hint;
+        std::vector<std::string> hints; // Choice: one hint per value
     };
     struct Menu {
         std::string title, subtitle;
@@ -101,6 +106,7 @@ private:
     double escaped_t_ = -100;
     double now_ = 0, frame_dt_ = 0;
     float fps_ = 0;
+    bool film_on_ = false;   // the PC film shader ran this frame
     int frames_ = 0;
     int frames_total_ = 0;   // boot log: first frames only
     double fps_t_ = 0;
@@ -140,7 +146,7 @@ private:
     std::vector<ItemType> owned() const;
     float ui() const;  // UI scale (pixels per font pixel)
     std::string key_hint(const char* kb, const char* pad) const;
-    void save_settings() { cfg_.save(data_dir_ + "settings.cfg"); }
+    void save_settings() { if (dev_.shot_path.empty()) cfg_.save(data_dir_ + "settings.cfg"); } // screenshots never overwrite your settings
 };
 
 } // namespace iris

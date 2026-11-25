@@ -43,6 +43,7 @@ int main(int argc, char** argv) {
         else if (a == "--level") dev.level = level_arg(next());
         else if (a == "--seed") dev.seed = (uint32_t)std::strtoul(next(), nullptr, 10);
         else if (a == "--host") dev.host = true;
+        else if (a == "--difficulty") { Difficulty d; if (difficulty_from_name(next(), d)) dev.difficulty = (int)d; }
         else if (a == "--join") dev.join = next();
         else if (a == "--shot") dev.shot_path = next();
         else if (a == "--after") dev.shot_after = (float)std::atof(next());
@@ -65,6 +66,9 @@ int main(int argc, char** argv) {
         else if (a == "--select") dev.select = std::atoi(next());
         else if (a == "--flare") dev.flare = std::atoi(next());
         else if (a == "--stun") dev.stun = true;
+        else if (a == "--camcorder") dev.camcorder = 1;
+        else if (a == "--nofilm") dev.film = 0;
+        else if (a == "--at-exit") dev.at_exit = (float)std::atof(next());
         else if (a == "--nohud") dev.hud = false;
         else { std::fprintf(stderr, "unknown option %s (try --help)\n", a.c_str()); return 2; }
     }

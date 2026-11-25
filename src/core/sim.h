@@ -41,7 +41,9 @@ struct Entity {
 };
 
 // Things lying or burning in the world that aren't part of the level itself.
-enum class PropKind : uint8_t { Item, Flare };
+// Item: something to pick up. Flare: burning firesalt. Tape: objective pickup.
+// Breaker: objective switch box on a wall (item = which wall side it hangs on, life 1 = switched on).
+enum class PropKind : uint8_t { Item, Flare, Tape, Breaker };
 struct Prop {
     uint16_t id = 0;
     PropKind kind = PropKind::Item;
@@ -49,6 +51,16 @@ struct Prop {
     Vec2 pos;
     float life = 0;        // flares: seconds left
 };
+
+// One objective per level. Finishing it gives everyone a perk for the rest of the run.
+enum class ObjType : uint8_t { None, Tapes, Breakers, Survive, COUNT };
+struct Objective {
+    ObjType type = ObjType::None;
+    uint8_t have = 0, need = 0;   // Survive: seconds
+    bool done = false;
+    Perk reward = Perk::Stamina;
+};
+std::string objective_text(const Objective& o); // "FIND THE LOST TAPES 1/3"
 constexpr float FLARE_TIME = 40.0f;
 constexpr float FLARE_RADIUS = 6.5f;
 
@@ -59,6 +71,7 @@ struct SimPlayer {
     InputCmd last_cmd;
     bool have_cmd = false;  // the first command only sets the counters' baseline
     float respawn_t = 0;    // multiplayer: seconds until respawn after dying
+    uint8_t perks[PERK_COUNT] = {};  // kept through deaths: they're the run's
     std::string toast;      // short personal message ("PICKED UP CROWBAR")
     uint32_t toast_seq = 0;
 };
@@ -74,12 +87,15 @@ public:
     uint32_t epoch = 0;        // bumps on every level change
     float level_time = 0;      // seconds since the level started
     bool multiplayer = false;  // respawn timers instead of a death screen
+    Difficulty difficulty = Difficulty::Medium;
     SimPlayer players[IRIS_MAX_PLAYERS];
     std::vector<Entity> ents;
     std::vector<Prop> props;
     std::unordered_set<uint32_t> picked;  // level item ids taken this level
     std::vector<uint32_t> picked_order;   // same, in pick order (for snapshots)
     std::deque<SimEvent> events;          // recent messages for everyone's HUD
+    Objective objective;
+    uint32_t objectives_done = 0;         // this run
     uint32_t event_seq = 0;
     bool escaped = false;                 // someone took the exit out of Level 11
 
@@ -106,7 +122,7 @@ public:
     Entity& spawn_entity(EntityType t, Vec2 pos, float yaw);
     void spawn_item(ItemType t, Vec2 pos);
     void clear_entities() { ents.clear(); }
-    bool nearest_exit(Vec2 from, Vec2& out) const;
+    bool nearest_exit(Vec2 from, Vec2& out, ExitDoor* door = nullptr) const;
 
     // helpers shared with the client (prompts, HUD)
     bool looking_at(const PlayerState& p, Vec2 target, float max_dist, float cos_fov) const;
@@ -119,11 +135,15 @@ private:
     float spawn_t_ = 0;
     LevelId pending_level_ = LevelId::COUNT;
 
+    void setup_objective();
+    void complete_objective();
+    bool reachable_cells(std::vector<std::pair<int, int>>& out, int min_depth, int max_depth);
     void use_item(int i, ItemType t);
     void try_pickup(int i);
     void swing(int i);
     void toast(int i, const std::string& s);
     void kill(int i, DeathCause c);
+    void lethal_touch(int i, Entity& e, DeathCause c); // kills, except on easy where it badly hurts
     void damage(int i, float amount, DeathCause c);
     void update_player_stats(int i, float dt);
     void update_entity(Entity& e, float dt);

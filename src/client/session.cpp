@@ -22,8 +22,9 @@ std::vector<DrawProp> props_from_sim(const GameSim& s) {
 // ======================================================================== single player
 class SingleSession : public Session {
 public:
-    SingleSession(LevelId level, uint32_t seed, const std::string& name, bool sandbox) : sim_(seed) {
+    SingleSession(LevelId level, uint32_t seed, const std::string& name, bool sandbox, Difficulty diff) : sim_(seed) {
         sim_.sandbox = sandbox;
+        sim_.difficulty = diff;
         sim_.auto_spawn = !sandbox;
         sim_.start_level(level, seed);
         sim_.add_player(name);
@@ -78,6 +79,7 @@ private:
         v_.toast_seq = sim_.players[0].toast_seq;
         v_.level_time = sim_.level_time;
         v_.escaped = sim_.escaped;
+        v_.objective = sim_.objective;
         v_.multiplayer = false;
     }
 };
@@ -218,7 +220,7 @@ private:
         if (!s.players[net_.my_id].active) return;
         bool new_level = !have_state_ || s.epoch != epoch_;
         if (new_level) {
-            world_ = World(s.level, s.seed);
+            world_ = World(s.level, s.seed, s.difficulty);
             epoch_ = s.epoch;
             history_.clear();
         }
@@ -244,6 +246,7 @@ private:
         v_.epoch = s.epoch;
         v_.level_time = s.level_time;
         v_.escaped = s.escaped;
+        v_.objective = s.objective;
         v_.respawn_t = s.players[net_.my_id].respawn_t;
         v_.toast = s.toast;
         v_.toast_seq = s.toast_seq;
@@ -253,12 +256,12 @@ private:
 
 } // namespace
 
-std::unique_ptr<Session> make_single_player(LevelId level, uint32_t seed, const std::string& name, bool sandbox) {
-    return std::unique_ptr<Session>(new SingleSession(level, seed, name, sandbox));
+std::unique_ptr<Session> make_single_player(LevelId level, uint32_t seed, const std::string& name, bool sandbox, Difficulty diff) {
+    return std::unique_ptr<Session>(new SingleSession(level, seed, name, sandbox, diff));
 }
 
 std::unique_ptr<Session> make_multiplayer(const std::string& host, uint16_t port, const std::string& name,
-                                          bool start_server, LevelId level, double now, std::string* error) {
+                                          bool start_server, LevelId level, Difficulty diff, double now, std::string* error) {
     std::unique_ptr<NetSession> s(new NetSession());
     if (start_server) {
         s->host.reset(new HostThread());
@@ -266,6 +269,7 @@ std::unique_ptr<Session> make_multiplayer(const std::string& host, uint16_t port
         cfg.name = name + "'S GAME";
         cfg.port = port;
         cfg.level = level;
+        cfg.difficulty = diff;
         if (!s->host->start(cfg)) {
             if (error) *error = s->host->error;
             return nullptr;

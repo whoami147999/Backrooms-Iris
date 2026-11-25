@@ -16,6 +16,10 @@ struct Settings {
     std::string name = "WANDERER";
     std::string last_ip = "192.168.1.";
     int start_level = 0;        // index into LevelId
+    int difficulty = 1;         // Difficulty: 0 easy .. 3 nightmare
+    bool film = true;           // film look (bloom, grain, aberration, grading)
+    bool camcorder = false;     // found-footage camcorder look
+    bool atmosphere = true;     // light halos/shafts, dust, flicker
 
     void load(const std::string& path);
     void save(const std::string& path) const;
