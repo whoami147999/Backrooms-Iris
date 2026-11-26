@@ -229,8 +229,8 @@ bool platform_init(const PlatformConfig& cfg) {
     platform_boot_stage("vitagl init");
     vlog("[iris] vita: vglInitExtended(%s, %d KB headroom)\n", cfg.safe_mode ? "no msaa" : "2x msaa", headroom / 1024);
     // NB: vglInit* return GL_FALSE on success. GL_TRUE means "worked, but had to fall back to a
-    // smaller resolution" (1.0.1 and older read it the other way round and stopped right here,
-    // behind vitaGL's spinning boot logo). vitaGL keeps that logo up until our first frame.
+    // smaller resolution" (reading it the other way round leaves the game stuck behind vitaGL's
+    // spinning boot logo, which stays up until our first frame).
     GLboolean fell_back = vglInitExtended(0, 960, 544, headroom, cfg.safe_mode ? SCE_GXM_MULTISAMPLE_NONE : SCE_GXM_MULTISAMPLE_2X);
     g_vgl_up = true;
     vlog("[iris] vita: vitaGL ready%s\n", fell_back ? " (resolution fallback)" : "");
@@ -275,7 +275,7 @@ void platform_thread_background(int core) {
 
 void platform_boot_stage(const char* stage) {
     vlog("[iris] stage: %s\n", stage);
-    // "1.0.2|stage": a breadcrumb left by another version isn't this version's crash
+    // "1.0|stage": a breadcrumb left by another version isn't this version's crash
     std::string line = std::string(IRIS_VERSION) + "|" + stage;
     SceUID fd = sceIoOpen(BOOT_FILE, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
     if (fd < 0) return;

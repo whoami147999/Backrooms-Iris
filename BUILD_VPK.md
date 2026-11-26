@@ -28,7 +28,7 @@ cmake --build build-vita -j
 
 Output: `build-vita/BackroomsIris.vpk` (title ID BKIR00001).
 
-Version 1.0.2. Sound uses SDL audio (`SceAudio_stub`, already linked). The renderer builds chunk meshes on a
+Version 1.0. Sound uses SDL audio (`SceAudio_stub`, already linked). The renderer builds chunk meshes on a
 worker thread (std::thread, so the target links `pthread`) and generates its textures at level load (power-of-two,
 256 px on the Vita: about a second per level). The GLSL post effects are PC only (`#if !defined(IRIS_GL_VITA)`), so
 vitaGL only ever sees fixed-function GL.
@@ -76,12 +76,12 @@ Steps, in order: `libshacccg check`, `clocks`, `vitagl init`, `sdl init`, `audio
 ### Solved: stuck on vitaGL's spinning logo (`vitagl init`)
 
 `vglInit*()` return **GL_FALSE on success** (GL_TRUE means it worked but had to fall back to a smaller
-resolution; see `vglInitWithCustomSizes` in vitaGL's `source/vgl.c`). 0.6.1 to 1.0.1 read that the other way round
-and stopped on an error screen right after a successful init, hidden behind vitaGL's boot splash (which stays up until
-the first frame). 1.0.2 only logs the fallback flag. If something fails after vitaGL is up, the game quits and the
+resolution; see `vglInitWithCustomSizes` in vitaGL's `source/vgl.c`). Pre-release builds read that the other way
+round and stopped on an error screen right after a successful init, hidden behind vitaGL's boot splash (which stays up
+until the first frame). The game now only logs the fallback flag. If something fails after vitaGL is up, the game quits and the
 reason is in log.txt (nothing it draws itself would be visible behind the splash).
 
-Boot breadcrumbs are stamped with the version (`1.0.2|stage`), so a leftover from an older build doesn't count as a
+Boot breadcrumbs are stamped with the version (`1.0|stage`), so a leftover from an older build doesn't count as a
 crash, and safe mode switched on by an older version is switched off again.
 
 ### Threads on the Vita
