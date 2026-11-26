@@ -60,6 +60,8 @@ struct PlayerState {
     float regen = 0;       // moth jelly seconds left
     float silent = 0;      // liquid silence seconds left
     float flash = 99;      // seconds since you set off a flash bulb (screen flash)
+    float painkill = 0;    // painkillers seconds left
+    bool nv_on = false;    // night vision goggles
     bool light_on = false; // flashlight
     bool noclip = false;   // sandbox: walk through walls
     uint8_t inv[ITEM_COUNT] = {};

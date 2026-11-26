@@ -12,6 +12,8 @@
 #include "session.h"
 #include "settings.h"
 #include "tailscale.h"
+#include "audio.h"
+#include <unordered_map>
 
 namespace iris {
 
@@ -44,7 +46,9 @@ struct DevOptions {          // command-line switches used for testing / screens
     int camcorder = -1;      // force the camcorder look on/off
     int film = -1;
     int retro = -1;
-    float at_exit = -1;      // stand this far in front of the nearest exit door, facing it
+    float at_exit = -1;
+    bool nv = false;         // night vision goggles on
+    bool at_camp = false;    // stand next to the nearest wanderers' camp      // stand this far in front of the nearest exit door, facing it
 };
 
 class App {
@@ -87,6 +91,23 @@ private:
     NetClient browser_;          // LAN discovery for the Join screen
     double browse_t_ = 0;
     Tailscale tailscale_;        // tailnet discovery (PC): friends' games anywhere
+    Audio audio_;
+    // what the sound code saw last frame (to notice changes)
+    struct AudioState {
+        int step = 0;
+        float swing = 99, health = 100, flash = 99;
+        bool light = false, alive = true;
+        uint32_t epoch = 0xFFFFFFFF, toast_seq = 0;
+        double scan_t = -100;
+        Vec2 fire_at;
+        float fire_d = 1e9f;
+        std::unordered_map<uint16_t, double> next;   // entity id -> next idle sound
+        std::unordered_map<uint16_t, int> state;     // entity id -> last state
+        std::unordered_map<int, int> other_step;     // other players' footsteps
+    } as_;
+    void update_audio(const struct GameView& v, Vec3 eye, float yaw);
+    void play_at(Sfx s, Vec2 at, float vol, Vec3 eye, float yaw, const World& w, float pitch = 1);
+    void item_sound(ItemType t);
     double tail_t_ = -100;
     TailStatus tail_;
 
@@ -114,6 +135,7 @@ private:
     float fps_ = 0;
     bool film_on_ = false;   // the PC film shader ran this frame
     double compass_t_ = -100;
+    float vm_last_yaw_ = 0, vm_sway_ = 0;
     Vec2 compass_to_;
     bool compass_ok_ = false;
     int frames_ = 0;

@@ -99,7 +99,7 @@ void usage() {
         "  --config FILE     config file\n"
         "  --port N          UDP port (default %d)\n"
         "  --seed N          world seed (0 = random)\n"
-        "  --level N         starting level: 0 1 2 4 5 6 7 8 9 11 19 21 22 24 33 36 37 51 fun ! grey black mansion hope\n"
+        "  --level N         starting level: 0 1 2 3 4 5 6 7 8 9 10 11 13 19 21 22 24 33 36 37 51 fun ! grey black mansion hope\n"
         "  --difficulty D    easy, medium, hard, nightmare\n"
         "  --name TEXT       server name\n"
         "  --query HOST[:P]  ask a running server for its status and exit\n"
@@ -131,7 +131,7 @@ int main(int argc, char** argv) {
         else if (a == "--seed") cfg.seed = (uint32_t)std::strtoul(next().c_str(), nullptr, 10);
         else if (a == "--name") cfg.name = next();
         else if (a == "--level") {
-            if (!parse_level(next(), cfg.level)) { std::fprintf(stderr, "levels: 0 1 2 4 5 6 7 8 9 11 19 21 22 24 33 36 37 51 fun ! grey black mansion hope\n"); return 2; }
+            if (!parse_level(next(), cfg.level)) { std::fprintf(stderr, "levels: 0 1 2 3 4 5 6 7 8 9 10 11 13 19 21 22 24 33 36 37 51 fun ! grey black mansion hope\n"); return 2; }
         } else if (a == "--difficulty") {
             if (!difficulty_from_name(next().c_str(), cfg.difficulty)) { std::fprintf(stderr, "difficulty: easy medium hard nightmare\n"); return 2; }
         } else { std::fprintf(stderr, "unknown option %s (try --help)\n", a.c_str()); return 2; }

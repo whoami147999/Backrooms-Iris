@@ -15,7 +15,7 @@
 namespace iris {
 
 enum class LevelId : uint8_t {
-    L0, L1, L2, L4, L5, L6, L7, L8, L9, L11, L19, L21, L22, L24, L33, L36, L37, L51, LFun,
+    L0, L1, L2, L3, L4, L5, L6, L7, L8, L9, L10, L11, L13, L19, L21, L22, L24, L33, L36, L37, L51, LFun,
     LRun,                                     // Level ! - Run For Your Life
     TSG, TSGBlack, TSGMansion, TSGHope,       // TH3 SH4DY GR3Y and its sub-levels
     COUNT
@@ -50,6 +50,7 @@ enum class ItemType : uint8_t {
     FlashBulb, GlowStick, MusicBox,                   // thrown / dropped
     RabbitFoot,                                       // cheats death once (stacks)
     Compass, Radio,                                   // tools: point to the exit / pick up entities
+    Batteries, NightVision, Chalk, Painkillers,       // 0.6
     Pistol, Shotgun, Rifle,                           // sandbox only
     COUNT
 };
@@ -97,7 +98,13 @@ struct ExitDoor {
 
 // Furniture and doorway pieces inside a room (Level 5 guest rooms). Boxes are axis aligned,
 // in world metres. `solid` pieces collide.
-enum class FurnKind : uint8_t { WallPiece, Lintel, DoorLeaf, Bed, Headboard, Nightstand, Lamp, Dresser, Wardrobe, Painting, Rug };
+enum class FurnKind : uint8_t {
+    WallPiece, Lintel, DoorLeaf, Bed, Headboard, Nightstand, Lamp, Dresser, Wardrobe, Painting, Rug,
+    // props scattered through every level
+    Chair, Table, RoundTable, Cabinet, Boxes, Barrel, Cone, Bench, Plant, Shelf, Bin, Locker, Pallet, Rubble,
+    Tree, Mattress, Lantern, Counter, Car, Mailbox, FireBarrel,
+    Couch, Tv, Fridge, Scarecrow,
+};
 struct Furn {
     FurnKind kind;
     float x0, z0, x1, z1, y0, y1;
@@ -135,7 +142,9 @@ public:
     // `owner` is true for the one cell that should draw it.
     int furniture(int cx, int cz, Furn* out, bool* owner = nullptr) const;
     bool guest_room(int cx, int cz) const;   // Level 5: this cell is inside an enterable room
-    bool hotel() const { return id_ == LevelId::L5 || id_ == LevelId::TSGMansion; } // levels with guest rooms
+    bool hotel() const { return id_ == LevelId::L5 || id_ == LevelId::TSGMansion || id_ == LevelId::L13; } // levels with rooms off the corridors
+    bool crop(int cx, int cz) const;         // Level 10: wheat stands in this cell
+    bool camp(int cx, int cz, int& ccx, int& ccz) const; // a wanderers' camp around (ccx, ccz) covers this cell
     bool water(int cx, int cz) const { return id_ == LevelId::L7 && floor_mat(cx, cz) == 1; } // wading: slow
     bool greyscale() const { return id_ == LevelId::TSG || id_ == LevelId::TSGBlack || id_ == LevelId::TSGMansion || id_ == LevelId::TSGHope; }
 
@@ -173,6 +182,10 @@ private:
     bool hotel_room(int cx, int cz, Room& r) const;
     int hotel_block(int bx, int bz) const;   // 0 solid, 1 ballroom, 2 guest rooms
     bool hotel_wall(int line, int along, bool vertical) const;
+    int cell_props(int cx, int cz, Furn* out) const;
+    bool door_room(int cx, int cz, int& bx, int& bz, bool& north) const; // Level 21: this cell is inside a room behind a door
+    bool door_room_block(int bx, int bz, bool& north) const;
+    bool door_room_wall(int line, int along, bool vertical) const;
 };
 
 } // namespace iris

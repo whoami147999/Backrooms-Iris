@@ -18,7 +18,7 @@ using namespace iris;
 static void usage() {
     std::printf(
         "Backrooms Iris %s\n\n"
-        "  --level N           jump straight into level N (0 1 2 4 5 6 7 8 9 11 19 21 22 24 33 36 37 51 fun ! grey black mansion hope)\n"
+        "  --level N           jump straight into level N (0 1 2 3 4 5 6 7 8 9 10 11 13 19 21 22 24 33 36 37 51 fun ! grey black mansion hope)\n"
         "  --sandbox           ...in sandbox mode\n"
         "  --seed N            world seed for --level\n"
         "  --host              host a multiplayer game right away\n"
@@ -70,6 +70,8 @@ int main(int argc, char** argv) {
         else if (a == "--camcorder") dev.camcorder = 1;
         else if (a == "--nofilm") dev.film = 0;
         else if (a == "--noretro") dev.retro = 0;
+        else if (a == "--nv") dev.nv = true;
+        else if (a == "--at-camp") dev.at_camp = true;
         else if (a == "--at-exit") dev.at_exit = (float)std::atof(next());
         else if (a == "--nohud") dev.hud = false;
         else { std::fprintf(stderr, "unknown option %s (try --help)\n", a.c_str()); return 2; }

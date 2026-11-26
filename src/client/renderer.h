@@ -43,6 +43,15 @@ struct FilmParams {
     float dither = 0;             // retro: colour levels per channel with ordered dithering (0 = off)
 };
 
+// What's in your hands, for the first-person view model.
+struct ViewModel {
+    ItemType item = ItemType::None;
+    bool light_on = false;
+    float bob = 0, kick = 0, swing = 0;   // kick: 1 right after a shot, falling to 0; swing: 0..1 crowbar arc
+    float sway_x = 0, sway_y = 0;
+    float light = 1;
+};
+
 struct Camera {
     Vec3 eye;
     float yaw = 0, pitch = 0, roll = 0;
@@ -106,6 +115,8 @@ public:
                     const std::vector<Phantom>& phantoms);
     // Flashlight: brightens the middle of the screen (multiplicative, keeps the dark dark).
     void flashlight_overlay(float strength, float flicker);
+    void draw_viewmodel(const ViewModel& vm);
+    void night_vision(float time); // brighten everything a lot and turn it green
     // Full-screen distortion of what was just drawn. amount 0 = off.
     void post_warp(float wobble, float ghost, float time);
     // Film look over the finished 3D frame (PC with GLSL). Returns false if it couldn't run.

@@ -102,7 +102,8 @@ inline void write_player(Writer& w, const PlayerState& s) {
     w.f32(s.juice); w.f32(s.hurt); w.f32(s.swing); w.f32(s.battery);
     w.u8((uint8_t)std::min(255.0f, std::ceil(s.regen))); w.u8((uint8_t)std::min(255.0f, std::ceil(s.silent)));
     w.u8((uint8_t)std::min(255.0f, s.flash * 50.0f));
-    w.u8((uint8_t)((s.light_on ? 1 : 0) | (s.noclip ? 2 : 0) | (s.alive ? 4 : 0)));
+    w.u8((uint8_t)std::min(255.0f, std::ceil(s.painkill)));
+    w.u8((uint8_t)((s.light_on ? 1 : 0) | (s.noclip ? 2 : 0) | (s.alive ? 4 : 0) | (s.nv_on ? 8 : 0)));
     for (int i = 0; i < ITEM_COUNT; i++) w.u8(s.inv[i]);
     for (int i = 0; i < PERK_COUNT; i++) w.u8(s.perks[i]);
     w.u8((uint8_t)s.cause);
@@ -116,8 +117,9 @@ inline void read_player(Reader& r, PlayerState& s) {
     s.health = r.f32(); s.sanity = r.f32(); s.boost = r.f32(); s.slow = r.f32(); s.lucky = r.f32();
     s.juice = r.f32(); s.hurt = r.f32(); s.swing = r.f32(); s.battery = r.f32();
     s.regen = r.u8(); s.silent = r.u8(); s.flash = r.u8() / 50.0f;
+    s.painkill = r.u8();
     uint8_t f = r.u8();
-    s.light_on = f & 1; s.noclip = (f & 2) != 0; s.alive = (f & 4) != 0;
+    s.light_on = f & 1; s.noclip = (f & 2) != 0; s.alive = (f & 4) != 0; s.nv_on = (f & 8) != 0;
     for (int i = 0; i < ITEM_COUNT; i++) s.inv[i] = r.u8();
     for (int i = 0; i < PERK_COUNT; i++) s.perks[i] = r.u8();
     s.cause = (DeathCause)r.u8();

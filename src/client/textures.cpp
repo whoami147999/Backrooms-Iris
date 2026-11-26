@@ -328,53 +328,128 @@ Image guest_carpet(int N) {
     });
 }
 
-// Furniture atlas, four quadrants (u, v from the top left):
-//   [0.0-0.5, 0.0-0.5] dark wood           [0.5-1.0, 0.0-0.5] bed sheets
-//   [0.0-0.5, 0.5-1.0] red velvet          [0.5-1.0, 0.5-0.75] drawer fronts, [0.75-1.0] painting
+// Furniture / props atlas: 4x4 cells (see FurnTex in textures.h).
 Image furniture_atlas(int N) {
-    const int Q = N / 2;
+    const int C = N / 4;
     Image im(N, N);
     for (int y = 0; y < N; y++)
         for (int x = 0; x < N; x++) {
-            float u = (float)(x % Q) / Q, v = (float)(y % Q) / Q;
-            int qx = x / Q, qy = y / Q;
-            float r, g, b;
-            if (qx == 0 && qy == 0) { // wood
-                float ring = vnoise(u * 3, v * 40, 3, 40, 1181);
-                float gr = std::sin((u * 18 + ring * 3.0f) * 2 * PI) * 0.04f + (ring - 0.5f) * 0.10f;
-                float l = 0.30f + gr + grain(x, y, 1182) * 0.03f;
-                r = l * 0.95f; g = l * 0.58f; b = l * 0.34f;
-            } else if (qx == 1 && qy == 0) { // sheets: off-white, rumpled, a few stains
-                float fold = std::sin((u * 3 + vnoise(u * 4, v * 4, 4, 4, 1183) * 1.5f) * 2 * PI) * 0.05f;
-                float stain = std::max(0.0f, fbm(u, v, 3, 3, 4, 1184) - 0.66f) * 1.2f;
-                float l = 0.80f + fold + grain(x, y, 1185) * 0.03f;
-                r = l * 0.97f - stain * 0.2f; g = l * 0.93f - stain * 0.3f; b = l * 0.82f - stain * 0.5f;
-            } else if (qx == 0 && qy == 1) { // velvet: deep red with a soft diamond tuft pattern
-                float px = std::fmod(u * 6, 1.0f) - 0.5f, py = std::fmod(v * 6, 1.0f) - 0.5f;
-                float tuft = std::fabs(px) + std::fabs(py) < 0.08f ? -0.12f : 0.0f;
-                float sheen = (vnoise(u * 8, v * 8, 8, 8, 1186) - 0.5f) * 0.12f;
-                float l = 0.9f + tuft + sheen + grain(x, y, 1187) * 0.05f;
-                r = 0.42f * l; g = 0.08f * l; b = 0.09f * l;
-            } else if (v < 0.5f) { // drawer fronts: two rows of drawers, brass pulls
-                float dv = v * 2.0f;
-                float gap = (std::fabs(dv - 0.5f) < 0.025f || dv < 0.03f || dv > 0.97f || u < 0.02f || u > 0.98f) ? -0.14f : 0.0f;
-                float ring = vnoise(u * 30, dv * 3, 30, 3, 1188);
-                float l = 0.32f + (ring - 0.5f) * 0.08f + gap + grain(x, y, 1189) * 0.03f;
-                r = l * 0.95f; g = l * 0.58f; b = l * 0.34f;
-                float kx = std::fabs(u - 0.5f), ky = std::min(std::fabs(dv - 0.25f), std::fabs(dv - 0.75f));
-                if (kx < 0.08f && ky < 0.035f) { r = 0.75f; g = 0.6f; b = 0.3f; }
-            } else { // a dark, muddy painting of a hallway in a gold frame
-                float pv = (v - 0.5f) * 2.0f;
-                bool frame = u < 0.07f || u > 0.93f || pv < 0.1f || pv > 0.9f;
-                if (frame) {
-                    float l = 0.55f + (vnoise(u * 20, pv * 20, 20, 20, 1190) - 0.5f) * 0.3f;
-                    r = l; g = l * 0.78f; b = l * 0.35f;
-                } else {
-                    float cx = std::fabs(u - 0.5f), horizon = std::fabs(pv - 0.55f);
-                    float hall = (cx < 0.08f + horizon * 0.5f) ? 0.10f : 0.0f; // a corridor vanishing into the dark
-                    float l = 0.12f + hall + (fbm(u, pv, 4, 4, 3, 1191) - 0.5f) * 0.1f;
-                    r = l * 1.2f; g = l * 1.0f; b = l * 0.6f;
+            float u = (float)(x % C) / C, v = (float)(y % C) / C;
+            int k = (y / C) * 4 + x / C;
+            float r = 0.5f, g = 0.5f, b = 0.5f;
+            float gn = grain(x, y, 1180 + (uint32_t)k);
+            switch (k) {
+                case FT_WOOD: {
+                    float ring = vnoise(u * 3, v * 40, 3, 40, 1181);
+                    float gr = std::sin((u * 18 + ring * 3.0f) * 2 * PI) * 0.04f + (ring - 0.5f) * 0.10f;
+                    float l = 0.30f + gr + gn * 0.03f;
+                    r = l * 0.95f; g = l * 0.58f; b = l * 0.34f;
+                    break;
                 }
+                case FT_SHEET: {
+                    float fold = std::sin((u * 3 + vnoise(u * 4, v * 4, 4, 4, 1183) * 1.5f) * 2 * PI) * 0.05f;
+                    float stain = std::max(0.0f, fbm(u, v, 3, 3, 4, 1184) - 0.66f) * 1.2f;
+                    float l = 0.80f + fold + gn * 0.03f;
+                    r = l * 0.97f - stain * 0.2f; g = l * 0.93f - stain * 0.3f; b = l * 0.82f - stain * 0.5f;
+                    break;
+                }
+                case FT_VELVET: {
+                    float px = std::fmod(u * 6, 1.0f) - 0.5f, py = std::fmod(v * 6, 1.0f) - 0.5f;
+                    float tuft = std::fabs(px) + std::fabs(py) < 0.08f ? -0.12f : 0.0f;
+                    float l = 0.9f + tuft + (vnoise(u * 8, v * 8, 8, 8, 1186) - 0.5f) * 0.12f + gn * 0.05f;
+                    r = 0.42f * l; g = 0.08f * l; b = 0.09f * l;
+                    break;
+                }
+                case FT_DRAWER: {
+                    float gap = (std::fabs(v - 0.5f) < 0.025f || v < 0.03f || v > 0.97f || u < 0.02f || u > 0.98f) ? -0.14f : 0.0f;
+                    float l = 0.32f + (vnoise(u * 30, v * 3, 30, 3, 1188) - 0.5f) * 0.08f + gap + gn * 0.03f;
+                    r = l * 0.95f; g = l * 0.58f; b = l * 0.34f;
+                    float kx = std::fabs(u - 0.5f), ky = std::min(std::fabs(v - 0.25f), std::fabs(v - 0.75f));
+                    if (kx < 0.08f && ky < 0.035f) { r = 0.75f; g = 0.6f; b = 0.3f; }
+                    break;
+                }
+                case FT_PAINTING: {
+                    bool frame = u < 0.07f || u > 0.93f || v < 0.08f || v > 0.92f;
+                    if (frame) { float l = 0.55f + (vnoise(u * 20, v * 20, 20, 20, 1190) - 0.5f) * 0.3f; r = l; g = l * 0.78f; b = l * 0.35f; }
+                    else {
+                        float cx = std::fabs(u - 0.5f), horizon = std::fabs(v - 0.55f);
+                        float hall = (cx < 0.08f + horizon * 0.5f) ? 0.10f : 0.0f;
+                        float l = 0.12f + hall + (fbm(u, v, 4, 4, 3, 1191) - 0.5f) * 0.1f;
+                        r = l * 1.2f; g = l; b = l * 0.6f;
+                    }
+                    break;
+                }
+                case FT_METAL: {
+                    float l = 0.55f + (vnoise(u * 2, v * 60, 2, 60, 1192) - 0.5f) * 0.10f + gn * 0.03f;
+                    float scratch = vnoise(u * 40, v * 3, 40, 3, 1193) > 0.8f ? 0.08f : 0.0f;
+                    r = l + scratch; g = l * 1.01f + scratch; b = l * 1.04f + scratch;
+                    break;
+                }
+                case FT_LOCKER: {
+                    float l = 0.42f + gn * 0.03f + (fbm(u, v, 3, 3, 3, 1194) - 0.5f) * 0.06f;
+                    bool slot = v < 0.2f && std::fmod(v * 40, 1.0f) < 0.4f && std::fabs(u - 0.5f) < 0.3f;
+                    bool seam = std::fabs(u - 0.5f) < 0.01f;
+                    if (slot || seam) l *= 0.4f;
+                    r = l * 0.55f; g = l * 0.75f; b = l * 0.62f;
+                    break;
+                }
+                case FT_CARDBOARD: {
+                    float corr = std::sin(v * 120) * 0.02f;
+                    bool tape = std::fabs(u - 0.5f) < 0.06f;
+                    float l = 0.62f + corr + gn * 0.04f;
+                    r = l * 0.85f; g = l * 0.65f; b = l * 0.42f;
+                    if (tape) { r = 0.78f; g = 0.7f; b = 0.55f; }
+                    break;
+                }
+                case FT_PLASTIC: { // traffic-cone orange with a white band
+                    bool band = v > 0.35f && v < 0.55f;
+                    float l = 0.95f + gn * 0.03f;
+                    if (band) { r = g = b = 0.9f * l; } else { r = 0.95f * l; g = 0.42f * l; b = 0.1f * l; }
+                    break;
+                }
+                case FT_LEAVES: {
+                    float n = fbm(u, v, 8, 8, 4, 1195);
+                    float l = 0.25f + n * 0.35f + gn * 0.06f;
+                    r = l * 0.45f; g = l * 0.85f; b = l * 0.3f;
+                    break;
+                }
+                case FT_BARK: {
+                    float strip = vnoise(u * 10, v * 2, 10, 2, 1196);
+                    float l = 0.26f + (strip - 0.5f) * 0.18f + gn * 0.05f;
+                    r = l * 0.85f; g = l * 0.68f; b = l * 0.5f;
+                    break;
+                }
+                case FT_RUST: {
+                    float n = fbm(u, v, 5, 5, 4, 1197);
+                    float l = 0.3f + gn * 0.06f;
+                    r = l * (0.9f + n * 0.6f); g = l * (0.6f + n * 0.2f); b = l * 0.45f;
+                    break;
+                }
+                case FT_FABRIC: { // blue upholstery
+                    float weave = ((x + y) % 3 == 0) ? -0.04f : 0.0f;
+                    float l = 0.75f + weave + gn * 0.06f;
+                    r = 0.18f * l; g = 0.25f * l; b = 0.55f * l;
+                    break;
+                }
+                case FT_STONE: {
+                    float n = fbm(u, v, 4, 4, 4, 1198);
+                    float l = 0.5f + (n - 0.5f) * 0.25f + gn * 0.05f;
+                    r = l * 0.95f; g = l * 0.88f; b = l * 0.74f;
+                    break;
+                }
+                case FT_GLOW: { // lamp shades, lanterns, screens: near-white, brighter in the middle
+                    float d = std::sqrt((u - 0.5f) * (u - 0.5f) + (v - 0.5f) * (v - 0.5f));
+                    float l = 0.95f - d * 0.3f;
+                    r = l; g = l * 0.92f; b = l * 0.75f;
+                    break;
+                }
+                case FT_RUBBER: { // black rubber / tyres / bin plastic, with tread
+                    float tread = std::fmod(v * 12, 1.0f) < 0.2f ? -0.05f : 0.0f;
+                    float l = 0.12f + tread + gn * 0.03f;
+                    r = g = l; b = l * 1.05f;
+                    break;
+                }
+                default: break;
             }
             im.set(x, y, r, g, b);
         }
@@ -557,6 +632,101 @@ Image numbered_doors(int N) {
         im.text((x0 + x1) / 2 - 8 * sc, y0 + 7 * sc, sc, NUM[k], 0.1f, 0.1f, 0.1f);
     }
     return im;
+}
+
+// Level 3: machinery panels (rivets, dials, warning stripes)
+Image machine_panel(int N) {
+    Image im = paint(N / 2, N, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
+        bool seam = (x % (N / 4) < 2) || (y % (N / 4) < 2);
+        bool rivet = (x % (N / 4) - N / 32) * (x % (N / 4) - N / 32) + (y % (N / 4) - N / 32) * (y % (N / 4) - N / 32) < 4;
+        float l = 0.36f + (fbm(u, v, 3, 6, 4, 3001) - 0.5f) * 0.1f + grain(x, y, 3002) * 0.03f - (seam ? 0.1f : 0) + (rivet ? 0.1f : 0);
+        r = l * 0.9f; g = l * 0.95f; b = l;
+        if (v > 0.9f) { bool yb = ((x + y) / (N / 24)) & 1; if (yb) { r = 0.8f; g = 0.65f; b = 0.1f; } else { r = g = b = 0.07f; } }
+    });
+    // a control panel with dials and lamps
+    int px0 = N / 8, px1 = N * 3 / 8, py0 = N * 30 / 100, py1 = N * 50 / 100;
+    im.rect(px0, py0, px1, py1, 0.15f, 0.17f, 0.16f);
+    for (int k = 0; k < 3; k++) {
+        float cx = px0 + (px1 - px0) * (0.2f + k * 0.3f), cy = py0 + (py1 - py0) * 0.35f;
+        im.disc(cx, cy, N / 40.0f, 0.85f, 0.85f, 0.8f, 1, 1);
+        im.line(cx, cy, cx + N / 70.0f, cy - N / 60.0f, 1.2f, 0.1f, 0.1f, 0.1f);
+        im.disc(px0 + (px1 - px0) * (0.2f + k * 0.3f), py0 + (py1 - py0) * 0.75f, N / 90.0f, k == 1 ? 1.0f : 0.2f, k == 1 ? 0.2f : 0.9f, 0.1f, 1, 1);
+    }
+    return im;
+}
+
+// Level 10: wheat (alpha), barn planks, dirt
+Image wheat(int N) {
+    Image im(N, N, 0);
+    Rng rng(1001);
+    for (int k = 0; k < N / 3; k++) {
+        float x = rng.range(2, N - 2.0f), top = rng.range(N * 0.02f, N * 0.3f), lean = rng.range(-N * 0.06f, N * 0.06f);
+        float t = rng.f01();
+        im.line(x, (float)N, x + lean, top, std::max(1.0f, N / 160.0f), 0.62f + t * 0.2f, 0.52f + t * 0.15f, 0.22f, 1);
+        im.disc(x + lean, top, std::max(1.5f, N / 70.0f), 0.85f, 0.72f, 0.35f, 1, 1); // the head of grain
+    }
+    return im;
+}
+Image dirt(int N) {
+    return paint(N, N, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
+        float n = fbm(u, v, 5, 5, 4, 1011);
+        float rut = std::fabs(std::sin(u * PI * 4)) < 0.15f ? -0.06f : 0.0f;
+        float l = 0.38f + (n - 0.5f) * 0.2f + rut + grain(x, y, 1012) * 0.06f;
+        r = l * 0.9f; g = l * 0.72f; b = l * 0.5f;
+    });
+}
+Image field_ground(int N) {
+    return paint(N, N, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
+        float n = fbm(u, v, 6, 6, 4, 1021);
+        float stub = hash01(1022, x / 2, y / 2, 1) < 0.15f ? 0.12f : 0.0f;
+        float l = 0.42f + (n - 0.5f) * 0.18f + stub + grain(x, y, 1023) * 0.05f;
+        r = l * 0.92f; g = l * 0.8f; b = l * 0.45f;
+    });
+}
+Image barn_planks(int N) {
+    return paint(N / 2, N, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
+        int P = N / 16;
+        float seam = (x % P < 2) ? -0.15f : 0.0f;
+        float gr = (vnoise(u * 16, v * 2, 16, 2, 1031 + (uint32_t)(x / P)) - 0.5f) * 0.15f;
+        float l = 0.85f + seam + gr + grain(x, y, 1032) * 0.04f - std::max(0.0f, fbm(u, v, 3, 6, 3, 1033) - 0.6f) * 0.5f;
+        r = g = b = l; // tinted per building (red barn, grey silo, straw)
+    });
+}
+
+// Level 13: apartment hallway wallpaper (faded stripes) and apartment doors
+Image apartment_wall(int N, bool with_door) {
+    const int W = N / 2, H = N;
+    Image im = paint(W, H, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
+        float stripe = ((x / (W / 10)) & 1) ? 0.04f : 0.0f;
+        float l = 0.78f + stripe + (fbm(u, v, 3, 6, 4, 1301) - 0.5f) * 0.1f + grain(x, y, 1302) * 0.02f;
+        float stain = std::max(0.0f, fbm(u, v, 3, 6, 4, 1303) - 0.62f) * 0.8f;
+        r = l * 0.92f - stain * 0.2f; g = l * 0.86f - stain * 0.25f; b = l * 0.66f - stain * 0.35f;
+        if (v > 0.93f) { r = 0.35f; g = 0.25f; b = 0.18f; }
+    });
+    if (with_door) {
+        int dx0 = W * 28 / 100, dx1 = W * 72 / 100, dy0 = H * 22 / 100;
+        for (int y = dy0; y < H; y++)
+            for (int x = dx0; x < dx1; x++) {
+                float uu = (float)(x - dx0) / (dx1 - dx0), vv = (float)(y - dy0) / (H - dy0);
+                bool panel = uu > 0.15f && uu < 0.85f && ((vv > 0.08f && vv < 0.46f) || (vv > 0.54f && vv < 0.92f));
+                float l = 0.55f + (panel ? 0.04f : 0.0f) + grain(x, y, 1304) * 0.03f;
+                im.set(x, y, l * 0.5f, l * 0.38f, l * 0.28f);
+            }
+        int sc = std::max(1, W / 256);
+        im.rect((dx0 + dx1) / 2 - 10 * sc, dy0 + 8 * sc, (dx0 + dx1) / 2 + 10 * sc, dy0 + 17 * sc, 0.8f, 0.7f, 0.35f);
+        im.text((dx0 + dx1) / 2 - 8 * sc, dy0 + 9 * sc, sc, "13C", 0.15f, 0.1f, 0.05f);
+    }
+    return im;
+}
+
+// the same institutional wall, without doors (Level 21 room walls)
+Image institution_wall(int N) {
+    return paint(N / 2, N, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
+        float l = 0.80f + (fbm(u, v, 4, 8, 3, 2101) - 0.5f) * 0.06f + grain(x, y, 2102) * 0.02f;
+        if (v > 0.9f) l = 0.42f;
+        if (v > 0.55f && v < 0.57f) l -= 0.18f;
+        r = l * 0.92f; g = l * 0.97f; b = l * 0.88f;
+    });
 }
 
 // ceiling tiles with air vents
@@ -868,17 +1038,34 @@ Image decal_atlas(int N) {
 }
 
 // ------------------------------------------------------------------ exit door
+// The exit door slab: painted steel (scuffed, a little dented), a wired-glass window, a kick
+// plate, a stencilled sign. The push bar, hinges and handle are real geometry.
 Image exit_door(int N) {
     const int W = N / 2, H = N;
     Image im = paint(W, H, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
-        bool frame = u < 0.06f || u > 0.94f || v < 0.03f;
-        float scratches = vnoise(u * 60, v * 4, 60, 4, 281) > 0.82f ? 0.06f : 0.0f;
-        float l = (frame ? 0.30f : 0.42f) + scratches + grain(x, y, 282) * 0.03f;
-        r = l * 0.80f; g = l * 0.88f; b = l * 0.82f;
+        float dent = (vnoise(u * 5, v * 9, 5, 9, 283) - 0.5f) * 0.08f;
+        float scuff = vnoise(u * 60, v * 4, 60, 4, 281) > 0.84f ? 0.07f : 0.0f;
+        float grime = std::max(0.0f, v - 0.7f) * 0.25f + std::max(0.0f, fbm(u, v, 3, 6, 4, 284) - 0.6f) * 0.4f;
+        float bevel = (u < 0.025f || u > 0.975f || v < 0.012f) ? -0.1f : 0.0f;
+        float l = 0.47f + dent + scuff - grime + bevel + grain(x, y, 282) * 0.025f;
+        r = l * 0.62f; g = l * 0.76f; b = l * 0.66f; // institutional green
+        if (v > 0.86f && v < 0.985f && u > 0.04f && u < 0.96f) { // kick plate
+            float pl = 0.55f + (vnoise(u * 40, v * 2, 40, 2, 285) - 0.5f) * 0.1f;
+            r = pl; g = pl; b = pl * 1.02f;
+        }
     });
-    im.rect(W * 12 / 100, H * 52 / 100, W * 88 / 100, H * 56 / 100, 0.75f, 0.75f, 0.72f); // push bar
-    im.rect(W * 30 / 100, H * 14 / 100, W * 70 / 100, H * 30 / 100, 0.08f, 0.1f, 0.1f);   // little window
-    im.rect(W * 32 / 100, H * 15 / 100, W * 68 / 100, H * 29 / 100, 0.02f, 0.03f, 0.03f);
+    // window: dark wired glass in a rubber gasket
+    int wx0 = W * 30 / 100, wx1 = W * 70 / 100, wy0 = H * 10 / 100, wy1 = H * 30 / 100;
+    im.rect(wx0 - 3, wy0 - 3, wx1 + 3, wy1 + 3, 0.08f, 0.08f, 0.08f);
+    for (int y = wy0; y < wy1; y++)
+        for (int x = wx0; x < wx1; x++) {
+            float gl = 0.08f + (float)(y - wy0) / (wy1 - wy0) * 0.05f + ((x - wx0) + (y - wy0) < (wx1 - wx0) / 3 ? 0.05f : 0.0f);
+            bool wire = ((x - wx0) % std::max(4, W / 40) == 0) || ((y - wy0) % std::max(4, W / 40) == 0);
+            im.set(x, y, wire ? gl + 0.12f : gl, wire ? gl + 0.12f : gl + 0.02f, wire ? gl + 0.12f : gl + 0.03f);
+        }
+    int sc = std::max(1, W / 120);
+    im.text(W / 2 - 25 * sc, H * 40 / 100, sc, "EMERGENCY", 0.85f, 0.85f, 0.8f);
+    im.text(W / 2 - 11 * sc, H * 40 / 100 + 10 * sc, sc, "EXIT", 0.85f, 0.85f, 0.8f);
     return im;
 }
 
@@ -1127,6 +1314,35 @@ void make_level_textures(LevelId level, int N, Image out[MAT_COUNT]) {
             out[MAT_LIGHT] = light_panel(N / 4, N / 8, 0.4f);
             out[MAT_PROP] = out[MAT_WALL];
             break;
+        case LevelId::L3:
+            out[MAT_BLOCK] = machine_panel(N);
+            out[MAT_ROOF] = metal(N / 2, 0.35f);
+            out[MAT_WALL] = out[MAT_BLOCK];
+            out[MAT_FLOOR] = concrete(N, N, 0.28f, 3011, false);
+            out[MAT_FLOOR2] = grate(N);
+            out[MAT_CEIL] = concrete(N / 2, N / 2, 0.2f, 3012, false);
+            out[MAT_LIGHT] = caged_bulb(N);
+            out[MAT_PROP] = rusty_pipe(N);
+            break;
+        case LevelId::L10:
+            out[MAT_FLOOR] = field_ground(N);
+            out[MAT_FLOOR2] = dirt(N);
+            out[MAT_BLOCK] = barn_planks(N);
+            out[MAT_ROOF] = shingles(N / 2);
+            out[MAT_PROP] = planks(N / 2, 0.4f, 0.8f, 0.62f, 0.42f, 1041);
+            out[MAT_WALL] = out[MAT_PROP];
+            out[MAT_CROP] = wheat(std::min(N, 512));
+            break;
+        case LevelId::L13:
+            out[MAT_WALL] = apartment_wall(N, false);
+            out[MAT_BLOCK] = apartment_wall(N, true);
+            out[MAT_FLOOR] = carpet(N);
+            out[MAT_FLOOR2] = parquet(N);
+            out[MAT_FLOOR3] = guest_carpet(N);
+            out[MAT_CEIL] = plaster(N / 2);
+            out[MAT_LIGHT] = light_panel(N / 8, N / 8, 1.0f);
+            out[MAT_PROP] = parquet(N / 4);
+            break;
         case LevelId::L7:
             out[MAT_WALL] = wallpaper(N);
             desaturate(out[MAT_WALL], 0.5f, 0.6f); // water-stained, mouldy
@@ -1148,7 +1364,7 @@ void make_level_textures(LevelId level, int N, Image out[MAT_COUNT]) {
             break;
         case LevelId::L21:
             out[MAT_BLOCK] = numbered_doors(N);
-            out[MAT_WALL] = out[MAT_BLOCK];
+            out[MAT_WALL] = institution_wall(N);
             out[MAT_FLOOR] = office_carpet(N);
             desaturate(out[MAT_FLOOR], 0.6f, 0.9f);
             out[MAT_CEIL] = vent_ceiling(N);
@@ -1245,8 +1461,9 @@ void make_level_textures(LevelId level, int N, Image out[MAT_COUNT]) {
         default: break;
     }
     // anything a level doesn't use still gets a valid texture
-    if (out[MAT_FURN].w == 0) out[MAT_FURN] = Image(4, 4, 0xff808080u); // only Level 5 has furniture
+    if (out[MAT_FURN].w == 0) out[MAT_FURN] = furniture_atlas(std::min(N, 512)); // props are everywhere now
     out[MAT_DECAL] = decal_atlas(std::min(N, 512));
+    if (out[MAT_CROP].w == 0) out[MAT_CROP] = Image(4, 4, 0); // (only Level 10 grows anything)
     for (int i = 0; i < MAT_COUNT; i++)
         if (out[i].w == 0) out[i] = out[MAT_FLOOR].w ? out[MAT_FLOOR] : Image(4, 4, 0xff808080u);
 }
@@ -1277,6 +1494,10 @@ Sprite item_sprite(ItemType t) {
         case ItemType::Pistol: return SPR_PISTOL;
         case ItemType::Shotgun: return SPR_SHOTGUN;
         case ItemType::Rifle: return SPR_RIFLE;
+        case ItemType::Batteries: return SPR_BATTERY;
+        case ItemType::NightVision: return SPR_NV;
+        case ItemType::Chalk: return SPR_CHALK;
+        case ItemType::Painkillers: return SPR_PILLS;
         default: return SPR_WHITE;
     }
 }
@@ -1618,6 +1839,44 @@ Image make_sprite(Sprite s) {
             im.rect(40, 32, 46, 44, 0.15f, 0.15f, 0.15f, 1);  // grip
             return im;
         }
+        case SPR_BATTERY: {
+            Image im(64, 64, 0);
+            for (int k = 0; k < 2; k++) {
+                int x0 = 16 + k * 18;
+                im.rect(x0, 18, x0 + 14, 54, 0.15f, 0.15f, 0.15f, 1);
+                im.rect(x0, 18, x0 + 14, 26, 0.85f, 0.6f, 0.15f, 1);
+                im.rect(x0 + 4, 14, x0 + 10, 18, 0.7f, 0.7f, 0.7f, 1);
+                im.rect(x0 + 2, 20, x0 + 4, 52, 1, 1, 1, 0.25f);
+            }
+            return im;
+        }
+        case SPR_NV: { // goggles with green lenses
+            Image im(64, 64, 0);
+            im.rect(10, 26, 54, 40, 0.15f, 0.16f, 0.15f, 1);
+            im.disc(21, 33, 8, 0.1f, 0.1f, 0.1f, 1, 1);
+            im.disc(43, 33, 8, 0.1f, 0.1f, 0.1f, 1, 1);
+            im.disc(21, 33, 5, 0.3f, 1.0f, 0.4f, 1, 1);
+            im.disc(43, 33, 5, 0.3f, 1.0f, 0.4f, 1, 1);
+            im.rect(4, 30, 10, 34, 0.1f, 0.1f, 0.1f, 1);
+            im.rect(54, 30, 60, 34, 0.1f, 0.1f, 0.1f, 1);
+            return im;
+        }
+        case SPR_CHALK: {
+            Image im(64, 64, 0);
+            im.line(16, 46, 48, 18, 7, 0.95f, 0.95f, 0.92f);
+            im.line(16, 46, 22, 41, 7, 0.75f, 0.75f, 0.72f);
+            im.line(6, 56, 20, 56, 2, 0.9f, 0.9f, 0.9f, 0.7f);
+            return im;
+        }
+        case SPR_PILLS: { // a pill bottle and two pills
+            Image im(64, 64, 0);
+            im.rect(20, 18, 40, 52, 0.9f, 0.55f, 0.1f, 0.95f);
+            im.rect(18, 12, 42, 19, 0.95f, 0.95f, 0.95f, 1);
+            im.rect(22, 28, 38, 40, 0.95f, 0.95f, 0.92f, 1);
+            im.disc(48, 50, 4, 1, 1, 1, 1, 1);
+            im.disc(54, 46, 4, 0.9f, 0.3f, 0.3f, 1, 1);
+            return im;
+        }
         case SPR_CONE: {
             Image im(64, 128, 0);
             for (int y = 0; y < 128; y++)
@@ -1643,6 +1902,15 @@ Image make_sprite(Sprite s) {
                     float band = 0.85f + 0.15f * std::sin(dy * 9 + vnoise(dx * 3, dy * 3, 4, 4, 77) * 3);
                     float l = (0.08f + lit * 0.92f) * band;
                     im.set(x, y, l, l, l, clampf((1 - d2) * 30, 0, 1));
+                }
+            return im;
+        }
+        case SPR_GRIT: {
+            Image im(64, 64, 0);
+            for (int y = 0; y < 64; y++)
+                for (int x = 0; x < 64; x++) {
+                    float n = 0.86f + hash01(611, x, y, 1) * 0.1f + (vnoise(x / 8.0f, y / 8.0f, 8, 8, 612) - 0.5f) * 0.1f;
+                    im.set(x, y, n, n, n, 1);
                 }
             return im;
         }

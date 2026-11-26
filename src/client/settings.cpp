@@ -31,19 +31,21 @@ void Settings::load(const std::string& path) {
         else if (k == "camcorder") camcorder = v == "1";
         else if (k == "atmosphere") atmosphere = v == "1";
         else if (k == "retro") retro = v == "1";
+        else if (k == "volume") volume = fv;
     }
     if (mouse_sens < 0.1f || mouse_sens > 5) mouse_sens = 1;
     if (stick_sens < 0.1f || stick_sens > 5) stick_sens = 1;
     if (fov < 50 || fov > 110) fov = 70;
     if (name.empty()) name = "WANDERER";
     if (difficulty < 0 || difficulty > 3) difficulty = 1;
+    if (volume < 0 || volume > 1) volume = 0.8f;
 }
 
 void Settings::save(const std::string& path) const {
     FILE* f = std::fopen(path.c_str(), "w");
     if (!f) return;
-    std::fprintf(f, "mouse_sens=%.2f\nstick_sens=%.2f\ninvert_y=%d\nfov=%.0f\nhead_bob=%d\nfullscreen=%d\nvsync=%d\nshow_fps=%d\nname=%s\nlast_ip=%s\nstart_level=%d\ndifficulty=%d\nfilm=%d\ncamcorder=%d\natmosphere=%d\nretro=%d\n",
-                 mouse_sens, stick_sens, invert_y, fov, head_bob, fullscreen, vsync, show_fps, name.c_str(), last_ip.c_str(), start_level, difficulty, film, camcorder, atmosphere, retro);
+    std::fprintf(f, "mouse_sens=%.2f\nstick_sens=%.2f\ninvert_y=%d\nfov=%.0f\nhead_bob=%d\nfullscreen=%d\nvsync=%d\nshow_fps=%d\nname=%s\nlast_ip=%s\nstart_level=%d\ndifficulty=%d\nfilm=%d\ncamcorder=%d\natmosphere=%d\nretro=%d\nvolume=%.2f\n",
+                 mouse_sens, stick_sens, invert_y, fov, head_bob, fullscreen, vsync, show_fps, name.c_str(), last_ip.c_str(), start_level, difficulty, film, camcorder, atmosphere, retro, volume);
     std::fclose(f);
 }
 

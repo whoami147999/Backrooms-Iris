@@ -9,6 +9,7 @@
 #include "../core/hash.h"
 #include "font.h"
 #include "gl.h"
+#include "models.h"
 
 #ifndef GL_TEXTURE_MAX_ANISOTROPY_EXT
 #define GL_TEXTURE_MAX_ANISOTROPY_EXT 0x84FE
@@ -80,7 +81,7 @@ bool Renderer::init(const RenderSettings& s) {
     s_ = s;
     for (int i = 0; i < SPR_COUNT; i++) {
         bool nearest = i == SPR_FONT || i == SPR_PARTY_FACE || i == SPR_EXIT_SIGN;
-        spr_[i] = upload_texture(make_sprite((Sprite)i), false, nearest, i == SPR_NOISE || i == SPR_SKIN);
+        spr_[i] = upload_texture(make_sprite((Sprite)i), false, nearest, i == SPR_NOISE || i == SPR_SKIN || i == SPR_GRIT);
     }
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
@@ -338,164 +339,137 @@ static void add_part(std::vector<Vertex>& out, const Part& p, Vec2 pos, float ya
 }
 
 void Renderer::draw_entity(const World& w, const DrawEntity& e, float time) {
-    float light = clampf(w.light_level({e.pos.x, 1.2f, e.pos.z}) * 0.75f + 0.10f, 0.08f, 0.95f);
-    float sw = std::sin(e.anim) * std::min(1.0f, e.speed / 2.0f);
+    float light = clampf(w.light_level({e.pos.x, 1.2f, e.pos.z}) * 0.75f + 0.12f, 0.08f, 0.95f);
+    float stride = std::min(1.0f, e.speed / 2.2f);
     float breathe = std::sin(time * 1.6f + e.id) * 0.012f;
-    std::vector<Part> parts;
+    const int seg = s_.mesh_detail >= 2 ? 10 : 6;
+    ModelBuilder m(dyn_, seg);
+    m.place(e.pos, e.yaw);
+    m.set_light(light, {0.35f, 0.85f, 0.45f});
+    bool stunned = e.state == EntState::Stunned;
+    if (stunned) m.push_pose({0, 0.12f, 0}, 0, 0, 1.35f); // knocked over onto its side
+    Vec2 f = yaw_forward(e.yaw);
     switch (e.type) {
         case EntityType::Bacteria: {
-            // 2.6 m of black, wet, thin limbs. Arms to its knees, long claws, spines down its back.
-            // Twitches when it notices you.
-            float tw = e.state == EntState::Notice ? (hash01(e.id, (int)(time * 30), 0, 1) - 0.5f) * 0.14f : 0.0f;
-            float k = 0.045f, k2 = 0.09f;
-            float lean = e.state == EntState::Chase ? 0.35f : 0.12f; // hunches forward when it runs
-            float arm = 2.05f;                                        // shoulder height (arm pivot)
-            parts = {
-                // legs: thigh-to-ankle sticks, knobbly knees, splayed feet
-                {-0.1f, 0.05f, 0, 0.065f, 1.3f, 0.065f, k, k, k, sw * 0.9f},
-                {0.1f, 0.05f, 0, 0.065f, 1.3f, 0.065f, k, k, k, -sw * 0.9f},
-                {-0.1f, 0.62f, 0.02f, 0.09f, 0.1f, 0.09f, k2, k2, k2, sw * 0.9f, 1.35f},
-                {0.1f, 0.62f, 0.02f, 0.09f, 0.1f, 0.09f, k2, k2, k2, -sw * 0.9f, 1.35f},
-                {-0.11f, 0, 0.07f, 0.08f, 0.06f, 0.2f, k, k, k, sw * 0.9f, 1.35f},
-                {0.11f, 0, 0.07f, 0.08f, 0.06f, 0.2f, k, k, k, -sw * 0.9f, 1.35f},
-                // pelvis, a thin torso with ribs showing, a long neck, a narrow head
-                {tw, 1.3f, 0, 0.26f, 0.14f, 0.12f, k, k, k, 0},
-                {tw, 1.42f, 0.03f, 0.22f, 0.62f, 0.13f, k, k, k, lean, 1.42f, 0.03f},
-                {tw, 1.62f, 0.1f, 0.24f, 0.03f, 0.02f, k2, k2, k2, lean, 1.42f, 0.03f},
-                {tw, 1.72f, 0.1f, 0.25f, 0.03f, 0.02f, k2, k2, k2, lean, 1.42f, 0.03f},
-                {tw, 1.82f, 0.1f, 0.25f, 0.03f, 0.02f, k2, k2, k2, lean, 1.42f, 0.03f},
-                {tw, 2.0f, 0.04f, 0.34f, 0.07f, 0.12f, k, k, k, lean, 1.42f, 0.03f},     // shoulders
-                {tw * 1.5f, 2.04f, 0.08f, 0.05f, 0.28f, 0.05f, k, k, k, lean + 0.2f, 1.42f, 0.03f},
-                {tw * 2, 2.28f, 0.14f, 0.15f, 0.36f, 0.17f, k * 1.3f, k * 1.3f, k * 1.3f, lean + 0.25f, 1.42f, 0.03f},
-                {tw * 2, 2.36f, 0.23f, 0.11f, 0.03f, 0.01f, 0.0f, 0.0f, 0.0f, lean + 0.25f, 1.42f, 0.03f}, // a slit of a mouth
-                // spines down its back
-                {tw, 1.95f, -0.05f, 0.03f, 0.14f, 0.03f, k, k, k, lean - 0.5f, 1.42f, 0.03f},
-                {tw, 1.78f, -0.05f, 0.03f, 0.16f, 0.03f, k, k, k, lean - 0.6f, 1.42f, 0.03f},
-                {tw, 1.6f, -0.05f, 0.03f, 0.13f, 0.03f, k, k, k, lean - 0.5f, 1.42f, 0.03f},
-                // arms down to the knees, each ending in three claws
-                {-0.21f + tw, 0.75f, 0.06f, 0.045f, 1.3f, 0.045f, k, k, k, -sw * 0.7f + lean, arm},
-                {0.21f + tw, 0.75f, 0.06f, 0.045f, 1.3f, 0.045f, k, k, k, sw * 0.7f + lean, arm},
-            };
-            for (int side = -1; side <= 1; side += 2)
-                for (int c = -1; c <= 1; c++)
-                    parts.push_back({side * 0.21f + c * 0.025f + tw, 0.45f, 0.08f, 0.012f, 0.32f, 0.012f, k2, k2, k2,
-                                     side * sw * 0.7f + lean, arm});
+            // 2.6 m of wet black limbs: arms to its knees, long claws, spines down its back
+            Humanoid h;
+            float tw = e.state == EntState::Notice ? (hash01(e.id, (int)(time * 30), 0, 1) - 0.5f) * 0.5f : 0.0f;
+            h.leg = 1.42f; h.torso = 0.72f; h.neck = 0.22f;
+            h.hip_w = 0.075f; h.shoulder_w = 0.16f;
+            h.upper_arm = 0.62f; h.forearm = 0.6f;
+            h.limb_r = 0.04f; h.arm_r = 0.026f;
+            h.chest = {0.13f, 0.17f, 0.08f}; h.belly = {0.08f, 0.15f, 0.065f}; h.head = {0.08f, 0.19f, 0.1f};
+            Rgb k{0.035f, 0.035f, 0.045f}, k2{0.07f, 0.07f, 0.09f};
+            h.skin = k; h.top = k; h.legs = k; h.feet = k2; h.hands = k2; h.has_hair = false;
+            h.phase = e.anim; h.stride = stride;
+            h.lean = e.state == EntState::Chase ? 0.38f : 0.1f + breathe;
+            h.arm_swing = 0.45f;
+            h.head_tilt = 0.25f + tw;
+            h.build(m);
+            for (int s2 = 0; s2 < 2; s2++) // three long claws per hand
+                for (int c = -1; c <= 1; c++) m.cone(h.hand[s2], h.hand[s2] + Vec3{c * 0.035f, -0.26f, 0.04f + std::fabs((float)c) * -0.02f}, 0.012f, k2);
+            for (int k3 = 0; k3 < 4; k3++) { // spines
+                Vec3 b = h.hip_c + Vec3{0, 0.28f + k3 * 0.16f, -0.05f - k3 * 0.02f + std::sin(h.lean) * (0.28f + k3 * 0.16f)};
+                m.cone(b, b + Vec3{0, 0.08f, -0.13f}, 0.02f, k2);
+            }
             break;
         }
         case EntityType::Hound: {
-            // a person on all fours: grey, starved, ribs showing, a mat of black hair over its head
-            // and back. The head comes up when it's staring you down.
-            float sk[3] = {0.52f, 0.5f, 0.47f}, dk[3] = {0.36f, 0.34f, 0.32f};
-            float head_up = e.state == EntState::Stare ? 0.2f : 0.0f;
-            float lunge = e.state == EntState::Chase ? 0.08f : 0.0f;
-            parts = {
-                {0, 0.5f + breathe, 0, 0.36f, 0.24f, 0.92f, sk[0], sk[1], sk[2], 0},              // body
-                {0, 0.48f, 0.38f, 0.42f, 0.2f, 0.22f, sk[0], sk[1], sk[2], 0},                    // shoulders
-                {0, 0.53f, -0.38f, 0.32f, 0.17f, 0.18f, dk[0], dk[1], dk[2], 0},                  // hips
-                // ribs (dark lines along the flanks)
-                {-0.185f, 0.56f, 0.12f, 0.01f, 0.13f, 0.03f, dk[0], dk[1], dk[2], 0},
-                {-0.185f, 0.56f, 0.0f, 0.01f, 0.13f, 0.03f, dk[0], dk[1], dk[2], 0},
-                {-0.185f, 0.56f, -0.12f, 0.01f, 0.13f, 0.03f, dk[0], dk[1], dk[2], 0},
-                {0.185f, 0.56f, 0.12f, 0.01f, 0.13f, 0.03f, dk[0], dk[1], dk[2], 0},
-                {0.185f, 0.56f, 0.0f, 0.01f, 0.13f, 0.03f, dk[0], dk[1], dk[2], 0},
-                {0.185f, 0.56f, -0.12f, 0.01f, 0.13f, 0.03f, dk[0], dk[1], dk[2], 0},
-                // long front arms with big hands, bent back legs with feet
-                {-0.18f, 0.05f, 0.42f + lunge, 0.08f, 0.5f, 0.08f, sk[0], sk[1], sk[2], sw},
-                {0.18f, 0.05f, 0.42f + lunge, 0.08f, 0.5f, 0.08f, sk[0], sk[1], sk[2], -sw},
-                {-0.18f, 0, 0.47f + lunge, 0.12f, 0.05f, 0.16f, sk[0], sk[1], sk[2], sw, 0.55f, 0.42f + lunge},
-                {0.18f, 0, 0.47f + lunge, 0.12f, 0.05f, 0.16f, sk[0], sk[1], sk[2], -sw, 0.55f, 0.42f + lunge},
-                {-0.15f, 0.05f, -0.4f, 0.09f, 0.5f, 0.1f, sk[0], sk[1], sk[2], -sw},
-                {0.15f, 0.05f, -0.4f, 0.09f, 0.5f, 0.1f, sk[0], sk[1], sk[2], sw},
-                {-0.15f, 0, -0.34f, 0.09f, 0.05f, 0.18f, dk[0], dk[1], dk[2], -sw, 0.55f, -0.4f},
-                {0.15f, 0, -0.34f, 0.09f, 0.05f, 0.18f, dk[0], dk[1], dk[2], sw, 0.55f, -0.4f},
-                // neck, head, a hanging jaw
-                {0, 0.55f + head_up * 0.5f, 0.55f, 0.13f, 0.14f, 0.16f, sk[0], sk[1], sk[2], 0},
-                {0, 0.55f + head_up, 0.66f, 0.24f, 0.24f, 0.26f, sk[0], sk[1], sk[2], 0},
-                {0, 0.5f + head_up, 0.72f, 0.18f, 0.06f, 0.18f, dk[0] * 0.6f, dk[1] * 0.5f, dk[2] * 0.5f, 0},
-                // hair: a black mat over the head and down the spine, strands hanging
-                {0, 0.74f + head_up, 0.62f, 0.3f, 0.1f, 0.34f, 0.025f, 0.025f, 0.025f, 0},
-                {0, 0.72f, 0.25f, 0.28f, 0.1f, 0.5f, 0.025f, 0.025f, 0.025f, 0},
-                {-0.15f, 0.5f + head_up, 0.62f, 0.03f, 0.28f, 0.2f, 0.025f, 0.025f, 0.025f, 0},
-                {0.15f, 0.5f + head_up, 0.62f, 0.03f, 0.28f, 0.2f, 0.025f, 0.025f, 0.025f, 0},
-                {-0.16f, 0.45f, 0.3f, 0.03f, 0.3f, 0.3f, 0.025f, 0.025f, 0.025f, 0},
-                {0.16f, 0.45f, 0.3f, 0.03f, 0.3f, 0.3f, 0.025f, 0.025f, 0.025f, 0},
-            };
+            // a person on all fours: grey, starved, ribs showing, black hair over its head and spine
+            Rgb sk{0.52f, 0.5f, 0.47f}, dk{0.36f, 0.34f, 0.32f}, hair{0.03f, 0.03f, 0.03f};
+            float head_up = e.state == EntState::Stare ? 0.18f : 0.0f;
+            float y0 = 0.55f + breathe;
+            m.ellipsoid({0, y0, 0.0f}, {0.16f, 0.13f, 0.4f}, sk);
+            m.ellipsoid({0, y0 + 0.03f, 0.2f}, {0.2f, 0.16f, 0.22f}, sk);           // ribcage
+            for (int r = 0; r < 3; r++) m.ellipsoid({0, y0 + 0.02f, 0.12f + r * 0.08f}, {0.205f, 0.15f, 0.012f}, dk, 0.7f); // ribs
+            m.ellipsoid({0, y0, -0.3f}, {0.15f, 0.13f, 0.16f}, sk);                // hips
+            for (int s2 = 0; s2 < 4; s2++) { // legs: two segments, front knees back, hind knees forward
+                bool front = s2 < 2;
+                float side = (s2 & 1) ? 1.0f : -1.0f;
+                float ph = e.anim + (s2 == 0 || s2 == 3 ? 0.0f : PI);
+                float th = std::sin(ph) * 0.5f * stride;
+                float bend = (front ? 1.0f : -1.0f) * (0.35f + std::max(0.0f, -std::cos(ph)) * 0.6f * stride);
+                Vec3 top{side * 0.15f, y0 - 0.02f, front ? 0.3f : -0.3f};
+                Vec3 knee = top + Vec3{0, -0.27f * std::cos(th - bend * 0.5f), 0.27f * std::sin(th - bend * 0.5f)};
+                Vec3 foot = knee + Vec3{0, -std::max(0.05f, knee.y - 0.04f), 0.27f * std::sin(th + bend * 0.5f) * 0.5f};
+                m.capsule(top, knee, 0.055f, 0.042f, sk);
+                m.capsule(knee, foot, 0.04f, 0.035f, sk);
+                m.ellipsoid(foot + Vec3{0, 0, 0.05f}, {0.05f, 0.025f, 0.08f}, dk, 0.6f);
+            }
+            Vec3 head{0, y0 + 0.08f + head_up, 0.62f};
+            m.capsule({0, y0 + 0.04f, 0.38f}, head + Vec3{0, -0.02f, -0.08f}, 0.07f, 0.065f, sk, false);
+            m.ellipsoid(head, {0.11f, 0.12f, 0.14f}, sk);
+            float jaw = e.state == EntState::Chase ? 0.06f : 0.02f;
+            m.ellipsoid(head + Vec3{0, -0.08f - jaw, 0.05f}, {0.08f, 0.035f, 0.1f}, dk, 0.7f);
+            m.ellipsoid(head + Vec3{0, 0.06f, -0.03f}, {0.13f, 0.09f, 0.15f}, hair, 0.8f);  // matted hair
+            m.ellipsoid({0, y0 + 0.13f, 0.05f}, {0.12f, 0.05f, 0.36f}, hair, 0.8f);
+            for (int st = 0; st < 6; st++) { // hanging strands
+                float sx = (st % 3 - 1) * 0.08f, sz = st < 3 ? 0.6f : 0.4f;
+                Vec3 a{sx, st < 3 ? head.y + 0.02f : y0 + 0.12f, sz};
+                m.capsule(a, a + Vec3{sx * 0.6f, -0.32f + std::sin(time * 2 + st) * 0.02f, 0.03f}, 0.018f, 0.008f, hair, false);
+            }
             break;
         }
         case EntityType::SkinStealer: {
-            // almost a person. The skin doesn't fit: patchy, stretched, raw at the seams. Arms too
-            // long, neck too long, holes where the eyes should be.
-            float sk[3] = {0.80f, 0.62f, 0.54f}, pale[3] = {0.88f, 0.78f, 0.7f}, raw[3] = {0.55f, 0.12f, 0.1f};
-            parts = {
-                {-0.12f, 0, 0, 0.12f, 1.0f, 0.12f, sk[0], sk[1], sk[2], sw * 0.8f},
-                {0.12f, 0, 0, 0.12f, 1.0f, 0.12f, pale[0], pale[1], pale[2], -sw * 0.8f},
-                {-0.12f, 0.35f, 0.062f, 0.08f, 0.12f, 0.005f, raw[0], raw[1], raw[2], sw * 0.8f, 1.0f},   // a raw patch on the shin
-                {0, 0.98f, 0, 0.4f, 0.24f, 0.22f, pale[0], pale[1], pale[2], 0},                          // hips
-                {0, 1.2f + breathe, 0, 0.44f, 0.55f, 0.22f, sk[0] * 0.92f, sk[1] * 0.86f, sk[2] * 0.86f, 0.08f, 1.2f},
-                {0.12f, 1.35f, 0.112f, 0.14f, 0.22f, 0.006f, pale[0], pale[1], pale[2], 0.08f, 1.2f},      // mismatched patch
-                {-0.1f, 1.25f, 0.113f, 0.03f, 0.4f, 0.006f, raw[0], raw[1], raw[2], 0.08f, 1.2f},          // a stitched seam
-                {-0.29f, 0.6f, 0, 0.08f, 1.15f, 0.08f, sk[0], sk[1], sk[2], -sw, 1.72f},                   // arms past the knees
-                {0.29f, 0.6f, 0, 0.08f, 1.15f, 0.08f, pale[0], pale[1], pale[2], sw, 1.72f},
-                {-0.29f, 0.47f, 0.01f, 0.1f, 0.14f, 0.06f, sk[0], sk[1], sk[2], -sw, 1.72f},               // hands
-                {0.29f, 0.47f, 0.01f, 0.1f, 0.14f, 0.06f, pale[0], pale[1], pale[2], sw, 1.72f},
-                {0, 1.73f, 0.01f, 0.1f, 0.2f, 0.1f, sk[0], sk[1], sk[2], 0},                               // a long neck
-                {0, 1.9f, 0.03f, 0.24f, 0.32f, 0.25f, pale[0], pale[1], pale[2], 0},                       // head
-                {-0.06f, 2.06f, 0.155f, 0.065f, 0.06f, 0.01f, 0.01f, 0.0f, 0.0f, 0},                       // empty eye holes
-                {0.06f, 2.06f, 0.155f, 0.065f, 0.06f, 0.01f, 0.01f, 0.0f, 0.0f, 0},
-                {0, 1.97f, 0.155f, 0.17f, 0.025f, 0.01f, raw[0] * 0.5f, raw[1] * 0.5f, raw[2] * 0.5f, 0},  // the mouth, too wide
-                {0, 2.17f, 0.0f, 0.26f, 0.06f, 0.27f, 0.12f, 0.08f, 0.06f, 0},                             // matted hair
-            };
+            // almost a person. The skin doesn't fit: patchy, stretched, raw at the seams
+            Humanoid h;
+            h.leg = 1.0f; h.torso = 0.62f; h.neck = 0.16f;
+            h.upper_arm = 0.42f; h.forearm = 0.44f; h.shoulder_w = 0.21f;
+            h.limb_r = 0.058f; h.arm_r = 0.042f;
+            h.head = {0.11f, 0.15f, 0.125f};
+            h.skin = {0.88f, 0.76f, 0.68f}; h.top = {0.80f, 0.6f, 0.52f}; h.legs = {0.86f, 0.74f, 0.66f};
+            h.feet = {0.6f, 0.45f, 0.4f}; h.hands = {0.85f, 0.7f, 0.62f}; h.hair = {0.12f, 0.08f, 0.06f};
+            h.phase = e.anim; h.stride = stride; h.lean = 0.18f + breathe;
+            h.arm_forward = e.state == EntState::Chase ? 0.5f : 0.05f;
+            h.head_tilt = 0.12f;
+            h.build(m);
+            Rgb raw{0.55f, 0.1f, 0.08f}, hole{0.02f, 0.0f, 0.0f};
+            m.push_pose(h.head_c, h.head_tilt);
+            for (int s2 = -1; s2 <= 1; s2 += 2) m.ellipsoid(h.head_c + Vec3{s2 * 0.045f, 0.025f, 0.1f}, {0.03f, 0.025f, 0.03f}, hole, 0.6f); // eye holes
+            m.ellipsoid(h.head_c + Vec3{0, -0.06f, 0.105f}, {0.065f, 0.012f, 0.025f}, hole, 0.6f);                      // a mouth too wide
+            m.pop_pose();
+            m.ellipsoid(h.chest_c + Vec3{-0.07f, 0.0f, 0.1f}, {0.06f, 0.11f, 0.03f}, raw, 0.6f); // where the skin is stitched on
+            m.ellipsoid(h.chest_c + Vec3{0.09f, -0.15f, 0.1f}, {0.05f, 0.05f, 0.025f}, raw, 0.6f);
+            m.ellipsoid((h.shoulder[1] + h.hand[1]) * 0.5f, {0.05f, 0.08f, 0.05f}, raw, 0.6f);
             break;
         }
         case EntityType::Partygoer: {
-            // =) a yellow party guest: round body, white gloves, a hat, a balloon (drawn below)
-            float y[3] = {0.94f, 0.8f, 0.2f}, y2[3] = {0.82f, 0.68f, 0.14f};
-            parts = {
-                {-0.12f, 0, 0, 0.14f, 0.82f, 0.14f, y[0], y[1], y[2], sw * 0.5f},
-                {0.12f, 0, 0, 0.14f, 0.82f, 0.14f, y[0], y[1], y[2], -sw * 0.5f},
-                {-0.12f, 0, 0.04f, 0.16f, 0.08f, 0.24f, 0.15f, 0.1f, 0.25f, sw * 0.5f, 0.82f},           // shoes
-                {0.12f, 0, 0.04f, 0.16f, 0.08f, 0.24f, 0.15f, 0.1f, 0.25f, -sw * 0.5f, 0.82f},
-                {0, 0.8f, 0, 0.46f, 0.66f + breathe, 0.28f, y[0], y[1], y[2], 0},
-                {0, 0.95f, 0.145f, 0.3f, 0.36f, 0.01f, y2[0], y2[1], y2[2], 0},                         // belly
-                {0, 1.44f, 0, 0.52f, 0.1f, 0.3f, y[0], y[1], y[2], 0},                                    // shoulders
-                {-0.3f, 0.66f, 0, 0.1f, 0.8f, 0.1f, y[0], y[1], y[2], -sw * 0.4f, 1.46f},
-                {0.3f, 0.66f, 0, 0.1f, 0.8f, 0.1f, y[0], y[1], y[2], sw * 0.4f - 0.3f, 1.46f},
-                {-0.3f, 0.56f, 0.01f, 0.13f, 0.13f, 0.13f, 0.95f, 0.95f, 0.92f, -sw * 0.4f, 1.46f},     // gloves
-                {0.3f, 0.56f, 0.01f, 0.13f, 0.13f, 0.13f, 0.95f, 0.95f, 0.92f, sw * 0.4f - 0.3f, 1.46f},
-                {0, 1.5f, 0, 0.36f, 0.36f, 0.32f, y[0], y[1], y[2], 0},
-                {0, 1.86f, 0, 0.2f, 0.06f, 0.2f, 0.85f, 0.15f, 0.2f, 0},                                 // party hat, stacked
-                {0, 1.92f, 0, 0.14f, 0.09f, 0.14f, 0.2f, 0.6f, 0.9f, 0},
-                {0, 2.01f, 0, 0.08f, 0.09f, 0.08f, 0.85f, 0.15f, 0.2f, 0},
-                {0, 2.1f, 0, 0.05f, 0.05f, 0.05f, 1.0f, 0.9f, 0.3f, 0},
-            };
+            // =) a round yellow party guest: white gloves, purple shoes, a party hat
+            Humanoid h;
+            h.leg = 0.78f; h.torso = 0.55f; h.neck = 0.04f;
+            h.hip_w = 0.13f; h.shoulder_w = 0.25f;
+            h.upper_arm = 0.3f; h.forearm = 0.28f;
+            h.limb_r = 0.075f; h.arm_r = 0.06f;
+            h.chest = {0.25f, 0.21f, 0.17f}; h.belly = {0.25f, 0.24f, 0.19f}; h.head = {0.19f, 0.19f, 0.17f};
+            Rgb y{0.95f, 0.8f, 0.2f};
+            h.skin = y; h.top = y; h.legs = y; h.feet = {0.25f, 0.12f, 0.35f}; h.hands = {0.96f, 0.96f, 0.93f}; h.has_hair = false;
+            h.phase = e.anim; h.stride = stride * 0.8f; h.arm_swing = 0.4f;
+            h.arm_forward = e.state == EntState::Chase ? 0.9f : 0.0f; // arms out for a hug
+            h.build(m);
+            Vec3 ht = h.head_c + Vec3{0, h.head.y * 0.85f, 0};
+            m.cone(ht, ht + Vec3{0.02f, 0.3f, 0}, 0.11f, {0.85f, 0.15f, 0.2f});
+            m.ellipsoid(ht + Vec3{0.02f, 0.31f, 0}, {0.03f, 0.03f, 0.03f}, {1, 0.9f, 0.3f}, 0.6f);
             break;
         }
         case EntityType::Smiler: break;
         default: break;
     }
-    if (e.state == EntState::Stunned) // knocked down: everything slumps toward the floor
-        for (Part& p : parts) { p.y *= 0.35f; p.h *= 0.55f; p.swing = 0.6f; p.pivot = -1; p.pz = -99; }
-    if (!parts.empty()) {
-        for (const Part& p : parts) add_part(dyn_, p, e.pos, e.yaw, light);
-        flush_dyn(spr_[SPR_WHITE]);
-    }
-    Vec2 f = yaw_forward(e.yaw);
-    if (e.type == EntityType::Partygoer) {
+    if (stunned) m.pop_pose();
+    if (!dyn_.empty()) flush_dyn(spr_[SPR_GRIT]);
+    if (e.type == EntityType::Partygoer && !stunned) {
         // the =) face, and a balloon on a string
         Vec2 r = yaw_right(e.yaw);
-        Vec3 c{e.pos.x + f.x * 0.165f, 1.68f, e.pos.z + f.z * 0.165f};
-        Vec3 rr{r.x * 0.17f, 0, r.z * 0.17f}, up{0, 0.17f, 0};
+        Vec3 c{e.pos.x + f.x * 0.18f, 1.62f, e.pos.z + f.z * 0.18f};
+        Vec3 rr{r.x * 0.15f, 0, r.z * 0.15f}, up{0, 0.15f, 0};
         uint32_t lc = rgba(light, light, light);
-        // the entity faces you, so its right is your left: wind the quad from its left
         push_quad(c + rr - up, c - rr - up, c - rr + up, c + rr + up, lc);
         flush_dyn(spr_[SPR_PARTY_FACE]);
-        Vec3 hand{e.pos.x + r.x * 0.3f, 1.0f, e.pos.z + r.z * 0.3f};
+        Vec3 hand{e.pos.x + r.x * 0.33f, 1.0f, e.pos.z + r.z * 0.33f};
         Vec3 bal{hand.x + std::sin(time * 1.3f + e.id) * 0.1f, 2.45f, hand.z};
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         billboard(bal, 0.38f, 0.46f, rgba(0.85f * light + 0.15f, 0.08f, 0.12f, 1));
         flush_dyn(spr_[SPR_BALLOON]);
-        // the string
         push_quad({hand.x - 0.005f, hand.y, hand.z}, {hand.x + 0.005f, hand.y, hand.z}, {bal.x + 0.005f, bal.y - 0.22f, bal.z}, {bal.x - 0.005f, bal.y - 0.22f, bal.z}, rgba(0.8f, 0.8f, 0.8f));
         flush_dyn(spr_[SPR_WHITE]);
         glDisable(GL_BLEND);
@@ -507,24 +481,22 @@ void Renderer::draw_entity(const World& w, const DrawEntity& e, float time) {
         Vec3 c{e.pos.x, 1.6f + std::sin(time * 1.7f + e.id) * 0.05f, e.pos.z};
         glDepthMask(GL_FALSE);
         glEnable(GL_BLEND);
-        billboard(c, size * 2.2f, size * 1.6f, rgba(1, 1, 0.9f, 0.06f * flick)); // a faint glow around it
+        billboard(c, size * 2.2f, size * 1.6f, rgba(1, 1, 0.9f, 0.06f * flick));
         flush_dyn(spr_[SPR_GLOW], true, false);
         billboard(c, size, size, rgba(1, 1, 1, 0.9f * flick));
         flush_dyn(spr_[SPR_SMILER], false, false);
         glDepthMask(GL_TRUE);
     } else if (e.type == EntityType::Hound && e.state == EntState::Stare) {
-        // eyes catch the light when it's staring back at you
         Vec2 r = yaw_right(e.yaw);
-        for (int s = -1; s <= 1; s += 2) {
-            Vec3 c{e.pos.x + f.x * 0.8f + r.x * 0.065f * s, 0.84f, e.pos.z + f.z * 0.8f + r.z * 0.065f * s};
-            billboard(c, 0.07f, 0.07f, rgba(1, 0.9f, 0.6f, 0.9f));
+        for (int s2 = -1; s2 <= 1; s2 += 2) {
+            Vec3 c{e.pos.x + f.x * 0.75f + r.x * 0.05f * s2, 0.66f + 0.18f, e.pos.z + f.z * 0.75f + r.z * 0.05f * s2};
+            billboard(c, 0.06f, 0.06f, rgba(1, 0.9f, 0.6f, 0.9f));
         }
         flush_dyn(spr_[SPR_GLOW], true, false);
     } else if (e.type == EntityType::Bacteria && e.state == EntState::Chase) {
-        // in the chase, two pin-pricks of light where its eyes would be
         Vec2 r = yaw_right(e.yaw);
-        for (int s = -1; s <= 1; s += 2) {
-            Vec3 c{e.pos.x + f.x * 0.4f + r.x * 0.04f * s, 2.38f, e.pos.z + f.z * 0.4f + r.z * 0.04f * s};
+        for (int s2 = -1; s2 <= 1; s2 += 2) {
+            Vec3 c{e.pos.x + f.x * 0.55f + r.x * 0.035f * s2, 2.45f, e.pos.z + f.z * 0.55f + r.z * 0.035f * s2};
             billboard(c, 0.05f, 0.05f, rgba(1, 1, 1, 0.8f));
         }
         flush_dyn(spr_[SPR_GLOW], true, false);
@@ -535,35 +507,137 @@ void Renderer::draw_player(const World& w, const DrawPlayer& p, float time) {
     static const float COLORS[4][3] = {{0.95f, 0.55f, 0.15f}, {0.2f, 0.75f, 0.7f}, {0.65f, 0.35f, 0.85f}, {0.45f, 0.8f, 0.3f}};
     const float* c = COLORS[p.id & 3];
     float light = clampf(w.light_level(p.pos + Vec3{0, 1.2f, 0}) * 0.75f + 0.15f, 0.12f, 0.95f);
-    if (!p.alive) light *= 0.4f;
-    float sw = std::sin(p.anim) * 0.6f;
-    float cr = p.crouch * 0.45f;
-    float down = p.alive ? 0.0f : 1.4f; // dead players lie on the floor
-    const float jeans[3] = {0.18f, 0.22f, 0.32f}, boot[3] = {0.12f, 0.1f, 0.09f}, skin[3] = {0.85f, 0.68f, 0.56f};
-    float sh = 1.43f - cr; // shoulder pivot
-    std::vector<Part> parts = {
-        {-0.11f, 0.06f, 0, 0.14f, 0.8f - cr, 0.15f, jeans[0], jeans[1], jeans[2], sw},
-        {0.11f, 0.06f, 0, 0.14f, 0.8f - cr, 0.15f, jeans[0], jeans[1], jeans[2], -sw},
-        {-0.11f, 0, 0.03f, 0.15f, 0.08f, 0.22f, boot[0], boot[1], boot[2], sw, 0.86f - cr},
-        {0.11f, 0, 0.03f, 0.15f, 0.08f, 0.22f, boot[0], boot[1], boot[2], -sw, 0.86f - cr},
-        {0, 0.84f - cr, 0, 0.44f, 0.62f, 0.26f, c[0], c[1], c[2], 0},                       // jacket
-        {0, 0.84f - cr, 0.132f, 0.03f, 0.55f, 0.005f, c[0] * 0.6f, c[1] * 0.6f, c[2] * 0.6f, 0}, // zip
-        {0, 0.95f - cr, -0.2f, 0.32f, 0.42f, 0.14f, 0.25f, 0.22f, 0.18f, 0},               // backpack
-        {-0.28f, 0.88f - cr, 0, 0.11f, 0.58f, 0.11f, c[0], c[1], c[2], -sw * 0.8f, sh},
-        {0.28f, 0.88f - cr, 0, 0.11f, 0.58f, 0.11f, c[0], c[1], c[2], sw * 0.8f, sh},
-        {-0.28f, 0.78f - cr, 0.01f, 0.1f, 0.11f, 0.1f, skin[0], skin[1], skin[2], -sw * 0.8f, sh},
-        {0.28f, 0.78f - cr, 0.01f, 0.1f, 0.11f, 0.1f, skin[0], skin[1], skin[2], sw * 0.8f, sh},
-        {0, 1.45f - cr, 0, 0.12f, 0.06f, 0.12f, skin[0], skin[1], skin[2], 0},               // neck
-        {0, 1.5f - cr, 0, 0.26f, 0.28f, 0.26f, skin[0], skin[1], skin[2], 0},                // head
-        {0, 1.74f - cr, -0.01f, 0.28f, 0.08f, 0.28f, 0.2f, 0.14f, 0.1f, 0},                  // hair
-        {-0.06f, 1.64f - cr, 0.131f, 0.04f, 0.035f, 0.005f, 0.1f, 0.1f, 0.12f, 0},           // eyes
-        {0.06f, 1.64f - cr, 0.131f, 0.04f, 0.035f, 0.005f, 0.1f, 0.1f, 0.12f, 0},
-    };
-    if (p.light_on) parts.push_back({0.28f, 0.7f - cr, 0.12f, 0.06f, 0.06f, 0.24f, 0.2f, 0.2f, 0.22f, 1.3f, sh, 0}); // flashlight raised
-    if (down > 0) for (auto& part : parts) { part.y *= 0.15f; part.h *= 0.4f; part.pivot = -1; part.pz = -99; part.swing = 0; }
-    for (const Part& part : parts) add_part(dyn_, part, {p.pos.x, p.pos.z}, p.yaw, light);
-    flush_dyn(spr_[SPR_WHITE]);
+    if (!p.alive) light *= 0.5f;
+    const int seg = s_.mesh_detail >= 2 ? 10 : 6;
+    ModelBuilder m(dyn_, seg);
+    m.place({p.pos.x, p.pos.z}, p.yaw);
+    m.set_light(light, {0.35f, 0.85f, 0.45f});
+    if (!p.alive) m.push_pose({0, 0.15f, 0}, -1.5f); // lying on the floor
+    Humanoid h;
+    h.top = {c[0], c[1], c[2]};
+    h.legs = {0.18f, 0.22f, 0.32f};
+    h.phase = p.anim;
+    h.stride = p.alive ? 0.8f : 0.0f;
+    h.crouch = p.crouch;
+    h.arm_forward = p.light_on ? 0.35f : 0.0f;
+    h.build(m);
+    // a backpack, and the flashlight in the right hand
+    m.push_pose(h.chest_c, h.lean);
+    m.box(h.chest_c + Vec3{0, -0.02f, -0.19f}, {0.15f, 0.2f, 0.08f}, {0.25f, 0.22f, 0.18f});
+    m.pop_pose();
+    if (p.light_on) m.tube(h.hand[1], h.hand[1] + Vec3{0, 0.02f, 0.2f}, 0.025f, {0.2f, 0.2f, 0.22f});
+    if (!p.alive) m.pop_pose();
+    flush_dyn(spr_[SPR_GRIT]);
     (void)time;
+}
+
+// =================================================================== first-person view models
+// Drawn in camera space after the world (own depth, own projection), lit by the light where you stand.
+void Renderer::draw_viewmodel(const ViewModel& vm) {
+    if (vm.item == ItemType::None) return;
+    bool gun = is_gun(vm.item);
+    if (!gun && vm.item != ItemType::Crowbar && !(vm.item == ItemType::Flashlight || vm.light_on)) return;
+    glClear(GL_DEPTH_BUFFER_BIT);
+    Mat4 proj = Mat4::perspective(54.0f * PI / 180.0f, (float)width / (float)height, 0.01f, 6.0f);
+    glMatrixMode(GL_PROJECTION);
+    glLoadMatrixf(proj.m);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    glDisable(GL_FOG);
+    glDisable(GL_CULL_FACE);
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_TEXTURE_2D);
+    glEnableClientState(GL_VERTEX_ARRAY);
+    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+    glEnableClientState(GL_COLOR_ARRAY);
+    const int seg = s_.mesh_detail >= 2 ? 12 : 7;
+    ModelBuilder m(dyn_, seg);
+    m.place_camera();
+    m.set_light(clampf(vm.light, 0.25f, 1.1f), {-0.35f, 0.8f, 0.5f});
+    const Rgb gunmetal{0.16f, 0.16f, 0.18f}, steel{0.42f, 0.43f, 0.46f}, wood{0.42f, 0.26f, 0.14f}, polymer{0.11f, 0.11f, 0.11f};
+    const Rgb skin{0.85f, 0.67f, 0.55f}, sleeve{0.24f, 0.26f, 0.3f}, red{0.6f, 0.08f, 0.07f}, olive{0.28f, 0.3f, 0.22f};
+    // hand position: lower right, bobbing with your steps, kicking back when you fire
+    float bx = 0.17f + vm.sway_x, by = -0.17f + std::sin(vm.bob) * 0.008f + vm.sway_y, bz = -0.42f + vm.kick * 0.06f;
+    Vec3 grip{bx, by, bz};
+    float pitch_kick = vm.kick * 0.18f;
+    if (gun) {
+        m.push_pose(grip, pitch_kick);
+        if (vm.item == ItemType::Pistol) {
+            m.box(grip + Vec3{0, 0.06f, -0.08f}, {0.017f, 0.025f, 0.11f}, gunmetal);              // slide
+            m.box(grip + Vec3{0, 0.085f, -0.17f}, {0.004f, 0.006f, 0.004f}, steel);              // front sight
+            m.box(grip + Vec3{0, 0.085f, 0.015f}, {0.012f, 0.006f, 0.004f}, steel);              // rear sight
+            m.box(grip + Vec3{0, 0.03f, -0.07f}, {0.015f, 0.012f, 0.09f}, polymer);              // frame
+            m.tube(grip + Vec3{0, 0.06f, -0.19f}, grip + Vec3{0, 0.06f, -0.2f}, 0.008f, steel);  // muzzle
+            m.push_pose(grip, -0.25f);
+            m.box(grip + Vec3{0, -0.02f, 0.005f}, {0.015f, 0.055f, 0.025f}, polymer);           // grip
+            m.pop_pose();
+            m.capsule(grip + Vec3{0, 0.01f, -0.035f}, grip + Vec3{0, -0.005f, -0.01f}, 0.006f, 0.006f, gunmetal); // trigger guard
+        } else if (vm.item == ItemType::Shotgun) {
+            m.tube(grip + Vec3{0, 0.065f, 0.0f}, grip + Vec3{0, 0.065f, -0.62f}, 0.017f, gunmetal);
+            m.tube(grip + Vec3{0, 0.035f, -0.05f}, grip + Vec3{0, 0.035f, -0.52f}, 0.014f, gunmetal); // magazine tube
+            m.box(grip + Vec3{0, 0.045f, 0.03f}, {0.022f, 0.035f, 0.08f}, gunmetal);                  // receiver
+            float pump = vm.kick > 0.3f ? 0.05f : 0.0f;
+            m.box(grip + Vec3{0, 0.03f, -0.28f + pump}, {0.024f, 0.022f, 0.08f}, wood);              // pump
+            m.push_pose(grip + Vec3{0, 0.03f, 0.1f}, 0.25f);
+            m.box(grip + Vec3{0, 0.0f, 0.2f}, {0.02f, 0.04f, 0.12f}, wood);                           // stock
+            m.pop_pose();
+            m.capsule(grip + Vec3{-0.02f, 0.0f, -0.28f}, grip + Vec3{-0.12f, -0.2f, -0.1f}, 0.022f, 0.035f, sleeve); // other hand on the pump
+            m.ellipsoid(grip + Vec3{-0.012f, 0.012f, -0.28f}, {0.03f, 0.03f, 0.045f}, skin, 0.8f);
+        } else { // rifle
+            m.box(grip + Vec3{0, 0.05f, -0.05f}, {0.02f, 0.035f, 0.12f}, olive);                     // receiver
+            m.box(grip + Vec3{0, 0.05f, -0.26f}, {0.022f, 0.028f, 0.1f}, polymer);                   // handguard
+            m.tube(grip + Vec3{0, 0.055f, -0.36f}, grip + Vec3{0, 0.055f, -0.55f}, 0.008f, gunmetal); // barrel
+            m.tube(grip + Vec3{0, 0.11f, 0.0f}, grip + Vec3{0, 0.11f, -0.16f}, 0.018f, polymer);     // scope
+            m.box(grip + Vec3{0, 0.09f, -0.08f}, {0.008f, 0.012f, 0.03f}, polymer);
+            m.push_pose(grip + Vec3{0, 0.02f, -0.07f}, 0.25f);
+            m.box(grip + Vec3{0, -0.04f, -0.07f}, {0.012f, 0.05f, 0.022f}, polymer);                 // magazine
+            m.pop_pose();
+            m.box(grip + Vec3{0, 0.04f, 0.15f}, {0.02f, 0.035f, 0.08f}, olive);                      // stock
+            m.capsule(grip + Vec3{-0.02f, 0.02f, -0.25f}, grip + Vec3{-0.12f, -0.2f, -0.1f}, 0.022f, 0.035f, sleeve);
+            m.ellipsoid(grip + Vec3{-0.012f, 0.025f, -0.25f}, {0.03f, 0.03f, 0.045f}, skin, 0.8f);
+        }
+        // your hand on the grip and the arm running out of frame
+        m.ellipsoid(grip + Vec3{0, -0.005f, 0.01f}, {0.03f, 0.035f, 0.045f}, skin, 0.8f);
+        m.capsule(grip + Vec3{0, -0.02f, 0.03f}, grip + Vec3{0.06f, -0.2f, 0.25f}, 0.03f, 0.042f, sleeve);
+        m.pop_pose();
+    } else if (vm.item == ItemType::Crowbar) {
+        float sw = vm.swing; // 0..1 through the swing arc
+        Vec3 cg = grip + Vec3{0.02f, -0.04f, 0.02f};
+        m.push_pose(cg, -0.9f + std::sin(sw * PI) * 1.7f, std::sin(sw * PI) * 0.7f, -0.25f);
+        Vec3 g2 = cg;
+        Vec3 a = g2 + Vec3{0, -0.04f, 0.03f}, b = g2 + Vec3{0, 0.24f, -0.06f};
+        (void)grip;
+        m.tube(a, b, 0.012f, red);
+        m.tube(b, b + Vec3{0.0f, 0.04f, -0.06f}, 0.011f, red);                 // the hook
+        m.tube(b + Vec3{0.0f, 0.04f, -0.06f}, b + Vec3{0.0f, 0.0f, -0.09f}, 0.01f, steel);
+        m.tube(a, a + Vec3{0, -0.03f, 0.03f}, 0.011f, steel);                   // the flat end
+        m.ellipsoid(g2, {0.03f, 0.035f, 0.045f}, skin, 0.8f);
+        m.capsule(g2 + Vec3{0, -0.02f, 0.03f}, g2 + Vec3{0.06f, -0.2f, 0.25f}, 0.03f, 0.042f, sleeve);
+        m.pop_pose();
+    } else { // flashlight
+        Vec3 g = grip + Vec3{0.02f, 0.03f, 0};
+        m.tube(g + Vec3{0, 0, 0.08f}, g + Vec3{0, 0, -0.1f}, 0.019f, {0.13f, 0.13f, 0.14f});
+        m.capsule(g + Vec3{0, 0, -0.1f}, g + Vec3{0, 0, -0.15f}, 0.022f, 0.03f, {0.2f, 0.2f, 0.22f}, false);
+        m.tube(g + Vec3{0, 0, -0.15f}, g + Vec3{0, 0, -0.152f}, 0.029f, vm.light_on ? Rgb{2.0f, 2.0f, 1.8f} : Rgb{0.4f, 0.4f, 0.4f});
+        m.ellipsoid(g + Vec3{0, -0.01f, 0}, {0.03f, 0.035f, 0.05f}, skin, 0.8f);
+        m.capsule(g + Vec3{0, -0.02f, 0.03f}, g + Vec3{0.06f, -0.2f, 0.25f}, 0.03f, 0.042f, sleeve);
+    }
+    flush_dyn(spr_[SPR_GRIT]);
+    if (gun && vm.kick > 0.6f) { // muzzle flash
+        float z = vm.item == ItemType::Pistol ? -0.63f : (vm.item == ItemType::Shotgun ? -1.05f : -0.98f);
+        Vec3 c{bx, by + 0.06f, z + 0.42f + bz};
+        glEnable(GL_BLEND);
+        glDepthMask(GL_FALSE);
+        float sz = vm.item == ItemType::Shotgun ? 0.16f : 0.1f;
+        push_quad(c + Vec3{-sz, -sz, 0}, c + Vec3{sz, -sz, 0}, c + Vec3{sz, sz, 0}, c + Vec3{-sz, sz, 0}, rgba(1, 0.75f, 0.35f, 1));
+        flush_dyn(spr_[SPR_GLOW], true, false);
+        glDepthMask(GL_TRUE);
+        glDisable(GL_BLEND);
+    }
+    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+    glDisableClientState(GL_COLOR_ARRAY);
+    glDisableClientState(GL_VERTEX_ARRAY);
+    glEnable(GL_CULL_FACE);
 }
 
 // =================================================================== frame
@@ -632,7 +706,7 @@ void Renderer::draw_world(const World& w, const Camera& cam, float time, float f
     glEnableClientState(GL_COLOR_ARRAY);
 
     // ----- night sky (outdoor levels): stars, and on the moon, the planets
-    if (li.outdoor && li.ambient[0] < 0.8f) {
+    if (w.id() == LevelId::L7 || w.id() == LevelId::L9 || w.id() == LevelId::L24) { // night skies
         glDepthMask(GL_FALSE);
         glEnable(GL_BLEND);
         const float R = far_z * 0.85f;
@@ -683,7 +757,8 @@ void Renderer::draw_world(const World& w, const Camera& cam, float time, float f
         glBindTexture(GL_TEXTURE_2D, tex_[mat]);
         bool emissive = mat == MAT_LIGHT;
         if (emissive) glFogf(GL_FOG_DENSITY, fog_density_ * 0.45f); // lights cut through the haze a bit
-        if (mat == MAT_DECAL) { glEnable(GL_ALPHA_TEST); glAlphaFunc(GL_GREATER, 0.5f); } // hard-edged details
+        if (mat == MAT_DECAL || mat == MAT_CROP) { glEnable(GL_ALPHA_TEST); glAlphaFunc(GL_GREATER, 0.5f); } // hard-edged details
+        if (mat == MAT_CROP) glDisable(GL_CULL_FACE); // wheat is seen from both sides
         for (const GpuChunk* g : visible) {
             if (!g->count[mat]) continue;
             glBindBuffer(GL_ARRAY_BUFFER, g->vbo);
@@ -693,7 +768,8 @@ void Renderer::draw_world(const World& w, const Camera& cam, float time, float f
                            (const void*)(uintptr_t)(g->first[mat] * sizeof(uint16_t)));
         }
         if (emissive) glFogf(GL_FOG_DENSITY, fog_density_);
-        if (mat == MAT_DECAL) { glDisable(GL_ALPHA_TEST); glAlphaFunc(GL_GREATER, 0.02f); }
+        if (mat == MAT_DECAL || mat == MAT_CROP) { glDisable(GL_ALPHA_TEST); glAlphaFunc(GL_GREATER, 0.02f); }
+        if (mat == MAT_CROP) glEnable(GL_CULL_FACE);
     }
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
@@ -777,6 +853,19 @@ void Renderer::draw_world(const World& w, const Camera& cam, float time, float f
             flush_dyn(spr_[SPR_WHITE]);
             float pulse = 0.5f + 0.5f * std::sin(time * 2.5f + p.id);
             billboard({p.pos.x, 0.12f, p.pos.z}, 0.55f, 0.55f, rgba(0.6f, 0.85f, 1.0f, 0.10f + 0.12f * pulse));
+            flush_dyn(spr_[SPR_GLOW], true, false);
+            continue;
+        }
+        if (p.kind == PropKind::Mark) { // a chalk X on the floor, faintly luminous so you can find it again
+            float yaw = (uint8_t)p.item / 255.0f * 2 * PI;
+            for (int k = 0; k < 2; k++) {
+                float a = yaw + PI / 4 + k * PI / 2;
+                Vec3 d{std::cos(a) * 0.35f, 0, std::sin(a) * 0.35f}, s2{-std::sin(a) * 0.035f, 0, std::cos(a) * 0.035f};
+                Vec3 c{p.pos.x, 0.012f, p.pos.z};
+                push_quad(c - d - s2, c + d - s2, c + d + s2, c - d + s2, rgba(0.95f, 0.95f, 0.9f, 0.85f));
+            }
+            flush_dyn(spr_[SPR_WHITE], false, true);
+            billboard({p.pos.x, 0.1f, p.pos.z}, 0.6f, 0.3f, rgba(0.8f, 0.9f, 1.0f, 0.08f));
             flush_dyn(spr_[SPR_GLOW], true, false);
             continue;
         }
@@ -1200,7 +1289,7 @@ bool Renderer::use_retro_shader() {
     iris_glUniform1i(retro_loc_[0], 0);
     const float lines = 300.0f; // vertices land on a 300-line grid
     iris_glUniform2f(retro_loc_[1], lines * (float)width / (float)height, lines);
-    iris_glUniform1f(retro_loc_[2], 0.28f); // some swim, not a broken ceiling
+    iris_glUniform1f(retro_loc_[2], 0.12f); // a hint of swim, not a broken ceiling
     return true;
 #endif
 }
@@ -1290,6 +1379,28 @@ bool Renderer::post_film(const FilmParams& f) {
     glEnable(GL_DEPTH_TEST);
     return true;
 #endif
+}
+
+void Renderer::night_vision(float time) {
+    begin_2d();
+    // dst * (1 + src), twice: four times brighter; then multiply by green
+    glBlendFunc(GL_DST_COLOR, GL_ONE);
+    for (int i = 0; i < 2; i++) {
+        push_quad({0, (float)height, 0}, {(float)width, (float)height, 0}, {(float)width, 0, 0}, {0, 0, 0}, rgba(1, 1, 1, 1));
+        set_pointers(dyn_.data());
+        glBindTexture(GL_TEXTURE_2D, spr_[SPR_WHITE]);
+        glDrawArrays(GL_TRIANGLES, 0, (GLsizei)dyn_.size());
+        dyn_.clear();
+    }
+    glBlendFunc(GL_DST_COLOR, GL_ZERO);
+    push_quad({0, (float)height, 0}, {(float)width, (float)height, 0}, {(float)width, 0, 0}, {0, 0, 0}, rgba(0.42f, 1.0f, 0.48f, 1));
+    set_pointers(dyn_.data());
+    glDrawArrays(GL_TRIANGLES, 0, (GLsizei)dyn_.size());
+    dyn_.clear();
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    float ox = hash01(91, (int)(time * 24), 0, 1), oy = hash01(91, (int)(time * 24), 1, 1); // sensor noise
+    tiled(SPR_NOISE, 0, 0, (float)width, (float)height, rgba(0.6f, 1, 0.6f, 0.12f), 96, ox, oy);
+    end_2d();
 }
 
 void Renderer::flashlight_overlay(float strength, float flicker) {

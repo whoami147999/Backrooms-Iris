@@ -45,7 +45,7 @@ float entity_max_hp(EntityType t);
 // Things lying or burning in the world that aren't part of the level itself.
 // Item: something to pick up. Flare: burning firesalt. Tape: objective pickup.
 // Breaker: objective switch box on a wall (item = which wall side it hangs on, life 1 = switched on).
-enum class PropKind : uint8_t { Item, Flare, Tape, Breaker, Glow, Lure };
+enum class PropKind : uint8_t { Item, Flare, Tape, Breaker, Glow, Lure, Mark };
 struct Prop {
     uint16_t id = 0;
     PropKind kind = PropKind::Item;

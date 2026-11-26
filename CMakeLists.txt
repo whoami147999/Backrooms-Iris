@@ -85,6 +85,8 @@ if(IRIS_BUILD_CLIENT)
     src/client/chunk_mesh.cpp
     src/client/renderer.cpp
     src/client/tailscale.cpp
+    src/client/models.cpp
+    src/client/audio.cpp
     src/platform/sdl_gamepad.cpp
   )
 

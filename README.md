@@ -3,12 +3,28 @@
 Open-source co-op Backrooms horror. Up to 4 players, PvE: survive, keep your head together, find the exit.
 One C++ codebase for **Linux, Windows and PS Vita**, plus a headless dedicated server for **FreeBSD**.
 
-![Level 21 in 0.5](docs/screenshots/v05/04-level21.jpg)
+![0.6](docs/screenshots/v06/06-shotgun.jpg)
 
 > Inspired by Backrooms games and the community wiki lore. All code, art and sound are original and generated
 > in code: no assets, maps or art copied from any other game.
 
-## What's in 0.5
+## What's in 0.6
+
+| | |
+|---|---|
+| **Sound** | every sound synthesized in code (no files, no copyright): fluorescent hum, drones, wind, water, alarms, footsteps per surface, gunshots, entity noises, stings, heartbeat, music box, UI. Positional, muffled behind walls. Settings: VOLUME |
+| **New models** | entities and players rebuilt from smooth curved shapes on a real skeleton (knees, elbows, a walk cycle); guns, crowbar and flashlight are 3D in your hands |
+| **Exit doors** | real 3D doors: deep steel frame, push bar, hinges, closer, wired-glass window, a boxed EXIT sign |
+| **Props everywhere** | chairs, tables, filing cabinets, boxes, barrels, cones, benches, plants, shelves, lockers, pallets, rubble, trees, parked cars, mailboxes, couches, TVs, fridges, scarecrows. You bump into them |
+| **Wanderers' camps** | bedroll, lantern, fire barrel, boxes and supplies left behind, on most indoor levels |
+| **More to walk into** | most hotel blocks are rooms now; Level 21's doors sometimes open into offices; two thirds of the mall's shops are open; doorways have arches |
+| **Curves** | round columns with bases and capitals, round pipes, a vaulted ceiling in Level 2, round tables, barrels, pillows, trees |
+| **3 new levels** | Level 3 Electrical Station, Level 10 Bumper Crop (wade through wheat), Level 13 The Infinite Apartments |
+| **4 new items** | Batteries, Night Vision Goggles, Chalk, Painkillers |
+| **Memory juice** | now makes you fast and unkillable... until it kills you |
+| **Compass** | nerfed: only works while you hold it, short range, the needle wanders (worse in the dark), no distance |
+
+## What was in 0.5
 
 | | |
 |---|---|
@@ -37,7 +53,7 @@ One C++ codebase for **Linux, Windows and PS Vita**, plus a headless dedicated s
 | **TSG - M4NS10N** | a grey mansion with rooms you can walk into | a Skin-Stealer, Smilers |
 | **TSG - L0ST H0P3** | the last dark maze. Its exit is the way out of everything | Smilers, a Bacteria |
 
-Exit order now: 0 → 1 → 2 → 4 → 5 → 6 → 7 → 8 → 9 → 19 → 21 → 22 → 33 → 36 → 37 → Fun → ! → 51 → 24 → 11 → TH3 SH4DY GR3Y →
+Exit order now: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 19 → 21 → 22 → 33 → 36 → 37 → Fun → ! → 51 → 24 → 11 → 13 → TH3 SH4DY GR3Y →
 B14CK → M4NS10N → L0ST H0P3 → back to 0.
 
 The level designs are our own takes on the community wiki pages (the wikis disagree a lot, especially on TH3 SH4DY GR3Y).
@@ -205,6 +221,14 @@ Main menu → **Sandbox**, pick a level, then press **Tab** (Select on Vita) in 
 
 
 ## Screenshots
+
+0.6:
+
+| | |
+|---|---|
+| ![](docs/screenshots/v06/06-shotgun.jpg) | ![](docs/screenshots/v06/09-exit-door.jpg) |
+| ![](docs/screenshots/v06/10-camp.jpg) | ![](docs/screenshots/v06/11-wheat.jpg) |
+| ![](docs/screenshots/v06/03-skin-stealer.jpg) | ![](docs/screenshots/v06/12-apartment.jpg) |
 
 0.5:
 
@@ -470,7 +494,7 @@ select it, then type, or use up/down to change the letter under the cursor and l
 backrooms-iris [--level N] [--seed N] [--difficulty easy|medium|hard|nightmare] [--sandbox] [--host] [--join IP]
 ```
 
-`--level` jumps straight into a level (0 1 2 4 5 6 7 8 9 11 19 21 22 24 33 36 37 51 fun ! grey black mansion hope) in single player; add `--sandbox` for sandbox mode. Settings live in
+`--level` jumps straight into a level (0 1 2 3 4 5 6 7 8 9 10 11 13 19 21 22 24 33 36 37 51 fun ! grey black mansion hope) in single player; add `--sandbox` for sandbox mode. Settings live in
 `~/.local/share/BackroomsIris/BackroomsIris/settings.cfg` (Linux), `%APPDATA%\BackroomsIris\BackroomsIris\` (Windows),
 `ux0:data/BackroomsIris/` (Vita).
 

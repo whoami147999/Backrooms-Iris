@@ -73,6 +73,7 @@ bool App::init(const DevOptions& dev) {
     rs_.camcorder = cfg_.camcorder;
     rs_.atmosphere = cfg_.atmosphere;
     rs_.retro = cfg_.retro;
+    if (dev.shot_path.empty() && audio_.init()) audio_.set_master(cfg_.volume); // (screenshots stay silent)
     std::printf("[iris] renderer init\n");
     ren_.init(rs_);
     std::printf("[iris] net init\n");
@@ -84,6 +85,7 @@ bool App::init(const DevOptions& dev) {
 }
 
 void App::shutdown() {
+    audio_.shutdown();
     session_.reset();
     browser_.scan_stop();
     ren_.shutdown();
@@ -123,6 +125,20 @@ void App::dev_setup() {
     if (GameSim* sim = session_->sim()) { // poke the sim directly (screenshots / testing)
         PlayerState& p = sim->players[0].st;
         if (dev_.has_pos) { p.pos.x = dev_.pos_x; p.pos.z = dev_.pos_z; }
+        if (dev_.nv) { p.inv[(int)ItemType::NightVision] = 1; p.nv_on = true; }
+        if (dev_.at_camp) {
+            int pcx = floor_to_int(p.pos.x / CELL), pcz = floor_to_int(p.pos.z / CELL), ccx, ccz;
+            bool found = false;
+            for (int r = 0; r < 40 && !found; r++)
+                for (int dz = -r; dz <= r && !found; dz++)
+                    for (int dx = -r; dx <= r && !found; dx++)
+                        if (sim->world.camp(pcx + dx, pcz + dz, ccx, ccz)) {
+                            found = true;
+                            p.pos.x = (ccx + 0.5f) * CELL + 3.2f;
+                            p.pos.z = (ccz + 1.0f) * CELL + 1.0f;
+                            cmd_.yaw = std::atan2(1.0f, 0.5f);
+                        }
+        }
         if (dev_.at_exit >= 0) {
             Vec2 at;
             ExitDoor door;
@@ -312,6 +328,7 @@ void App::build_menu() {
             auto toggle = [&](const std::string& l, bool* b, std::function<void()> on = nullptr) {
                 Item it; it.kind = Item::Toggle; it.label = l; it.flag = b; it.on = on; m.items.push_back(it);
             };
+            slider("VOLUME", &cfg_.volume, 0.0f, 1.0f, 0.1f);
             slider("MOUSE SENSITIVITY", &cfg_.mouse_sens, 0.2f, 3.0f, 0.1f);
             slider("STICK SENSITIVITY", &cfg_.stick_sens, 0.2f, 3.0f, 0.1f);
             toggle("INVERT LOOK", &cfg_.invert_y);
@@ -344,7 +361,9 @@ void App::build_menu() {
             break;
         case Screen::Playing: // pause menu
             m.title = "PAUSED";
-            m.subtitle = session_ && session_->view().multiplayer ? "THE GAME KEEPS GOING WITHOUT YOU" : "";
+            m.subtitle = session_ ? std::string(level_label(session_->view().world.id())) + "  -  " + diff_info(session_->view().world.difficulty()).name +
+                                        (session_->view().multiplayer ? "  -  THE GAME KEEPS GOING" : "")
+                                  : "";
             button("RESUME", [this] { paused_ = false; build_menu(); });
             button("SETTINGS", [this] { go(Screen::Settings); });
             button("CONTROLS", [this] { go(Screen::Controls); });
@@ -358,6 +377,13 @@ void App::build_menu() {
 }
 
 void App::menu_input() {
+    int sel_before = menu_.sel;
+    bool ui_activate = (in_.accept || in_.click) && !editing_ && error_.empty();
+    struct UiSound { App* a; int before; bool act; ~UiSound() {
+        a->audio_.set_master(a->cfg_.volume);
+        if (a->menu_.sel != before) a->audio_.play(SFX_UI_MOVE, 0.5f);
+        else if (act) a->audio_.play(SFX_UI_SELECT, 0.6f);
+    } } ui_sound{this, sel_before, ui_activate};
     if (!error_.empty()) {
         if (in_.accept || in_.back || in_.click) error_.clear();
         return;
@@ -608,6 +634,7 @@ void App::start_join(const std::string& addr) {
 }
 
 void App::leave_game() {
+    audio_.stop_loops();
     session_.reset();
     paused_ = false;
     sb_open_ = false;
@@ -669,7 +696,7 @@ void App::game_input() {
             if (is_weapon(selected_)) cmd_.attack_ctr++;
             else if (selected_ == ItemType::Flashlight) cmd_.light_ctr++;
             else if (selected_ == ItemType::Compass || selected_ == ItemType::Radio) {} // passive tools
-            else { cmd_.use_item = (uint8_t)selected_; cmd_.use_ctr++; }
+            else { cmd_.use_item = (uint8_t)selected_; cmd_.use_ctr++; item_sound(selected_); }
         }
     } else if (!v.multiplayer && (in_.accept || in_.interact)) {
         session_->request_respawn();
@@ -812,34 +839,22 @@ void App::draw_hud(const GameView& v, const ScreenFx& fx) {
 
     if (me.alive) {
         // ----- held item, bottom right of the view (drawn first so the HUD sits on top)
-        if (is_gun(selected_)) { // the gun in your hands: recoil, a muzzle flash, a crosshair
-            float sz = 170 * s;
-            float bob = std::sin(me.bob) * 3 * s * std::min(1.0f, me.speed / WALK_SPEED);
-            float kick = me.swing < 0.12f ? (1.0f - me.swing / 0.12f) : 0.0f;
-            float gx = W * 0.56f, gy = H - sz * 0.78f - 22 * s + bob + kick * 14 * s; // above the hotbar
-            if (me.swing < 0.06f) ren_.sprite(SPR_GLOW, gx - 12 * s, gy - 18 * s, 50 * s, 50 * s, rgba(1, 0.75f, 0.3f, 0.95f), 0, true);
-            ren_.sprite(item_sprite(selected_), gx, gy, sz, sz, rgba(0.95f, 0.95f, 0.95f), -0.1f - kick * 0.25f);
+        if (is_gun(selected_)) { // crosshair (the gun itself is a 3D view model now)
             ren_.rect(W / 2 - 4 * s, H / 2 - s * 0.5f, 3 * s, s, rgba(1, 1, 1, 0.8f));
             ren_.rect(W / 2 + 1 * s, H / 2 - s * 0.5f, 3 * s, s, rgba(1, 1, 1, 0.8f));
             ren_.rect(W / 2 - s * 0.5f, H / 2 - 4 * s, s, 3 * s, rgba(1, 1, 1, 0.8f));
             ren_.rect(W / 2 - s * 0.5f, H / 2 + 1 * s, s, 3 * s, rgba(1, 1, 1, 0.8f));
-        } else if (selected_ == ItemType::Crowbar || me.light_on) {
-            bool crow = selected_ == ItemType::Crowbar;
-            float sz = 90 * s;
-            float bob = std::sin(me.bob) * 3 * s * std::min(1.0f, me.speed / WALK_SPEED);
-            float swing = crow && me.swing < 0.35f ? std::sin(me.swing / 0.35f * PI) : 0;
-            ren_.sprite(crow ? SPR_CROWBAR : SPR_FLASHLIGHT, W * 0.62f - swing * 40 * s, H - sz * 0.9f + bob + swing * 10 * s, sz, sz,
-                        rgba(0.9f, 0.9f, 0.9f), crow ? -0.4f - swing * 1.3f : -0.15f);
         }
         // compass: a needle toward the nearest exit door
-        if (me.has(ItemType::Compass)) {
-            if (now_ - compass_t_ > 0.5) {
+        // compass (nerfed): only while you hold it, short range, a needle that won't sit still, no distance
+        if (selected_ == ItemType::Compass && me.has(ItemType::Compass)) {
+            if (now_ - compass_t_ > 2.0) {
                 compass_t_ = now_;
                 compass_ok_ = false;
                 float best = 1e9f;
                 int pcx = floor_to_int(me.pos.x / CELL), pcz = floor_to_int(me.pos.z / CELL);
-                for (int cz = pcz - 40; cz <= pcz + 40; cz++)
-                    for (int cx = pcx - 40; cx <= pcx + 40; cx++) {
+                for (int cz = pcz - 16; cz <= pcz + 16; cz++)
+                    for (int cx = pcx - 16; cx <= pcx + 16; cx++) {
                         ExitDoor d;
                         if (!v.world.exit_door(cx, cz, &d)) continue;
                         float dist = (d.pos - Vec2{me.pos.x, me.pos.z}).len();
@@ -851,14 +866,14 @@ void App::draw_hud(const GameView& v, const ScreenFx& fx) {
             if (compass_ok_) {
                 Vec2 d = compass_to_ - Vec2{me.pos.x, me.pos.z};
                 float ang = std::atan2(-d.x, -d.z) - cmd_.yaw; // relative to where you face
+                float shake = 0.35f + clampf(1.0f - v.world.light_level(me.pos) * 2.0f, 0, 1) * 0.4f; // worse in the dark
+                ang += (std::sin((float)now_ * 1.3f) * 0.6f + std::sin((float)now_ * 3.7f + 1.0f) * 0.4f) * shake;
                 ren_.sprite(SPR_WHITE, cx - s * 0.75f, cy - r, 1.5f * s, 2 * r, rgba(0.5f, 0.5f, 0.5f, 0.8f), -ang);
                 ren_.sprite(SPR_GLOW, cx + std::sin(-ang) * r - 3 * s, cy - std::cos(-ang) * r - 3 * s, 6 * s, 6 * s, rgba(0.4f, 1, 0.5f), 0, true);
-                char buf[24];
-                std::snprintf(buf, sizeof buf, "EXIT %.0fM", d.len());
-                ren_.text(cx, cy + r + 2 * s, s, buf, rgba(0.6f, 1, 0.65f, 0.85f), 1);
+                if (d.len() < 12.0f) ren_.text(cx, cy + r + 2 * s, s, "CLOSE", rgba(0.6f, 1, 0.65f, 0.85f), 1);
             } else {
                 ren_.sprite(SPR_WHITE, cx - s * 0.75f, cy - r, 1.5f * s, 2 * r, rgba(0.6f, 0.6f, 0.6f), (float)now_ * 3.0f); // spinning: nothing near
-                ren_.text(cx, cy + r + 2 * s, s, "NO SIGNAL", rgba(0.7f, 0.7f, 0.7f, 0.7f), 1);
+                ren_.text(cx, cy + r + 2 * s, s, "...", rgba(0.7f, 0.7f, 0.7f, 0.7f), 1);
             }
         }
         // radio: static rises as something gets close
@@ -891,7 +906,7 @@ void App::draw_hud(const GameView& v, const ScreenFx& fx) {
         bar(by, "HEALTH", me.health / 100, rgba(0.85f, 0.2f, 0.15f, 0.9f), 0);
         bar(by + 9 * s, "STAMINA", me.stamina, me.exhausted ? rgba(0.7f, 0.3f, 0.2f, 0.9f) : (me.boost > 0 ? rgba(0.4f, 1, 0.3f, 0.9f) : rgba(0.95f, 0.85f, 0.5f, 0.9f)), 0);
         bar(by + 18 * s, "SANITY", me.sanity / 100, rgba(0.6f, 0.45f, 0.95f, 0.9f), me.sanity < 30 ? (30 - me.sanity) / 30 : 0);
-        if (me.has(ItemType::Flashlight)) bar(by + 27 * s, "LIGHT", me.battery, me.light_on ? rgba(1, 0.97f, 0.8f, 0.9f) : rgba(0.6f, 0.6f, 0.55f, 0.7f), 0);
+        if (me.has(ItemType::Flashlight) || me.has(ItemType::NightVision)) bar(by + 27 * s, "LIGHT", me.battery, me.light_on ? rgba(1, 0.97f, 0.8f, 0.9f) : rgba(0.6f, 0.6f, 0.55f, 0.7f), 0);
         // active effects
         std::string fxline;
         char buf[48];
@@ -919,9 +934,10 @@ void App::draw_hud(const GameView& v, const ScreenFx& fx) {
             std::string use = pad ? (platform_is_vita() ? "SQUARE" : "X") : "CLICK";
             ren_.text(W - 6 * s, hy - 19 * s, s, info.name, rgba(1, 0.92f, 0.7f), 2);
             ren_.text(W - 6 * s, hy - 10 * s, s, use + ": " + (selected_ == ItemType::Crowbar ? "SWING" : is_gun(selected_) ? (selected_ == ItemType::Rifle ? "HOLD TO FIRE" : "SHOOT")
-  : selected_ == ItemType::Flashlight ? "LIGHT" : (selected_ == ItemType::Compass || selected_ == ItemType::Radio) ? "ALWAYS ON"
+  : selected_ == ItemType::Flashlight ? "LIGHT" : selected_ == ItemType::Compass ? "HOLD IT" : selected_ == ItemType::Radio ? "ALWAYS ON"
   : (selected_ == ItemType::Firesalt || selected_ == ItemType::FlashBulb || selected_ == ItemType::MusicBox) ? "THROW"
-  : selected_ == ItemType::GlowStick ? "DROP" : "USE"),
+  : selected_ == ItemType::GlowStick ? "DROP" : selected_ == ItemType::NightVision ? (me.nv_on ? "TURN OFF" : "TURN ON")
+  : selected_ == ItemType::Chalk ? "MARK THE FLOOR" : "USE"),
                       rgba(0.8f, 0.76f, 0.65f, 0.85f), 2);
         }
 
@@ -1052,6 +1068,21 @@ void App::draw_game(bool overlay_menu) {
             ren_.begin_2d();
             ren_.rect(0, 0, (float)ren_.width, (float)ren_.height, rgba(0, 0, 0, 1));
             ren_.text(ren_.width / 2.0f, ren_.height / 2.0f, ui() * 2, std::string("ENTERING ") + v.world.info().code, rgba(0.9f, 0.85f, 0.7f), 1);
+            static const char* TIPS[] = {
+                "HOUNDS HEAR YOU. CROUCH, OR STARE THEM DOWN",
+                "DON'T LOOK AT THE SMILE FOR TOO LONG",
+                "BACTERIA TURN SLOWLY. CORNERS ARE YOUR FRIENDS",
+                "WANDERERS LEFT CAMPS BEHIND. THEY LEFT SUPPLIES TOO",
+                "CHALK THE FLOOR SO YOU STOP WALKING IN CIRCLES",
+                "THE EXIT IS ALWAYS IN A WALL. LOOK FOR THE GREEN SIGN",
+                "OBJECTIVES MAKE YOU STRONGER FOR THE WHOLE RUN",
+                "A MUSIC BOX BUYS YOU TWENTY SECONDS",
+                "MEMORY JUICE MAKES YOU FAST AND UNKILLABLE. THEN IT KILLS YOU",
+                "FLASH BULBS STUN EVERYTHING THAT SEES THEM. INCLUDING YOU",
+                "NIGHT VISION AND THE FLASHLIGHT SHARE ONE BATTERY",
+            };
+            const int nt = (int)(sizeof(TIPS) / sizeof(TIPS[0]));
+            ren_.text(ren_.width / 2.0f, ren_.height / 2.0f + 22 * ui(), ui(), std::string("TIP: ") + TIPS[(v.epoch * 7 + 3) % (uint32_t)nt], rgba(0.65f, 0.62f, 0.55f), 1);
             ren_.end_2d();
             return;
         }
@@ -1079,6 +1110,8 @@ void App::draw_game(bool overlay_menu) {
     cam.pitch = cmd_.pitch;
 
     ScreenFx fx = compute_fx(v.me, cam.eye, cam.yaw, (float)now_, (int)v.epoch * 7919 + v.my_id);
+    if (!overlay_menu || session_->view().multiplayer) update_audio(v, cam.eye, cam.yaw);
+    else audio_.stop_loops();
     cam.roll = fx.roll;
     cam.fov_deg = cfg_.fov + fx.fov_add;
     float fog = fx.fog_mult;
@@ -1088,11 +1121,29 @@ void App::draw_game(bool overlay_menu) {
     // a flashlight lets you see further into the dark
     float flick = v.me.battery < 0.15f ? (hash01(4, (int)(now_ * 14), 0, 1) < 0.25f ? 0.2f : 1.0f) : 1.0f;
     if (v.me.light_on && dark) fog *= li.dark ? 0.55f : 0.8f;
+    if (v.me.nv_on && v.me.alive) fog *= 0.35f; // night vision sees through the dark
 
     ren_.update_chunks(v.world, cam.eye, rs_.chunk_builds_per_frame);
     static const std::unordered_set<uint32_t> none;
     ren_.draw_world(v.world, cam, (float)now_, fog, v.picked ? *v.picked : none, v.ents, v.others, v.props, fx.phantoms);
     ren_.post_warp(fx.wobble, fx.ghost, (float)now_);
+    // what's in your hands, in 3D
+    if (v.me.alive && dev_.hud) {
+        ViewModel vm;
+        if (is_weapon(selected_)) vm.item = selected_;
+        else if (v.me.light_on) vm.item = ItemType::Flashlight;
+        vm.light_on = v.me.light_on;
+        vm.bob = v.me.bob;
+        vm.kick = is_gun(selected_) ? clampf(1.0f - v.me.swing / 0.15f, 0, 1) : 0.0f;
+        vm.swing = selected_ == ItemType::Crowbar && v.me.swing < 0.35f ? v.me.swing / 0.35f : 0.0f;
+        float dyaw = std::remainder(cmd_.yaw - vm_last_yaw_, 2 * PI);
+        vm_last_yaw_ = cmd_.yaw;
+        vm_sway_ = lerpf(vm_sway_, clampf(dyaw * 0.6f, -0.03f, 0.03f), std::min(1.0f, (float)frame_dt_ * 10.0f));
+        vm.sway_x = vm_sway_;
+        vm.sway_y = -std::fabs(std::sin(v.me.bob * 0.5f)) * 0.01f * std::min(1.0f, v.me.speed / WALK_SPEED);
+        vm.light = v.world.light_level(cam.eye) * 0.8f + 0.3f + (v.me.light_on ? 0.35f : 0.0f);
+        ren_.draw_viewmodel(vm);
+    }
     float beam = li.dark ? (li.ambient[0] < 0.4f ? 1.3f : 1.1f) : (dark ? 0.9f : 0.5f);
     if (v.me.light_on && v.me.alive) ren_.flashlight_overlay(beam, flick);
 
@@ -1115,6 +1166,12 @@ void App::draw_game(bool overlay_menu) {
         film.dither = 31;
         if (!v.world.greyscale()) film.saturation = std::min(1.0f, film.saturation + 0.12f);
         film.distort *= 0.5f;
+    }
+    if (v.me.nv_on && v.me.alive) {
+        ren_.night_vision((float)now_);
+        film.saturation = 0.25f;
+        film.grain += 0.06f;
+        film.bloom = 0.4f;
     }
     film_on_ = ren_.post_film(film);
 
@@ -1256,6 +1313,191 @@ void App::run() {
             frames_ = 0;
             fps_t_ = now_;
         }
+    }
+}
+
+
+// =================================================================== sound
+void App::item_sound(ItemType t) {
+    switch (t) {
+        case ItemType::AlmondWater: case ItemType::EnergyDrink: case ItemType::MemoryJuice: case ItemType::LiquidPain:
+        case ItemType::CashewWater: case ItemType::LuckyMilk: case ItemType::SuperAlmond: case ItemType::LiquidSilence:
+            audio_.play(SFX_DRINK, 0.7f, 0, 0.95f + hash01(5, (int)(now_ * 10), 0, 1) * 0.1f); break;
+        case ItemType::RoyalRation: case ItemType::MothJelly: case ItemType::MedKit: audio_.play(SFX_EAT, 0.7f); break;
+        case ItemType::Firesalt: case ItemType::FlashBulb: case ItemType::MusicBox: case ItemType::GlowStick: audio_.play(SFX_THROW, 0.7f); break;
+        default: break;
+    }
+}
+
+void App::play_at(Sfx s, Vec2 at, float vol, Vec3 eye, float yaw, const World& w, float pitch) {
+    Vec2 e{eye.x, eye.z};
+    Vec2 d = at - e;
+    float dist = d.len();
+    if (dist > 45.0f) return;
+    Vec2 r = yaw_right(yaw);
+    float pan = dist > 0.3f ? (d.x * r.x + d.z * r.z) / dist * 0.85f : 0.0f;
+    bool blocked = dist > 1.0f && w.segment_blocked(e, at);
+    float v = vol / (1.0f + dist * 0.22f) * (blocked ? 0.45f : 1.0f);
+    audio_.play(s, v, pan, pitch, blocked ? 0.8f : 0.0f);
+}
+
+void App::update_audio(const GameView& v, Vec3 eye, float yaw) {
+    if (!audio_.ok()) return;
+    audio_.set_master(cfg_.volume);
+    const PlayerState& me = v.me;
+    const World& w = v.world;
+    const LevelId id = w.id();
+    Vec2 here{me.pos.x, me.pos.z};
+    // ----- ambience: one main bed per level, a low dread drone under most of them
+    Sfx amb = SFX_HUM;
+    float av = 0.22f;
+    switch (id) {
+        case LevelId::L6: case LevelId::L8: case LevelId::L19: case LevelId::L51: case LevelId::L2: case LevelId::TSGBlack: case LevelId::TSGHope:
+            amb = SFX_DRONE; av = 0.4f; break;
+        case LevelId::L9: case LevelId::L11: case LevelId::L24: case LevelId::L10: amb = SFX_WIND; av = 0.35f; break;
+        case LevelId::L7: case LevelId::L37: amb = SFX_WATER; av = 0.4f; break;
+        case LevelId::LRun: amb = SFX_ALARM; av = 0.3f; break;
+        default: break;
+    }
+    if (amb == SFX_HUM) av *= 1.0f - ren_.flicker_dim() * 2.0f; // the hum stutters with the lights
+    audio_.loop(LOOP_AMB1, amb, id == LevelId::L3 ? av * 1.8f : av, 0, id == LevelId::L3 ? 0.5f : 1.0f); // Level 3: transformers drone
+    bool safe = id == LevelId::L11 || id == LevelId::L37;
+    audio_.loop(LOOP_AMB2, id == LevelId::L7 ? SFX_WIND : SFX_DRONE, safe ? 0.0f : (amb == SFX_DRONE ? 0.0f : 0.12f), 0, 0.98f);
+    // ----- fire nearby (flares, fire barrels, lanterns) and the music box
+    if (now_ - as_.scan_t > 0.5) {
+        as_.scan_t = now_;
+        as_.fire_d = 1e9f;
+        int pcx = floor_to_int(here.x / CELL), pcz = floor_to_int(here.z / CELL);
+        for (int cz = pcz - 4; cz <= pcz + 4; cz++)
+            for (int cx = pcx - 4; cx <= pcx + 4; cx++) {
+                Furn fs[MAX_FURN];
+                bool owner = false;
+                int n = w.furniture(cx, cz, fs, &owner);
+                for (int k = 0; owner && k < n; k++)
+                    if (fs[k].kind == FurnKind::FireBarrel) {
+                        Vec2 c{(fs[k].x0 + fs[k].x1) * 0.5f, (fs[k].z0 + fs[k].z1) * 0.5f};
+                        float d = (c - here).len();
+                        if (d < as_.fire_d) { as_.fire_d = d; as_.fire_at = c; }
+                    }
+            }
+    }
+    float fire_d = as_.fire_d;
+    Vec2 fire_at = as_.fire_at;
+    Vec2 lure_at{0, 0};
+    float lure_d = 1e9f;
+    for (const DrawProp& p : v.props) {
+        float d = (p.pos - here).len();
+        if (p.kind == PropKind::Flare && d < fire_d) { fire_d = d; fire_at = p.pos; }
+        if (p.kind == PropKind::Lure && d < lure_d) { lure_d = d; lure_at = p.pos; }
+    }
+    auto pan_of = [&](Vec2 at) {
+        Vec2 d = at - here;
+        float l = d.len();
+        Vec2 r = yaw_right(yaw);
+        return l > 0.3f ? (d.x * r.x + d.z * r.z) / l * 0.8f : 0.0f;
+    };
+    audio_.loop(LOOP_FIRE, SFX_FIRE, fire_d < 12 ? 0.6f / (1.0f + fire_d * 0.5f) : 0.0f, pan_of(fire_at));
+    audio_.loop(LOOP_MUSIC, SFX_MUSICBOX, lure_d < 30 ? 0.7f / (1.0f + lure_d * 0.25f) : 0.0f, pan_of(lure_at));
+    // ----- your body: heartbeat when you're in trouble, whispers on memory juice, radio static
+    float trouble = std::max(clampf((35.0f - me.sanity) / 35.0f, 0, 1), clampf((30.0f - me.health) / 30.0f, 0, 1));
+    audio_.loop(LOOP_HEART, SFX_HEART, me.alive ? trouble * 0.8f : 0.0f, 0, 1.0f + trouble * 0.6f);
+    audio_.loop(LOOP_JUICE, SFX_WHISPERS, me.alive && me.juice >= 0 ? 0.25f + clampf(me.juice / JUICE_TIME, 0, 1) * 0.5f : 0.0f);
+    float sig = 0;
+    if (me.has(ItemType::Radio)) {
+        float nearest = 1e9f;
+        for (const DrawEntity& e : v.ents) nearest = std::min(nearest, (e.pos - here).len());
+        sig = clampf(1.0f - nearest / 35.0f, 0, 1);
+    }
+    audio_.loop(LOOP_STATIC, SFX_STATIC, sig * sig * 0.5f);
+    // ----- footsteps: by what you're walking on
+    int step = (int)std::floor(me.bob / PI);
+    if (step != as_.step && me.alive && me.speed > 0.4f) {
+        int cx = floor_to_int(here.x / CELL), cz = floor_to_int(here.z / CELL);
+        int fm = w.floor_mat(cx, cz);
+        Sfx s = SFX_STEP_HARD;
+        switch (id) {
+            case LevelId::L0: case LevelId::L4: case LevelId::L6: case LevelId::L21: case LevelId::LFun: case LevelId::TSG: case LevelId::TSGBlack:
+                s = SFX_STEP_CARPET; break;
+            case LevelId::L5: case LevelId::TSGMansion: s = fm == 1 ? SFX_STEP_WOOD : SFX_STEP_CARPET; break;
+            case LevelId::L2: s = fm == 1 ? SFX_STEP_METAL : SFX_STEP_HARD; break;
+            case LevelId::L19: s = SFX_STEP_WOOD; break;
+            case LevelId::L7: s = w.water(cx, cz) ? SFX_STEP_WATER : SFX_STEP_WOOD; break;
+            case LevelId::L37: s = fm == 1 ? SFX_STEP_WATER : SFX_STEP_HARD; break;
+            case LevelId::L1: s = fm == 1 ? SFX_STEP_WATER : SFX_STEP_HARD; break;
+            case LevelId::L33: s = fm == 1 ? SFX_STEP_CARPET : SFX_STEP_HARD; break;
+            case LevelId::L36: s = fm == 0 ? SFX_STEP_CARPET : SFX_STEP_HARD; break;
+            default: break;
+        }
+        float vol = me.crouch > 0.5f ? 0.12f : (me.speed > WALK_SPEED * 1.2f ? 0.55f : 0.32f);
+        if (me.silent > 0) vol = 0;
+        audio_.play(s, vol, (step & 1) ? 0.12f : -0.12f, 0.9f + hash01(77, step, 0, 1) * 0.2f);
+    }
+    as_.step = step;
+    for (const DrawPlayer& o : v.others) { // friends' footsteps
+        int st = (int)std::floor(o.anim / PI);
+        int& last = as_.other_step[o.id];
+        if (st != last && o.alive) play_at(SFX_STEP_HARD, {o.pos.x, o.pos.z}, 0.3f, eye, yaw, w, 0.95f);
+        last = st;
+    }
+    // ----- entities: idle noises, and a sting when something comes for you
+    for (const DrawEntity& e : v.ents) {
+        float d = (e.pos - here).len();
+        if (d > 40) continue;
+        int& last = as_.state[e.id];
+        double& next = as_.next[e.id];
+        int st = (int)e.state;
+        if (st != last) {
+            if (e.type == EntityType::Bacteria && e.state == EntState::Notice) { play_at(SFX_BACTERIA_SCREECH, e.pos, 1.2f, eye, yaw, w); if (d < 25) audio_.play(SFX_STING, 0.5f); }
+            if (e.type == EntityType::Smiler && e.state == EntState::Charge) { play_at(SFX_SMILER_CHARGE, e.pos, 1.3f, eye, yaw, w); audio_.play(SFX_STING, 0.5f); }
+            if (e.type == EntityType::Hound && e.state == EntState::Chase && last != (int)EntState::Stare) play_at(SFX_HOUND_GROWL, e.pos, 1.1f, eye, yaw, w, 1.15f);
+            if (e.type == EntityType::SkinStealer && e.state == EntState::Chase && d < 25) audio_.play(SFX_STING, 0.4f);
+            last = st;
+        }
+        if (now_ < next) continue;
+        float r = hash01(e.id, (int)(now_ * 3), 9, 1);
+        switch (e.type) {
+            case EntityType::Bacteria: if (e.speed > 0.2f) play_at(SFX_BACTERIA_CLICK, e.pos, 0.9f, eye, yaw, w, 0.9f + r * 0.2f); next = now_ + 1.5 + r * 2.5; break;
+            case EntityType::Hound:
+                if (e.state == EntState::Chase || e.state == EntState::Stare) play_at(SFX_HOUND_GROWL, e.pos, 0.9f, eye, yaw, w, 0.9f + r * 0.2f);
+                next = now_ + 2.5 + r * 2.5;
+                break;
+            case EntityType::Smiler: if (e.state == EntState::Stare) play_at(SFX_SMILER_WHISPER, e.pos, 0.8f, eye, yaw, w); next = now_ + 3.5 + r * 3; break;
+            case EntityType::Partygoer: play_at(SFX_PARTY_GIGGLE, e.pos, e.state == EntState::Chase ? 1.0f : 0.6f, eye, yaw, w, 0.95f + r * 0.1f); next = now_ + 3 + r * 4; break;
+            case EntityType::SkinStealer: play_at(SFX_SKIN_GROAN, e.pos, 0.8f, eye, yaw, w, 0.9f + r * 0.2f); next = now_ + 5 + r * 4; break;
+            default: next = now_ + 5; break;
+        }
+    }
+    if (as_.state.size() > 200) { as_.state.clear(); as_.next.clear(); }
+    // ----- things you did (or that happened to you)
+    if (me.swing < as_.swing - 0.05f) {
+        if (selected_ == ItemType::Pistol) audio_.play(SFX_PISTOL, 0.9f, 0.1f, 0.95f + hash01(3, (int)(now_ * 50), 0, 1) * 0.1f);
+        else if (selected_ == ItemType::Shotgun) audio_.play(SFX_SHOTGUN, 1.0f, 0.1f);
+        else if (selected_ == ItemType::Rifle) audio_.play(SFX_RIFLE, 0.8f, 0.1f, 0.95f + hash01(3, (int)(now_ * 50), 0, 1) * 0.1f);
+        else if (selected_ == ItemType::Crowbar) audio_.play(SFX_SWING, 0.7f);
+    }
+    as_.swing = me.swing;
+    if (me.light_on != as_.light) audio_.play(SFX_CLICK, 0.6f);
+    as_.light = me.light_on;
+    if (me.flash < as_.flash - 0.2f) audio_.play(SFX_FLASH, 0.9f);
+    as_.flash = me.flash;
+    if (me.alive && me.health < as_.health - 3.0f) audio_.play(SFX_HURT, 0.8f);
+    as_.health = me.health;
+    if (!me.alive && as_.alive) audio_.play(SFX_DEATH, 0.9f);
+    as_.alive = me.alive;
+    if (v.epoch != as_.epoch) {
+        if (as_.epoch != 0xFFFFFFFF) audio_.play(SFX_EXIT, 0.8f);
+        as_.epoch = v.epoch;
+        as_.state.clear();
+        as_.next.clear();
+    }
+    if (v.toast_seq != as_.toast_seq) {
+        const std::string& t = v.toast;
+        if (t.rfind("PICKED UP", 0) == 0) audio_.play(SFX_PICKUP, 0.6f);
+        else if (t.rfind("LOST TAPE", 0) == 0) audio_.play(SFX_TAPE, 0.8f);
+        else if (t.rfind("BREAKER", 0) == 0) audio_.play(SFX_BREAKER, 0.8f);
+        else if (t.rfind("OBJECTIVE DONE", 0) == 0) audio_.play(SFX_OBJECTIVE, 0.8f);
+        else if (t.find("RABBIT") != std::string::npos) audio_.play(SFX_STING, 0.7f);
+        as_.toast_seq = v.toast_seq;
     }
 }
 

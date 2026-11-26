@@ -529,6 +529,70 @@ static void test_tailscale() {
     CHECK(!parse_tailscale_status("tailscale: command not found", bad), "garbage is not a status");
 }
 
+// Memory juice: fast and unkillable until it kills you. The new items do their thing.
+static void test_juice_and_new_items() {
+    GameSim sim(9);
+    sim.start_level(LevelId::L11, 9);
+    int p = sim.add_player("A");
+    PlayerState& st = sim.players[p].st;
+    InputCmd cmd;
+    sim.apply_input(p, cmd);
+    st.inv[(int)ItemType::MemoryJuice] = 1;
+    use(sim, p, cmd, ItemType::MemoryJuice);
+    Entity& b = sim.spawn_entity(EntityType::Bacteria, {st.pos.x, st.pos.z - 0.4f}, 0);
+    b.state = EntState::Chase;
+    for (int t = 0; t < 120; t++) sim.tick(1.0f / 60);
+    CHECK(st.alive, "nothing should kill you while you're on memory juice");
+    // and it makes you fast
+    World W(LevelId::L11, 1);
+    PlayerState a, j;
+    j.juice = 0;
+    InputCmd run;
+    run.move_z = 1;
+    run.buttons = BTN_SPRINT;
+    for (int t = 0; t < 120; t++) { player_tick(a, run, W, 1.0f / 60); player_tick(j, run, W, 1.0f / 60); }
+    CHECK(j.speed > a.speed * 1.3f, "memory juice should make you much faster (%.2f vs %.2f)", j.speed, a.speed);
+    // batteries, painkillers, night vision, chalk
+    GameSim s2(10);
+    s2.start_level(LevelId::L11, 10);
+    int q = s2.add_player("B");
+    PlayerState& b2 = s2.players[q].st;
+    InputCmd c2;
+    s2.apply_input(q, c2);
+    b2.battery = 0.1f;
+    b2.inv[(int)ItemType::Batteries] = 1;
+    use(s2, q, c2, ItemType::Batteries);
+    CHECK(b2.battery > 0.99f, "batteries should refill the flashlight");
+    b2.inv[(int)ItemType::NightVision] = 1;
+    use(s2, q, c2, ItemType::NightVision);
+    CHECK(b2.nv_on, "night vision should switch on");
+    b2.inv[(int)ItemType::Chalk] = 2;
+    use(s2, q, c2, ItemType::Chalk);
+    bool mark = false;
+    for (auto& pr : s2.props) mark |= pr.kind == PropKind::Mark;
+    CHECK(mark && b2.inv[(int)ItemType::Chalk] == 1, "chalk should leave a mark");
+}
+
+// Every level now has props, and some have camps; nothing is placed inside a wall.
+static void test_props() {
+    int total = 0, camps = 0;
+    for (int li = 0; li < (int)LevelId::COUNT; li++) {
+        World L((LevelId)li, 2024);
+        for (int z = -40; z < 40; z++)
+            for (int x = -40; x < 40; x++) {
+                Furn f[MAX_FURN];
+                int n = L.furniture(x, z, f);
+                total += n;
+                int ccx, ccz;
+                if (L.camp(x, z, ccx, ccz) && x == ccx && z == ccz) camps++;
+                for (int k = 0; k < n; k++) CHECK(!L.solid(x, z), "%s: prop in a solid cell", level_info((LevelId)li).code);
+            }
+    }
+    CHECK(total > 3000, "props everywhere (%d)", total);
+    CHECK(camps > 5, "some camps (%d)", camps);
+    std::printf("  props: %d pieces, %d camps\n", total, camps);
+}
+
 int main() {
     test_determinism();
     test_connectivity();
@@ -544,6 +608,8 @@ int main() {
     test_objectives();
     test_new_items();
     test_tailscale();
+    test_juice_and_new_items();
+    test_props();
     test_sim_soak();
     test_network();
     if (g_fail) { std::printf("%d check(s) failed\n", g_fail); return 1; }

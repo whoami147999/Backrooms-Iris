@@ -56,6 +56,9 @@ std::vector<Population> population(LevelId id) {
         case LevelId::L51: return {{EntityType::Hound, 2}, {EntityType::Smiler, 2}};
         case LevelId::LRun: return {{EntityType::Partygoer, 5}, {EntityType::Hound, 1}}; // the chase (spawned behind you)
         case LevelId::TSG: return {{EntityType::Bacteria, 2}};
+        case LevelId::L3: return {{EntityType::Hound, 2}, {EntityType::Smiler, 1}};
+        case LevelId::L10: return {{EntityType::Hound, 2}, {EntityType::SkinStealer, 1}};
+        case LevelId::L13: return {{EntityType::SkinStealer, 1}, {EntityType::Partygoer, 1}, {EntityType::Smiler, 1}};
         case LevelId::TSGBlack: return {{EntityType::Bacteria, 2}, {EntityType::Hound, 2}};
         case LevelId::TSGMansion: return {{EntityType::SkinStealer, 1}, {EntityType::Smiler, 2}};
         case LevelId::TSGHope: return {{EntityType::Smiler, 3}, {EntityType::Bacteria, 1}};
@@ -392,6 +395,10 @@ void GameSim::try_pickup(int i) {
 
 void GameSim::use_item(int i, ItemType t) {
     PlayerState& p = players[i].st;
+    if (t == ItemType::NightVision && p.alive && p.has(t)) { // a tool you switch on and off
+        p.nv_on = !p.nv_on && p.battery > 0.02f;
+        return;
+    }
     if ((int)t <= 0 || (int)t >= ITEM_COUNT || !p.alive || !p.has(t) || item_info(t).tool) return;
     p.inv[(int)t]--;
     switch (t) {
@@ -457,6 +464,15 @@ void GameSim::use_item(int i, ItemType t) {
             break;
         }
         case ItemType::RabbitFoot: p.inv[(int)t]++; toast(i, "KEEP IT. IT WORKS ON ITS OWN"); break; // not used up by hand
+        case ItemType::Batteries: p.battery = 1; toast(i, "FRESH BATTERIES"); break;
+        case ItemType::Painkillers: p.painkill = 30.0f; break;
+        case ItemType::Chalk: { // a mark on the floor at your feet, for the rest of the level
+            int marks = 0;
+            for (const Prop& pr : props) marks += pr.kind == PropKind::Mark;
+            if (marks >= 40) for (size_t k = 0; k < props.size(); k++) if (props[k].kind == PropKind::Mark) { props.erase(props.begin() + (long)k); break; }
+            add_prop(PropKind::Mark, {p.pos.x, p.pos.z}, 1e9f, (ItemType)(uint8_t)(std::fmod(p.yaw + 4 * PI, 2 * PI) / (2 * PI) * 255));
+            break;
+        }
         default: break;
     }
 }
@@ -588,6 +604,7 @@ void GameSim::apply_input(int i, const InputCmd& cmd) {
 void GameSim::kill(int i, DeathCause c) {
     PlayerState& p = players[i].st;
     if (!p.alive || (god && c != DeathCause::MemoryJuice)) return;
+    if (p.juice >= 0 && c != DeathCause::MemoryJuice) return; // nothing else can kill you now. it's saving you for itself
     if (c != DeathCause::MemoryJuice && p.has(ItemType::RabbitFoot)) { // the rabbit's foot takes it instead
         p.inv[(int)ItemType::RabbitFoot]--;
         p.health = 40;
@@ -622,8 +639,8 @@ void GameSim::lethal_touch(int i, Entity& e, DeathCause c) {
 
 void GameSim::damage(int i, float amount, DeathCause c) {
     PlayerState& p = players[i].st;
-    if (!p.alive || god) return;
-    amount *= world.diff().damage * std::pow(0.85f, (float)p.perk(Perk::Tough));
+    if (!p.alive || god || p.juice >= 0) return;
+    amount *= world.diff().damage * std::pow(0.85f, (float)p.perk(Perk::Tough)) * (p.painkill > 0 ? 0.5f : 1.0f);
     p.health -= amount;
     p.hurt = 0;
     p.sanity = std::max(0.0f, p.sanity - amount * 0.25f);
@@ -648,12 +665,13 @@ void GameSim::update_player_stats(int i, float dt) {
     }
     p.slow = std::max(0.0f, p.slow - dt);
     p.silent = std::max(0.0f, p.silent - dt);
+    p.painkill = std::max(0.0f, p.painkill - dt);
     p.flash += dt;
     if (p.regen > 0) { p.regen -= dt; p.health = std::min(100.0f, p.health + 4.0f * dt); }
     p.lucky = std::max(0.0f, p.lucky - dt);
-    if (p.light_on) {
-        p.battery -= dt / 200.0f * world.diff().battery / (1.0f + 0.4f * p.perk(Perk::Battery));
-        if (p.battery <= 0) { p.battery = 0; p.light_on = false; toast(i, "FLASHLIGHT IS DEAD"); }
+    if (p.light_on || p.nv_on) {
+        p.battery -= dt / 200.0f * world.diff().battery / (1.0f + 0.4f * p.perk(Perk::Battery)) * ((p.light_on && p.nv_on) ? 1.6f : 1.0f);
+        if (p.battery <= 0) { p.battery = 0; p.light_on = false; p.nv_on = false; toast(i, "BATTERY IS DEAD"); }
     } else {
         p.battery = std::min(1.0f, p.battery + dt / 260.0f); // self-charging (wind-up) cell
     }
@@ -674,7 +692,7 @@ void GameSim::update_player_stats(int i, float dt) {
     const LevelInfo& li = world.info();
     float drain = li.sanity_drain;
     float light = light_at(p.pos);
-    if (p.light_on) light += 0.4f;
+    if (p.light_on || p.nv_on) light += 0.4f;
     if (light < 0.35f) drain += 0.35f * (1.0f - light / 0.35f);
     for (int j = 0; j < IRIS_MAX_PLAYERS; j++) {
         if (j == i || !players[j].active || !players[j].st.alive) continue;

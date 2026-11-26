@@ -56,7 +56,8 @@ void player_tick(PlayerState& p, const InputCmd& cmd, const World& world, float 
     float mag = std::sqrt(mx * mx + mz * mz);
     if (mag > 1) { mx /= mag; mz /= mag; mag = 1; }
 
-    bool boosted = p.boost > 0;
+    bool juiced = p.juice >= 0;           // memory juice: you're fast, you don't get tired... for now
+    bool boosted = p.boost > 0 || juiced;
     bool wants_sprint = (cmd.buttons & BTN_SPRINT) && !crouching && mz > 0.3f && mag > 0.5f;
     if (p.exhausted && p.stamina > 0.35f) p.exhausted = false;
     bool sprinting = wants_sprint && !p.exhausted;
@@ -68,7 +69,7 @@ void player_tick(PlayerState& p, const InputCmd& cmd, const World& world, float 
     }
 
     float speed = crouching ? CROUCH_SPEED : (sprinting ? SPRINT_SPEED : WALK_SPEED);
-    if (boosted) speed *= BOOST_MULT;
+    if (boosted) speed *= juiced ? 1.65f : BOOST_MULT;
     if (p.slow > 0) speed *= 0.72f;
     if (world.water(floor_to_int(p.pos.x / CELL), floor_to_int(p.pos.z / CELL))) speed *= 0.62f; // wading through the sea
     Vec2 fwd = yaw_forward(p.yaw), right = yaw_right(p.yaw);

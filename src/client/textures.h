@@ -36,7 +36,14 @@ enum Material : int {
     MAT_PROP,    // poles, frames
     MAT_FURN,    // furniture atlas (Level 5 rooms): 4 quadrants, see furniture_atlas()
     MAT_DECAL,   // alpha-tested detail atlas, 4x4: papers, stains, cracks, puddles, outlets... (see DECAL_*)
+    MAT_CROP,    // alpha-tested, two-sided: wheat (Level 10)
     MAT_COUNT
+};
+
+// cells of the furniture/props atlas (MAT_FURN), 4x4
+enum FurnTex : int {
+    FT_WOOD, FT_SHEET, FT_VELVET, FT_DRAWER, FT_PAINTING, FT_METAL, FT_LOCKER, FT_CARDBOARD,
+    FT_PLASTIC, FT_LEAVES, FT_BARK, FT_RUST, FT_FABRIC, FT_STONE, FT_GLOW, FT_RUBBER,
 };
 
 enum Decal : int {
@@ -69,7 +76,9 @@ enum Sprite : int {
     SPR_PLANET,        // a lit sphere (tinted per planet)
     SPR_SUPER, SPR_MOTH, SPR_SILENCE, SPR_MEDKIT, SPR_BULB, SPR_GLOWSTICK, SPR_MUSICBOX, SPR_RABBIT, SPR_COMPASS, SPR_RADIO,
     SPR_PISTOL, SPR_SHOTGUN, SPR_RIFLE,
+    SPR_BATTERY, SPR_NV, SPR_CHALK, SPR_PILLS,
     SPR_STAR,          // a tiny bright point
+    SPR_GRIT,          // near-white noise: surface grain for models
     SPR_COUNT
 };
 Image make_sprite(Sprite s);
