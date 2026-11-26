@@ -862,9 +862,9 @@ void Renderer::draw_world(const World& w, const Camera& cam, float time, float f
             continue;
         }
         if (p.kind == PropKind::Mark) { // a chalk X on the floor, faintly luminous so you can find it again
-            float yaw = (uint8_t)p.item / 255.0f * 2 * PI;
+            float myaw = (uint8_t)p.item / 255.0f * 2 * PI;
             for (int k = 0; k < 2; k++) {
-                float a = yaw + PI / 4 + k * PI / 2;
+                float a = myaw + PI / 4 + k * PI / 2;
                 Vec3 d{std::cos(a) * 0.35f, 0, std::sin(a) * 0.35f}, s2{-std::sin(a) * 0.035f, 0, std::cos(a) * 0.035f};
                 Vec3 c{p.pos.x, 0.012f, p.pos.z};
                 push_quad(c - d - s2, c + d - s2, c + d + s2, c - d + s2, rgba(0.95f, 0.95f, 0.9f, 0.85f));

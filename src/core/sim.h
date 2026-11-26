@@ -1,8 +1,7 @@
 // Backrooms Iris - the game simulation: players, entities, items, sanity, exits.
 //
 // One GameSim runs the authoritative game. In single player / sandbox it lives in the client;
-// in multiplayer it lives in the server (dedicated, or hosted inside a player's game) and
-// clients only render snapshots of it. No rendering, no sockets, no SDL in here.
+// in multiplayer it runs inside the host's game and everyone else renders snapshots of it. No rendering, no sockets, no SDL in here.
 #pragma once
 #include <cstdint>
 #include <deque>

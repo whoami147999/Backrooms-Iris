@@ -124,7 +124,7 @@ void NetClient::handle(const uint8_t* data, int len, double now) {
         error = r.str();
         state = State::Failed;
     } else if (type == PKT_BYE) {
-        error = "THE SERVER SHUT DOWN";
+        error = "THE HOST LEFT THE GAME";
         state = State::Failed;
     } else if (type == PKT_SNAPSHOT && state == State::Connected) {
         Snapshot s;
@@ -175,7 +175,9 @@ void NetClient::handle(const uint8_t* data, int len, double now) {
             p.pos.x = finite_or(r.f32());
             p.pos.z = finite_or(r.f32());
             p.life = finite_or(r.f32());
-            if ((int)p.item < ITEM_COUNT) s.props.push_back(p);
+            // (only real items need a valid item type: tapes, breakers and chalk marks keep their
+            // rotation / side in that byte)
+            if (p.kind != PropKind::Item || ((int)p.item > 0 && (int)p.item < ITEM_COUNT)) s.props.push_back(p);
         }
         if (s.epoch != picked_epoch) { picked.clear(); picked_epoch = s.epoch; }
         int k = r.u8();
@@ -220,7 +222,7 @@ void NetClient::poll(double now) {
         if (from == server_) handle(buf, n, now);
     if (state == State::Connected && now - last_heard_ > 8.0) {
         state = State::Failed;
-        error = "LOST CONNECTION TO THE SERVER";
+        error = "LOST CONNECTION TO THE HOST";
     }
 }
 

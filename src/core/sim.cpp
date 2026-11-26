@@ -740,7 +740,7 @@ int GameSim::closest_player(Vec2 pos, float* dist) const {
 }
 
 bool GameSim::plan_path(Entity& e, Vec2 goal) {
-    // BFS over cells, bounded so it stays cheap on an X230 (and a Vita host).
+    // BFS over cells, bounded so it stays cheap on old laptops.
     int sx = floor_to_int(e.pos.x / CELL), sz = floor_to_int(e.pos.z / CELL);
     int gx = floor_to_int(goal.x / CELL), gz = floor_to_int(goal.z / CELL);
     e.path.clear();
@@ -1026,9 +1026,9 @@ bool GameSim::find_spawn_cell(Vec2& out, float min_d, float max_d, bool need_dar
         for (const SimPlayer& sp : players) { // never pop into view, never too close to anyone
             if (!sp.active) continue;
             Vec2 pp{sp.st.pos.x, sp.st.pos.z};
-            float d = (pp - c).len();
+            float dist = (pp - c).len();
             // hidden = behind something, or far enough that the haze hides it
-            if (d < min_d || (d < 34.0f && !world.segment_blocked(pp, c))) { ok = false; break; }
+            if (dist < min_d || (dist < 34.0f && !world.segment_blocked(pp, c))) { ok = false; break; }
         }
         if (!ok) continue;
         if (need_dark && light_at({c.x, 1.5f, c.z}) > 0.3f) continue;

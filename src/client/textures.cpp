@@ -536,7 +536,7 @@ Image asphalt(int N, bool lines) {
         float c = (crack > 0.495f && crack < 0.505f) ? -0.07f : 0.0f;
         float l = 0.22f + agg + patch + c;
         r = l; g = l; b = l * 1.03f;
-        if (lines && std::fabs(u - 0.5f) < 0.015f && (y / (N / 8)) % 2 == 0) { r = 0.75f; g = 0.65f; b = 0.3f; }
+        if (lines && std::fabs(u - 0.5f) < 0.015f && (y / std::max(1, N / 8)) % 2 == 0) { r = 0.75f; g = 0.65f; b = 0.3f; }
     });
 }
 

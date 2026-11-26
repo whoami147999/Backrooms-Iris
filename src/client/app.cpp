@@ -696,7 +696,7 @@ void App::start_host() {
     build_menu();
 }
 
-// "1.2.3.4", "1.2.3.4:27316", "bigg-pc", "bigg-pc:27316"
+// "1.2.3.4", "1.2.3.4:27316", "my-pc", "my-pc:27316"
 void App::start_join(const std::string& addr_in) {
     std::string err, addr = addr_in;
     uint16_t port = IRIS_DEFAULT_PORT;

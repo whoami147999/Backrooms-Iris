@@ -283,6 +283,16 @@ static void test_network() {
     cfg.seed = 5;
     std::string err;
     CHECK(srv.start(cfg, &err), "server start: %s", err.c_str());
+    { // a chalk mark keeps its rotation in the item byte: it must still reach the clients
+        Vec3 sp = srv.sim.world.spawn_point();
+        Prop m;
+        m.id = 60000;
+        m.kind = PropKind::Mark;
+        m.item = (ItemType)200;
+        m.pos = Vec2{sp.x + 1, sp.z};
+        m.life = 600;
+        srv.sim.props.push_back(m);
+    }
     NetClient cl;
     auto t0 = std::chrono::steady_clock::now();
     auto now = [&] { return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(); };
@@ -305,6 +315,9 @@ static void test_network() {
     float moved = (cl.snap.players[cl.my_id].st.pos - World(LevelId::L11, 5).spawn_point()).len();
     CHECK(moved > 2.0f, "player only moved %.2f m on the server", moved);
     CHECK(cl.snap.ack > 50, "server acked only %u inputs", cl.snap.ack);
+    bool mark = false;
+    for (const PropSnap& p : cl.snap.props) mark |= p.kind == PropKind::Mark && (int)p.item == 200;
+    CHECK(mark, "chalk mark didn't reach the client");
     std::printf("  network: connected, %u snapshots, %u inputs acked, moved %.1f m\n", cl.snap_count, cl.snap.ack, moved);
     cl.disconnect();
     srv.stop();
@@ -379,7 +392,7 @@ static void test_host_security() {
     CHECK(biggest <= QUERY_SIZE, "reply of %d bytes is bigger than the query", biggest);
     CHECK(srv.player_count() == 0, "a HELLO without a cookie got a slot");
     FoundServer f;
-    char reply[QUERY_SIZE + 1] = "IRIS! name=\"BIGG'S GAME\" protocol=7 players=1/4 level=\"LEVEL 0\" password=1";
+    char reply[QUERY_SIZE + 1] = "IRIS! name=\"SAM'S GAME\" protocol=7 players=1/4 level=\"LEVEL 0\" password=1";
     CHECK(parse_server_info(reply, f) && f.locked && f.max_players == 4, "status line not parsed");
 
     // junk input never reaches the sim as NaN / out-of-range values
@@ -397,6 +410,34 @@ static void test_host_security() {
     CHECK(clean_name("") == "WANDERER", "empty name");
     raw.close();
     srv.stop();
+
+    // 4 players max (host included): the 5th is turned away, everyone else plays
+    Server open;
+    ServerConfig oc;
+    oc.port = 27397;
+    oc.level = LevelId::L0;
+    CHECK(open.start(oc, &err), "server start: %s", err.c_str());
+    NetClient cls[5];
+    double s0 = now();
+    for (int k = 0; k < 4; k++) cls[k].connect("127.0.0.1", 27397, "P" + std::to_string(k), "", s0);
+    while (now() - s0 < 1.5) {
+        open.poll();
+        for (int k = 0; k < 4; k++) cls[k].poll(now());
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    cls[4].connect("127.0.0.1", 27397, "FIFTH", "", now());
+    double s1 = now();
+    while (now() - s1 < 1.5) {
+        open.poll();
+        for (int k = 0; k < 5; k++) cls[k].poll(now());
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    int in = 0;
+    for (int k = 0; k < 4; k++) in += cls[k].state == NetClient::State::Connected && cls[k].got_snapshot;
+    CHECK(in == 4 && open.player_count() == 4, "only %d of 4 players got in", in);
+    CHECK(cls[4].state == NetClient::State::Failed && cls[4].error == "GAME IS FULL", "5th player: %s", cls[4].error.c_str());
+    for (auto& c : cls) c.disconnect();
+    open.stop();
     std::printf("  host security: password, cookie handshake, padded queries, input sanitizing ok\n");
 }
 
@@ -600,7 +641,7 @@ static void test_new_items() {
 static void test_tailscale() {
     const char* json = R"({
   "Version": "1.76.1", "BackendState": "Running", "TailscaleIPs": ["100.101.1.2", "fd7a:115c:a1e0::1"],
-  "Self": {"ID": "n1", "HostName": "bigg-pc", "DNSName": "bigg-pc.tail1234.ts.net.", "OS": "linux",
+  "Self": {"ID": "n1", "HostName": "my-pc", "DNSName": "my-pc.tail1234.ts.net.", "OS": "linux",
            "TailscaleIPs": ["100.101.1.2", "fd7a:115c:a1e0::1"], "Online": true, "Capabilities": ["a", "b"]},
   "Peer": {
     "nodekey:abc": {"HostName": "friend-laptop", "DNSName": "friend-laptop.tail1234.ts.net.", "OS": "windows",
@@ -608,11 +649,11 @@ static void test_tailscale() {
                     "PrimaryRoutes": null, "Tags": [], "LastSeen": "0001-01-01T00:00:00Z", "KeepAlive": false},
     "nodekey:def": {"HostName": "old-phone", "TailscaleIPs": ["100.70.0.9"], "Online": false, "Escaped": "a \"quoted\" name é"}
   },
-  "CurrentTailnet": {"Name": "bigg@example.com", "MagicDNSSuffix": "tail1234.ts.net", "MagicDNSEnabled": true}
+  "CurrentTailnet": {"Name": "you@example.com", "MagicDNSSuffix": "tail1234.ts.net", "MagicDNSEnabled": true}
 })";
     TailStatus st;
     CHECK(parse_tailscale_status(json, st), "tailscale json should parse");
-    CHECK(st.running && st.self_ip == "100.101.1.2" && st.self_name == "bigg-pc", "self: %s %s", st.self_ip.c_str(), st.self_name.c_str());
+    CHECK(st.running && st.self_ip == "100.101.1.2" && st.self_name == "my-pc", "self: %s %s", st.self_ip.c_str(), st.self_name.c_str());
     CHECK(st.peers.size() == 2, "two peers (%zu)", st.peers.size());
     bool friend_ok = false;
     for (auto& p : st.peers) if (p.name == "friend-laptop" && p.ip == "100.88.7.6" && p.online) friend_ok = true;

@@ -58,7 +58,9 @@ inline uint32_t password_proof(const std::string& password, uint32_t cookie) {
     return h;
 }
 
-inline float finite_or(float v, float fallback = 0.0f) { return std::isfinite(v) ? v : fallback; }
+// Floats off the wire: NaN/inf become `fallback`, everything else is clamped to a sane range
+// (no world coordinate or timer gets anywhere near a million).
+inline float finite_or(float v, float fallback = 0.0f) { return std::isfinite(v) ? clampf(v, -1.0e6f, 1.0e6f) : fallback; }
 
 class Writer {
 public:

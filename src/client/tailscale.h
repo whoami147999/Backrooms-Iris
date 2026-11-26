@@ -12,7 +12,7 @@
 namespace iris {
 
 struct TailPeer {
-    std::string name;     // host name ("bigg-pc")
+    std::string name;     // host name ("my-pc")
     std::string ip;       // first IPv4 tailnet address
     bool online = false;
     std::string os;

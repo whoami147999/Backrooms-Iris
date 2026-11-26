@@ -123,7 +123,7 @@ bool UdpSocket::open(uint16_t port, bool broadcast, const char* bind_ip) {
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
     addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    uint32_t bip;
+    uint32_t bip = 0;
     if (bind_ip && *bind_ip && parse_ipv4(bind_ip, bip)) addr.sin_addr.s_addr = htonl(bip);
     if (bind((int)s, (sockaddr*)&addr, sizeof addr) != 0) {
         IRIS_CLOSE((int)s);

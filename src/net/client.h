@@ -49,7 +49,7 @@ struct FoundServer {
     std::string name, level;
     int players = 0, max_players = 0, protocol = 0;
     double seen = 0;
-    std::string via;   // "TAILSCALE: bigg-pc" when found on the tailnet, empty on the LAN
+    std::string via;   // "TAILSCALE: my-pc" when found on the tailnet, empty on the LAN
     bool locked = false; // the host set a password
 };
 

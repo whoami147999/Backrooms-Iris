@@ -1,4 +1,4 @@
-// Backrooms Iris - tiny UDP socket wrapper: Linux, FreeBSD, Windows (winsock) and PS Vita.
+// Backrooms Iris - tiny UDP socket wrapper: Linux, the BSDs and Windows (winsock).
 #pragma once
 #include <cstdint>
 #include <string>
