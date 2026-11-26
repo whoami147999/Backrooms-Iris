@@ -28,6 +28,7 @@
 #include <vector>
 
 #include "../../client/font.h"
+#include "../../core/config.h"
 #include "../platform.h"
 #include "../sdl_gamepad.h"
 
@@ -97,8 +98,14 @@ bool file_exists(const char* path) {
 
 // A text screen drawn straight into a display framebuffer (no GPU, no vitaGL), for errors that
 // happen before or instead of graphics. Waits for a button, then quits the app.
+bool g_vgl_up = false; // once vitaGL owns the display (and its splash), we can't draw our own screen
+
 [[noreturn]] void fatal_screen(const std::vector<std::string>& lines) {
     for (const std::string& l : lines) vlog("[iris] FATAL: %s\n", l.c_str());
+    if (g_vgl_up) { // nothing we draw here would show: quit (the reason is in log.txt) rather than look frozen
+        sceKernelExitProcess(0);
+        std::abort();
+    }
     const int W = 960, H = 544, S = 3;
     void* base = nullptr;
     SceUID mem = sceKernelAllocMemBlock("iris_fb", SCE_KERNEL_MEMBLOCK_TYPE_USER_CDRAM_RW, 2 * 1024 * 1024, nullptr);
@@ -221,12 +228,12 @@ bool platform_init(const PlatformConfig& cfg) {
     if (free_user > 0 && free_user < headroom * 3) headroom = free_user / 3; // little RAM: still leave vitaGL most of it
     platform_boot_stage("vitagl init");
     vlog("[iris] vita: vglInitExtended(%s, %d KB headroom)\n", cfg.safe_mode ? "no msaa" : "2x msaa", headroom / 1024);
-    if (!vglInitExtended(0, 960, 544, headroom, cfg.safe_mode ? SCE_GXM_MULTISAMPLE_NONE : SCE_GXM_MULTISAMPLE_2X)) {
-        vlog("[iris] vita: vglInitExtended failed\n");
-        fatal_screen({"BACKROOMS IRIS CAN'T START", "VITAGL FAILED TO START (GPU / SHADER COMPILER)",
-                      "RE-EXTRACT LIBSHACCCG.SUPRX WITH SHARKF00D", "", "PRESS X OR START TO EXIT"});
-    }
-    vlog("[iris] vita: vitaGL ready\n");
+    // NB: vglInit* return GL_FALSE on success. GL_TRUE means "worked, but had to fall back to a
+    // smaller resolution" (1.0.1 and older read it the other way round and stopped right here,
+    // behind vitaGL's spinning boot logo). vitaGL keeps that logo up until our first frame.
+    GLboolean fell_back = vglInitExtended(0, 960, 544, headroom, cfg.safe_mode ? SCE_GXM_MULTISAMPLE_NONE : SCE_GXM_MULTISAMPLE_2X);
+    g_vgl_up = true;
+    vlog("[iris] vita: vitaGL ready%s\n", fell_back ? " (resolution fallback)" : "");
     log_free_memory("after vitaGL");
     platform_boot_stage("sdl init");
 
@@ -268,15 +275,19 @@ void platform_thread_background(int core) {
 
 void platform_boot_stage(const char* stage) {
     vlog("[iris] stage: %s\n", stage);
+    // "1.0.2|stage": a breadcrumb left by another version isn't this version's crash
+    std::string line = std::string(IRIS_VERSION) + "|" + stage;
     SceUID fd = sceIoOpen(BOOT_FILE, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
     if (fd < 0) return;
-    sceIoWrite(fd, stage, (SceSize)std::strlen(stage));
+    sceIoWrite(fd, line.data(), (SceSize)line.size());
     sceIoClose(fd);
 }
 
 std::string platform_last_crash() {
     read_prev_stage();
-    const std::string& s = g_prev_stage;
+    const std::string prefix = std::string(IRIS_VERSION) + "|";
+    if (g_prev_stage.compare(0, prefix.size(), prefix) != 0) return {}; // older version (or none)
+    const std::string s = g_prev_stage.substr(prefix.size());
     if (s.empty() || s == "exit") return {};
     if (s.size() >= 3 && s.compare(s.size() - 3, 3, "-ok") == 0) return {};
     return s;

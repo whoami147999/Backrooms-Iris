@@ -2,7 +2,7 @@
 // together with IRIS_PROTOCOL_VERSION).
 #pragma once
 
-#define IRIS_VERSION "1.0.1"
+#define IRIS_VERSION "1.0.2"
 #define IRIS_PROTOCOL_VERSION 7
 #define IRIS_DEFAULT_PORT 27315
 #define IRIS_MAX_PLAYERS 4

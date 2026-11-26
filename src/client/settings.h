@@ -26,6 +26,7 @@ struct Settings {
     bool retro = true;          // PS1 look
     float volume = 0.8f;        // master volume 0..1
     bool safe_mode = false;     // Vita: no MSAA, sound, mipmaps or worker thread (turned on after a crashed boot)
+    std::string safe_mode_ver;  // the version that turned it on (a new version starts without it)
 
     void load(const std::string& path);
     void save(const std::string& path) const;

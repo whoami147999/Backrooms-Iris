@@ -60,6 +60,10 @@ bool App::init(const DevOptions& dev) {
         if (!crash_note_.empty()) {
             std::printf("[iris] last run crashed during '%s': safe mode on\n", crash_note_.c_str());
             cfg_.safe_mode = true;
+            cfg_.safe_mode_ver = IRIS_VERSION;
+            save_settings();
+        } else if (cfg_.safe_mode && cfg_.safe_mode_ver != IRIS_VERSION) {
+            cfg_.safe_mode = false; // turned on by an older version: give the new one a clean start
             save_settings();
         }
     }
@@ -420,7 +424,7 @@ void App::build_menu() {
             m.items.back().hint = "GLOWING LAMPS, LIGHT SHAFTS, FLICKERING TUBES, DUST";
             toggle("SHOW FPS", &cfg_.show_fps);
             if (platform_is_vita()) {
-                toggle("SAFE MODE", &cfg_.safe_mode, [this] { save_settings(); });
+                toggle("SAFE MODE", &cfg_.safe_mode, [this] { cfg_.safe_mode_ver = IRIS_VERSION; save_settings(); });
                 m.items.back().hint = "NO SOUND, MSAA OR MIPMAPS. FOR CRASHES. RESTART THE GAME TO APPLY";
             }
             spacer();
