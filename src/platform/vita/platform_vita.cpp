@@ -7,7 +7,12 @@
 #include <psp2/display.h>
 #include <psp2/io/fcntl.h>
 #include <psp2/io/stat.h>
-#include <psp2/kernel/modulemgr.h>
+#include <psp2/kernel/threadmgr.h>
+#ifndef SCE_KERNEL_CPU_MASK_USER_0
+#define SCE_KERNEL_CPU_MASK_USER_0 (0x01 << 16)
+#define SCE_KERNEL_CPU_MASK_USER_1 (0x02 << 16)
+#define SCE_KERNEL_CPU_MASK_USER_2 (0x04 << 16)
+#endif
 #include <psp2/kernel/processmgr.h>
 #include <psp2/kernel/sysmem.h>
 #include <psp2/power.h>
@@ -184,20 +189,23 @@ bool platform_init(const PlatformConfig& cfg) {
                       "3. START BACKROOMS IRIS AGAIN",
                       "",
                       "PRESS X OR START TO EXIT"});
-    // Load (without starting) the module once to check it's a valid, signed module. A broken
-    // copy is a classic reason for vitaGL to die during init.
-    platform_boot_stage("libshacccg probe");
+    // Sanity-check the file without touching the module (vitaGL / vitaShaRK must be the first to
+    // load it: loading + unloading it ourselves can leave it unusable for them, and then vitaGL
+    // has no shader compiler and the first frame never appears).
     {
         const char* path = shacccg_data ? "ur0:data/libshacccg.suprx" : "ur0:data/external/libshacccg.suprx";
-        SceUID mod = sceKernelLoadModule(path, 0, nullptr);
-        vlog("[iris] vita: probe load %s -> 0x%08X\n", path, (unsigned)mod);
-        if (mod >= 0) sceKernelUnloadModule(mod, 0, nullptr);
-        else
+        SceIoStat st;
+        long long size = sceIoGetstat(path, &st) >= 0 ? (long long)st.st_size : -1;
+        vlog("[iris] vita: %s is %lld bytes\n", path, size);
+        if (size >= 0 && size < 64 * 1024)
             fatal_screen({"BACKROOMS IRIS CAN'T START",
-                          "LIBSHACCCG.SUPRX IS THERE BUT WON'T LOAD (BROKEN COPY?)",
+                          "LIBSHACCCG.SUPRX LOOKS BROKEN (TOO SMALL)",
                           "DELETE IT, RUN SHARKF00D AGAIN, THEN RESTART",
                           "", "PRESS X OR START TO EXIT"});
     }
+
+    // the main thread (game + all GL calls) keeps CPU 0 to itself; workers go to cores 1 and 2
+    sceKernelChangeThreadCpuAffinityMask(0, SCE_KERNEL_CPU_MASK_USER_0);
 
     // run the CPU/GPU at full clocks
     platform_boot_stage("clocks");
@@ -246,6 +254,16 @@ void platform_poll(InputState& in) {
     in.width = 960;
     in.height = 544;
     (void)prev;
+}
+
+// Background threads (chunk builder, sound synth): lower priority than the main thread and on
+// their own core, so a busy worker can never starve the frame loop (the Vita's scheduler doesn't
+// time-slice threads of equal priority).
+void platform_thread_background(int core) {
+    int r = sceKernelChangeThreadPriority(0, 0x10000100 + 16); // default user priority + 16 = lower
+    if (r < 0) r = sceKernelChangeThreadPriority(0, 176);        // (same thing, absolute)
+    int a = sceKernelChangeThreadCpuAffinityMask(0, core == 2 ? SCE_KERNEL_CPU_MASK_USER_2 : SCE_KERNEL_CPU_MASK_USER_1);
+    vlog("[iris] vita: worker thread -> core %d (priority 0x%08X, affinity 0x%08X)\n", core, (unsigned)r, (unsigned)a);
 }
 
 void platform_boot_stage(const char* stage) {

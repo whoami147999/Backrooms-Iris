@@ -178,6 +178,7 @@ void platform_set_vsync(bool on) {
 bool platform_is_vita() { return false; }
 
 void platform_boot_stage(const char*) {}
+void platform_thread_background(int) {}
 std::string platform_last_crash() { return {}; }
 
 void platform_swap() { SDL_GL_SwapWindow(g_win); }

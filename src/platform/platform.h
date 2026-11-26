@@ -67,4 +67,7 @@ void platform_shutdown();
 void platform_boot_stage(const char* stage);
 std::string platform_last_crash();    // stage the previous run died in, "" if it didn't
 
+// Call at the top of a worker thread: lowers its priority / moves it off the main core (Vita).
+void platform_thread_background(int core);
+
 } // namespace iris

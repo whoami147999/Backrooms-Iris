@@ -75,7 +75,7 @@ bool App::init(const DevOptions& dev) {
 
     if (platform_is_vita()) {
         rs_.view_dist = 24.0f;
-        rs_.texture_size = 512;     // sharper than before; generated once per level
+        rs_.texture_size = 256;     // 4x less work than 512 at every level load (the Vita CPU is slow)
         rs_.chunk_builds_per_frame = 1;
         rs_.post_effects = false;
         rs_.mesh_detail = 1;
@@ -111,6 +111,15 @@ bool App::init(const DevOptions& dev) {
     dev_setup();
     build_menu();
     std::printf("[iris] init done\n");
+    // Show something right away: the first real frame generates a level's textures, which takes
+    // a few seconds on a Vita. (If boot.txt ever stops at "loading screen", GL itself is stuck.)
+    platform_boot_stage("loading screen");
+    ren_.begin_frame(platform_is_vita() ? 960 : in_.width > 0 ? in_.width : 1280, platform_is_vita() ? 544 : in_.height > 0 ? in_.height : 720);
+    ren_.begin_2d();
+    ren_.text(ren_.width / 2.0f, ren_.height / 2.0f - 10 * ui(), ui() * 2, "BACKROOMS IRIS", rgba(0.95f, 0.88f, 0.6f), 1);
+    ren_.text(ren_.width / 2.0f, ren_.height / 2.0f + 20 * ui(), ui(), "LOADING...", rgba(0.7f, 0.66f, 0.55f), 1);
+    ren_.end_2d();
+    platform_swap();
     stage("first frame");
     return true;
 }

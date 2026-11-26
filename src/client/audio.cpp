@@ -2,6 +2,8 @@
 
 #include <SDL.h>
 
+#include "../platform/platform.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -492,7 +494,11 @@ bool Audio::init() {
     want.callback = callback;
     want.userdata = this;
     // synthesize in the background: the game starts right away, sounds join a moment later
-    synth_ = std::thread([this] { synth_all(buf_); ready_ = true; });
+    synth_ = std::thread([this] {
+        platform_thread_background(2);
+        synth_all(buf_);
+        ready_ = true;
+    });
     dev_ = SDL_OpenAudioDevice(nullptr, 0, &want, &have, SDL_AUDIO_ALLOW_FREQUENCY_CHANGE);
     if (!dev_) {
         std::printf("[iris] audio: can't open a device (%s)\n", SDL_GetError());

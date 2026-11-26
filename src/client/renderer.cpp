@@ -108,6 +108,7 @@ bool Renderer::init(const RenderSettings& s) {
 }
 
 void Renderer::worker_loop() {
+    platform_thread_background(1);
     for (;;) {
         Job job;
         {

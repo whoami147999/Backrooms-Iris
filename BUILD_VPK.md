@@ -28,9 +28,9 @@ cmake --build build-vita -j
 
 Output: `build-vita/BackroomsIris.vpk` (title ID BKIR00001).
 
-Version 1.0.0. Sound uses SDL audio (`SceAudio_stub`, already linked). The renderer builds chunk meshes on a
+Version 1.0.1. Sound uses SDL audio (`SceAudio_stub`, already linked). The renderer builds chunk meshes on a
 worker thread (std::thread, so the target links `pthread`) and generates its textures at level load (power-of-two,
-512 px on the Vita: expect ~2-3 s per level). The GLSL post effects are PC only (`#if !defined(IRIS_GL_VITA)`), so
+256 px on the Vita: about a second per level). The GLSL post effects are PC only (`#if !defined(IRIS_GL_VITA)`), so
 vitaGL only ever sees fixed-function GL.
 
 ## 3. If it fails
@@ -69,8 +69,8 @@ kills the game (C2-12828-1 etc.), the next boot finds an unfinished step there, 
   thread, no mipmaps, 256 px textures, shorter view distance. Settings > SAFE MODE turns it off again (applies on
   the next start).
 
-Steps, in order: `libshacccg check`, `libshacccg probe`, `clocks`, `vitagl init`, `sdl init`, `audio init`, `renderer init`,
-`menu setup`, `first frame`, `level N textures`, `level N texture upload`, `level N first draw`,
+Steps, in order: `libshacccg check`, `clocks`, `vitagl init`, `sdl init`, `audio init`, `renderer init`,
+`menu setup`, `loading screen`, `first frame`, `level N textures`, `level N texture upload`, `level N first draw`,
 `level N meshes`, `level N playing`. The log also records free memory at boot and after vitaGL starts.
 
 ### Known: crash during `vitagl init`
@@ -81,10 +81,18 @@ code. Most likely causes, in order:
 1. **Mismatched vitaGL / vitaShaRK / SceShaccCgExt** (e.g. vitaGL built from source against an old vitaShaRK).
    Reinstall all three from the same vdpm run: `vdpm vitaShaRK && vdpm SceShaccCgExt && vdpm vitaGL`, or use the
    GitHub Actions workflow in `.github/workflows/vita.yml` (fresh `vitasdk/vitasdk` image every time).
-2. **A broken libshacccg.suprx**: the game loads it once before vitaGL does and shows a message if it won't load.
+2. **A broken libshacccg.suprx**: the game checks the file exists and isn't tiny. (1.0.0 and 0.6.2 also loaded and
+   unloaded it as a test before vitaGL started, which could leave vitaGL without a shader compiler and stuck on its
+   first frame. 1.0.1 never touches the module.)
 3. **Memory**: the game logs free RAM before vitaGL starts and leaves less of it to newlib (96 MB heap).
 
 The log is written straight through sceIo, so it survives crashes.
+
+### Threads on the Vita
+
+The Vita's scheduler doesn't time-slice threads of the same priority, so the chunk builder and the sound synth call
+`platform_thread_background()`: lower priority, and cores 1 / 2. The main thread (game loop + every GL call) is
+pinned to core 0.
 
 ## Optional: PC build (Linux) to check the code compiles
 
