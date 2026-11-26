@@ -10,8 +10,6 @@
 #include <vector>
 
 #include "../core/sim.h"
-#include "../net/client.h"
-#include "../net/server.h"
 #include "renderer.h"
 
 namespace iris {
@@ -54,8 +52,11 @@ public:
 
 std::unique_ptr<Session> make_single_player(LevelId level, uint32_t seed, const std::string& name, bool sandbox = false,
                                             Difficulty diff = Difficulty::Medium);
-// host = true starts a server on this machine (own thread) and joins it.
-std::unique_ptr<Session> make_multiplayer(const std::string& host, uint16_t port, const std::string& name,
+#if IRIS_MULTIPLAYER
+// start_server = true hosts the game on this machine (own thread) and joins it; friends connect
+// straight to you (LAN, Tailscale or a forwarded UDP port). No dedicated server involved.
+std::unique_ptr<Session> make_multiplayer(const std::string& host, uint16_t port, const std::string& name, const std::string& password,
                                           bool start_server, LevelId level, Difficulty diff, double now, std::string* error);
+#endif
 
 } // namespace iris

@@ -1,7 +1,14 @@
 // Backrooms Iris - wire format. Little-endian, fixed layout, no allocations on the hot path.
 //
-// Client -> server:  HELLO, INPUT (last few commands, redundantly), BYE, and "IRIS?" queries
-// Server -> client:  WELCOME / REJECT, SNAPSHOT (20 Hz), and "IRIS!" query answers
+// Client -> host:  HELLO, INPUT (last few commands, redundantly), BYE, and "IRIS?" queries
+// Host -> client:  CHALLENGE, WELCOME / REJECT, SNAPSHOT (20 Hz), and "IRIS!" query answers
+//
+// Joining is a two-step handshake so a spoofed source address can't get a slot (and a flood of
+// snapshots aimed at someone else): HELLO -> CHALLENGE(cookie) -> HELLO(cookie, password proof)
+// -> WELCOME. The cookie is a keyed hash of the joiner's address, so the host keeps no state for
+// strangers. If the host set a password, the joiner proves it knows it without sending it.
+// Status queries must be padded to QUERY_SIZE bytes, and the answer is never bigger than the
+// question (no UDP amplification).
 #pragma once
 #include <algorithm>
 #include <cmath>
@@ -9,15 +16,49 @@
 #include <cstring>
 #include <string>
 
+#include "hash.h"
 #include "player.h"
 #include "sim.h"
 
 namespace iris {
 
 enum PacketType : uint8_t {
-    PKT_HELLO = 1, PKT_WELCOME = 2, PKT_REJECT = 3, PKT_INPUT = 4, PKT_SNAPSHOT = 5, PKT_BYE = 6,
+    PKT_HELLO = 1, PKT_WELCOME = 2, PKT_REJECT = 3, PKT_INPUT = 4, PKT_SNAPSHOT = 5, PKT_BYE = 6, PKT_CHALLENGE = 7,
 };
 constexpr int MAX_PACKET = 1400;
+constexpr int QUERY_SIZE = 320;    // "IRIS?" + zero padding
+constexpr int MAX_NAME = 14;
+
+// Player names: upper case letters, digits, space, - and _ (what the font and the name field have).
+inline std::string clean_name(const std::string& in) {
+    std::string out;
+    for (char ch : in) {
+        char c = (char)((ch >= 'a' && ch <= 'z') ? ch - 32 : ch);
+        bool ok = (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == ' ' || c == '-' || c == '_';
+        if (ok && out.size() < (size_t)MAX_NAME && !(c == ' ' && (out.empty() || out.back() == ' '))) out += c;
+    }
+    while (!out.empty() && out.back() == ' ') out.pop_back();
+    return out.empty() ? "WANDERER" : out;
+}
+
+// Passwords are case-insensitive. The proof ties the password to this joiner's cookie, so the
+// password itself never goes over the wire (it's a game lobby lock, not bank-grade crypto).
+inline std::string clean_password(const std::string& in) {
+    std::string out;
+    for (char ch : in) {
+        char c = (char)((ch >= 'a' && ch <= 'z') ? ch - 32 : ch);
+        if (c > ' ' && c < 127 && out.size() < 24) out += c;
+    }
+    return out;
+}
+inline uint32_t password_proof(const std::string& password, uint32_t cookie) {
+    uint32_t h = mix32(cookie ^ 0x3c6ef372u);
+    for (int round = 0; round < 64; round++) // a little work per guess
+        for (unsigned char c : password) h = mix32(h ^ (c + (uint32_t)round * 0x9e3779b9u));
+    return h;
+}
+
+inline float finite_or(float v, float fallback = 0.0f) { return std::isfinite(v) ? v : fallback; }
 
 class Writer {
 public:
@@ -78,10 +119,10 @@ inline void write_cmd(Writer& w, uint32_t seq, const InputCmd& c) {
 inline InputCmd read_cmd(Reader& r, uint32_t& seq) {
     InputCmd c;
     seq = r.u32();
-    c.move_x = r.i8() / 127.0f;
-    c.move_z = r.i8() / 127.0f;
-    c.yaw = r.f32();
-    c.pitch = r.f32();
+    c.move_x = clampf(r.i8() / 127.0f, -1, 1);
+    c.move_z = clampf(r.i8() / 127.0f, -1, 1);
+    c.yaw = std::remainder(finite_or(r.f32()), 2 * PI);
+    c.pitch = clampf(finite_or(r.f32()), -1.55f, 1.55f);
     c.buttons = r.u8();
     c.pickup_ctr = r.u8();
     c.use_ctr = r.u8();
@@ -110,19 +151,19 @@ inline void write_player(Writer& w, const PlayerState& s) {
 }
 
 inline void read_player(Reader& r, PlayerState& s) {
-    s.pos.x = r.f32(); s.pos.z = r.f32(); s.pos.y = 0; s.vel.x = r.f32(); s.vel.z = r.f32();
-    s.yaw = r.f32(); s.pitch = r.f32();
-    s.crouch = r.u8() / 255.0f; s.stamina = r.f32(); s.exhausted = r.u8() != 0;
-    s.bob = r.f32(); s.speed = r.f32();
-    s.health = r.f32(); s.sanity = r.f32(); s.boost = r.f32(); s.slow = r.f32(); s.lucky = r.f32();
-    s.juice = r.f32(); s.hurt = r.f32(); s.swing = r.f32(); s.battery = r.f32();
+    s.pos.x = finite_or(r.f32()); s.pos.z = finite_or(r.f32()); s.pos.y = 0; s.vel.x = finite_or(r.f32()); s.vel.z = finite_or(r.f32());
+    s.yaw = finite_or(r.f32()); s.pitch = finite_or(r.f32());
+    s.crouch = r.u8() / 255.0f; s.stamina = finite_or(r.f32()); s.exhausted = r.u8() != 0;
+    s.bob = finite_or(r.f32()); s.speed = finite_or(r.f32());
+    s.health = finite_or(r.f32()); s.sanity = finite_or(r.f32()); s.boost = finite_or(r.f32()); s.slow = finite_or(r.f32()); s.lucky = finite_or(r.f32());
+    s.juice = finite_or(r.f32()); s.hurt = finite_or(r.f32()); s.swing = finite_or(r.f32()); s.battery = finite_or(r.f32());
     s.regen = r.u8(); s.silent = r.u8(); s.flash = r.u8() / 50.0f;
     s.painkill = r.u8();
     uint8_t f = r.u8();
     s.light_on = f & 1; s.noclip = (f & 2) != 0; s.alive = (f & 4) != 0; s.nv_on = (f & 8) != 0;
     for (int i = 0; i < ITEM_COUNT; i++) s.inv[i] = r.u8();
     for (int i = 0; i < PERK_COUNT; i++) s.perks[i] = r.u8();
-    s.cause = (DeathCause)r.u8();
+    s.cause = (DeathCause)std::min<int>(r.u8(), (int)DeathCause::MemoryJuice);
 }
 
 } // namespace iris

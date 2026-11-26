@@ -15,6 +15,9 @@ struct Settings {
     bool show_fps = false;
     std::string name = "WANDERER";
     std::string last_ip = "192.168.1.";
+    std::string host_password;  // multiplayer (PC): blank = no password
+    std::string join_password;
+    std::string host_port = "27315"; // UDP port your game listens on (forward it for internet play)
     int start_level = 0;        // index into LevelId
     int difficulty = 1;         // Difficulty: 0 easy .. 3 nightmare
     bool film = true;           // film look (bloom, grain, aberration, grading)

@@ -50,6 +50,7 @@ struct FoundServer {
     int players = 0, max_players = 0, protocol = 0;
     double seen = 0;
     std::string via;   // "TAILSCALE: bigg-pc" when found on the tailnet, empty on the LAN
+    bool locked = false; // the host set a password
 };
 
 class NetClient {
@@ -69,7 +70,7 @@ public:
     uint32_t last_event = 0;
     float ping_ms = 0;
 
-    bool connect(const std::string& host, uint16_t port, const std::string& name, double now);
+    bool connect(const std::string& host, uint16_t port, const std::string& name, const std::string& password, double now);
     void disconnect();
     void poll(double now);
     void send_input(uint32_t seq, const InputCmd* cmds, const uint32_t* seqs, int count);
@@ -84,7 +85,9 @@ public:
 private:
     UdpSocket sock_, scan_sock_;
     NetAddr server_;
-    std::string name_;
+    std::string name_, password_;
+    uint32_t cookie_ = 0;
+    void send_hello(double now);
     double hello_t_ = 0, connect_start_ = 0, last_heard_ = 0;
     void handle(const uint8_t* data, int len, double now);
     std::vector<std::pair<NetAddr, std::string>> asked_; // unicast queries: who we asked, and the label

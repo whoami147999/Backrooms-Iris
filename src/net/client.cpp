@@ -21,10 +21,16 @@ bool parse_server_info(const char* t, FoundServer& out) {
         while (*e && *e != ' ') e++;
         return std::string(p, e);
     };
-    out.name = field("name=");
-    out.level = field("level=");
-    std::string diff = field("difficulty=");
-    if (!diff.empty()) out.level += "  " + diff;
+    out.name = clean_name(field("name="));
+    out.locked = field("password=") == "1";
+    auto printable = [](std::string s) {
+        std::string o;
+        for (char c : s) if (c >= ' ' && c < 127 && o.size() < 40) o += c;
+        return o;
+    };
+    out.level = printable(field("level="));
+    std::string diff = printable(field("difficulty="));
+    if (!diff.empty() && diff.size() < 12) out.level += "  " + diff;
     out.protocol = std::atoi(field("protocol=").c_str());
     std::string pl = field("players=");
     out.players = std::atoi(pl.c_str());
@@ -33,7 +39,7 @@ bool parse_server_info(const char* t, FoundServer& out) {
     return true;
 }
 
-bool NetClient::connect(const std::string& host, uint16_t port, const std::string& name, double now) {
+bool NetClient::connect(const std::string& host, uint16_t port, const std::string& name, const std::string& password, double now) {
     disconnect();
     error.clear();
     if (!net_resolve(host, port, server_)) {
@@ -46,7 +52,9 @@ bool NetClient::connect(const std::string& host, uint16_t port, const std::strin
         error = "CAN'T OPEN A SOCKET";
         return false;
     }
-    name_ = name;
+    name_ = clean_name(name);
+    password_ = clean_password(password);
+    cookie_ = 0;
     state = State::Connecting;
     connect_start_ = now;
     hello_t_ = 0;
@@ -57,6 +65,17 @@ bool NetClient::connect(const std::string& host, uint16_t port, const std::strin
     last_event = 0;
     my_id = -1;
     return true;
+}
+
+void NetClient::send_hello(double now) {
+    Writer w;
+    w.header(PKT_HELLO);
+    w.u16(IRIS_PROTOCOL_VERSION);
+    w.str(name_);
+    w.u32(cookie_);
+    w.u32(cookie_ && !password_.empty() ? password_proof(password_, cookie_) : 0);
+    sock_.send(server_, w.buf, w.n);
+    hello_t_ = now;
 }
 
 void NetClient::disconnect() {
@@ -84,9 +103,21 @@ void NetClient::handle(const uint8_t* data, int len, double now) {
     uint8_t type = r.header();
     if (!type) return;
     last_heard_ = now;
-    if (type == PKT_WELCOME) {
+    if (type == PKT_CHALLENGE && state == State::Connecting) {
+        cookie_ = r.u32();
+        bool locked = (r.u8() & 1) != 0;
+        if (r.bad) return;
+        if (locked && password_.empty()) {
+            error = "THIS GAME HAS A PASSWORD";
+            state = State::Failed;
+            return;
+        }
+        send_hello(now);
+    } else if (type == PKT_WELCOME) {
         r.u16();
-        my_id = r.u8();
+        int id = r.u8();
+        if (r.bad || id >= IRIS_MAX_PLAYERS) return;
+        my_id = id;
         if (state == State::Connecting) state = State::Connected;
         ping_ms = (float)((now - hello_t_) * 1000.0);
     } else if (type == PKT_REJECT) {
@@ -103,7 +134,7 @@ void NetClient::handle(const uint8_t* data, int len, double now) {
         s.seed = r.u32();
         s.difficulty = (Difficulty)std::min<int>(r.u8(), (int)Difficulty::COUNT - 1);
         s.epoch = r.u32();
-        s.level_time = r.f32();
+        s.level_time = finite_or(r.f32());
         s.escaped = r.u8() != 0;
         s.objective.type = (ObjType)std::min<int>(r.u8(), (int)ObjType::COUNT - 1);
         s.objective.have = r.u8();
@@ -119,7 +150,7 @@ void NetClient::handle(const uint8_t* data, int len, double now) {
             auto& p = s.players[id];
             p.active = true;
             p.name = r.str();
-            p.respawn_t = r.f32();
+            p.respawn_t = finite_or(r.f32());
             read_player(r, p.st);
         }
         int ne = r.u8();
@@ -127,11 +158,11 @@ void NetClient::handle(const uint8_t* data, int len, double now) {
             EntSnap e;
             e.id = r.u16();
             e.type = (EntityType)r.u8();
-            e.state = (EntState)r.u8();
-            e.pos.x = r.f32();
-            e.pos.z = r.f32();
+            e.state = (EntState)std::min<int>(r.u8(), (int)EntState::Stunned);
+            e.pos.x = finite_or(r.f32());
+            e.pos.z = finite_or(r.f32());
             e.yaw = (int16_t)r.u16() / 32767.0f * PI;
-            e.anim = r.f32();
+            e.anim = finite_or(r.f32());
             e.speed = r.u8() / 20.0f;
             if ((int)e.type < (int)EntityType::COUNT) s.ents.push_back(e);
         }
@@ -139,16 +170,19 @@ void NetClient::handle(const uint8_t* data, int len, double now) {
         for (int k = 0; k < npr && !r.bad; k++) {
             PropSnap p;
             p.id = r.u16();
-            p.kind = (PropKind)r.u8();
+            p.kind = (PropKind)std::min<int>(r.u8(), (int)PropKind::Mark);
             p.item = (ItemType)r.u8();
-            p.pos.x = r.f32();
-            p.pos.z = r.f32();
-            p.life = r.f32();
+            p.pos.x = finite_or(r.f32());
+            p.pos.z = finite_or(r.f32());
+            p.life = finite_or(r.f32());
             if ((int)p.item < ITEM_COUNT) s.props.push_back(p);
         }
         if (s.epoch != picked_epoch) { picked.clear(); picked_epoch = s.epoch; }
         int k = r.u8();
-        for (int j = 0; j < k && !r.bad; j++) picked.insert(r.u32());
+        for (int j = 0; j < k && !r.bad; j++) {
+            uint32_t id = r.u32();
+            if (picked.size() < 200000) picked.insert(id); // (a sane level never gets near this)
+        }
         s.toast_seq = r.u32();
         s.toast = r.str();
         int nev = r.u8();
@@ -171,17 +205,10 @@ void NetClient::handle(const uint8_t* data, int len, double now) {
 void NetClient::poll(double now) {
     if (state == State::Idle || state == State::Failed) return;
     if (state == State::Connecting) {
-        if (now - hello_t_ > 0.5) { // keep knocking until the server answers
-            Writer w;
-            w.header(PKT_HELLO);
-            w.u16(IRIS_PROTOCOL_VERSION);
-            w.str(name_);
-            sock_.send(server_, w.buf, w.n);
-            hello_t_ = now;
-        }
+        if (now - hello_t_ > 0.5) send_hello(now); // keep knocking until the host answers
         if (now - connect_start_ > 6.0) {
             state = State::Failed;
-            error = "NO ANSWER FROM " + net_addr_str(server_);
+            error = "NO ANSWER FROM " + net_addr_str(server_) + " (WRONG IP, OR UDP PORT NOT OPEN?)";
             sock_.close();
             return;
         }
@@ -199,10 +226,10 @@ void NetClient::poll(double now) {
 
 void NetClient::scan(double now) {
     if (!scan_sock_.is_open() && !scan_sock_.open(0, true)) return;
-    const char q[] = "IRIS?";
-    scan_sock_.send(net_broadcast(IRIS_DEFAULT_PORT), q, 5);
-    NetAddr local{0x7F000001u, IRIS_DEFAULT_PORT}; // also find a server on this machine
-    scan_sock_.send(local, q, 5);
+    char q[QUERY_SIZE] = "IRIS?";
+    scan_sock_.send(net_broadcast(IRIS_DEFAULT_PORT), q, QUERY_SIZE);
+    NetAddr local{0x7F000001u, IRIS_DEFAULT_PORT}; // also find a game hosted on this machine
+    scan_sock_.send(local, q, QUERY_SIZE);
     // forget servers that stopped answering
     for (size_t i = 0; i < found.size();)
         if (now - found[i].seen > 4.0) found.erase(found.begin() + (long)i);
@@ -211,9 +238,10 @@ void NetClient::scan(double now) {
 
 void NetClient::scan_to(const NetAddr& addr, const std::string& via) {
     if (!scan_sock_.is_open() && !scan_sock_.open(0, true)) return;
-    scan_sock_.send(addr, "IRIS?", 5);
+    char q[QUERY_SIZE] = "IRIS?";
+    scan_sock_.send(addr, q, QUERY_SIZE);
     for (auto& a : asked_) if (a.first == addr) { a.second = via; return; }
-    asked_.push_back({addr, via});
+    if (asked_.size() < 64) asked_.push_back({addr, via});
 }
 
 void NetClient::scan_poll(double now) {
@@ -238,7 +266,7 @@ void NetClient::scan_poll(double now) {
                 merged = true;
             }
         }
-        if (!merged) found.push_back(f);
+        if (!merged && found.size() < 24) found.push_back(f);
     }
 }
 

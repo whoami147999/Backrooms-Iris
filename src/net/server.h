@@ -1,6 +1,7 @@
-// Backrooms Iris - authoritative game server. Runs the GameSim, takes player inputs over
-// UDP, sends snapshots back. Used by the dedicated server (FreeBSD) and by "Host game"
-// inside the client (on its own thread).
+// Backrooms Iris - the host's side of a multiplayer game. "Host game" runs this inside the
+// game (on its own thread): it runs the GameSim, takes everyone's inputs over UDP and sends
+// snapshots back. Friends join over LAN, Tailscale or a forwarded UDP port; there is no
+// central or dedicated server.
 #pragma once
 #include <chrono>
 #include <cstdint>
@@ -13,7 +14,8 @@
 namespace iris {
 
 struct ServerConfig {
-    std::string name = "Backrooms Iris server";
+    std::string name = "Backrooms Iris game";
+    std::string password;    // empty: anyone who can reach the port can join
     std::string bind = "0.0.0.0";
     uint16_t port = IRIS_DEFAULT_PORT;
     int max_players = IRIS_MAX_PLAYERS;
@@ -36,6 +38,7 @@ public:
 
 private:
     struct PendingCmd { uint32_t seq; InputCmd cmd; };
+    struct Strike { uint32_t ip = 0; double until = 0; };   // wrong password: ignored for a bit
     struct Client {
         bool used = false;
         NetAddr addr;
@@ -53,6 +56,9 @@ private:
     clock::time_point start_, next_tick_, next_snap_;
     uint32_t tick_ = 0;
     bool running_ = false;
+    uint32_t secret_ = 0;          // keys the join cookies (new every time you host)
+    Strike strikes_[16];
+    uint32_t cookie_for(const NetAddr& a) const;
 
     double now() const { return std::chrono::duration<double>(clock::now() - start_).count(); }
     void handle(const NetAddr& from, const uint8_t* data, int len);

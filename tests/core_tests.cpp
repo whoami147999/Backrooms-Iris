@@ -6,6 +6,9 @@
 #include "core/collision.h"
 #include "core/config.h"
 #include "core/hash.h"
+#include "core/protocol.h"
+#include <cmath>
+#include <cstring>
 #include "core/world.h"
 #include "core/sim.h"
 #include "net/client.h"
@@ -283,7 +286,7 @@ static void test_network() {
     NetClient cl;
     auto t0 = std::chrono::steady_clock::now();
     auto now = [&] { return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(); };
-    cl.connect("127.0.0.1", 27399, "NETTEST", now());
+    cl.connect("127.0.0.1", 27399, "NETTEST", "", now());
     InputCmd cmd;
     cmd.move_z = 1;
     uint32_t seq = 0;
@@ -305,6 +308,96 @@ static void test_network() {
     std::printf("  network: connected, %u snapshots, %u inputs acked, moved %.1f m\n", cl.snap_count, cl.snap.ack, moved);
     cl.disconnect();
     srv.stop();
+}
+
+// The host's defences: join handshake, passwords, padded status queries, junk input.
+static void test_host_security() {
+    Server srv;
+    ServerConfig cfg;
+    cfg.port = 27398;
+    cfg.level = LevelId::L11;
+    cfg.seed = 9;
+    cfg.password = "Hunter2";
+    std::string err;
+    CHECK(srv.start(cfg, &err), "server start: %s", err.c_str());
+    auto t0 = std::chrono::steady_clock::now();
+    auto now = [&] { return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(); };
+    auto try_join = [&](const char* pw) {
+        NetClient cl;
+        double start = now();
+        cl.connect("127.0.0.1", 27398, "tester<>!!", pw, start);
+        while (now() - start < 2.0 && cl.state == NetClient::State::Connecting) {
+            srv.poll();
+            cl.poll(now());
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        std::string why = cl.error;
+        bool ok = cl.state == NetClient::State::Connected;
+        cl.disconnect();
+        for (int i = 0; i < 20; i++) { srv.poll(); std::this_thread::sleep_for(std::chrono::milliseconds(2)); }
+        return std::make_pair(ok, why);
+    };
+    auto r1 = try_join("");
+    CHECK(!r1.first && r1.second == "THIS GAME HAS A PASSWORD", "joined without the password (%s)", r1.second.c_str());
+    auto r2 = try_join("nope");
+    CHECK(!r2.first && r2.second == "WRONG PASSWORD", "wrong password not rejected (%s)", r2.second.c_str());
+    std::this_thread::sleep_for(std::chrono::milliseconds(1600)); // wrong guesses cool down
+    auto r3 = try_join("hunter2");   // case-insensitive
+    CHECK(r3.first, "right password refused (%s)", r3.second.c_str());
+    CHECK(srv.sim.players[0].name == "TESTER", "name not cleaned: '%s'", srv.sim.players[0].name.c_str());
+    CHECK(srv.player_count() == 0, "player still in after leaving");
+
+    // raw socket: a HELLO without the cookie gets only a small CHALLENGE, never a slot
+    UdpSocket raw;
+    CHECK(raw.open(0), "raw socket");
+    NetAddr host{0x7F000001u, 27398};
+    Writer w;
+    w.header(PKT_HELLO);
+    w.u16(IRIS_PROTOCOL_VERSION);
+    w.str("SPOOF");
+    raw.send(host, w.buf, w.n);
+    // unpadded status query: ignored. padded: answered, and never bigger than the question
+    raw.send(host, "IRIS?", 5);
+    char q[QUERY_SIZE] = "IRIS?";
+    raw.send(host, q, QUERY_SIZE);
+    int challenges = 0, answers = 0, biggest = 0;
+    double until = now() + 0.4;
+    while (now() < until) {
+        srv.poll();
+        uint8_t buf[MAX_PACKET];
+        NetAddr from;
+        int n;
+        while ((n = raw.recv(from, buf, sizeof buf)) >= 0) {
+            biggest = std::max(biggest, n);
+            if (n >= 5 && std::memcmp(buf, "IRIS!", 5) == 0) answers++;
+            else { Reader r(buf, n); if (r.header() == PKT_CHALLENGE) challenges++; }
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    CHECK(challenges == 1, "expected one challenge, got %d", challenges);
+    CHECK(answers == 1, "expected exactly one status answer (padded query only), got %d", answers);
+    CHECK(biggest <= QUERY_SIZE, "reply of %d bytes is bigger than the query", biggest);
+    CHECK(srv.player_count() == 0, "a HELLO without a cookie got a slot");
+    FoundServer f;
+    char reply[QUERY_SIZE + 1] = "IRIS! name=\"BIGG'S GAME\" protocol=7 players=1/4 level=\"LEVEL 0\" password=1";
+    CHECK(parse_server_info(reply, f) && f.locked && f.max_players == 4, "status line not parsed");
+
+    // junk input never reaches the sim as NaN / out-of-range values
+    Writer cw;
+    InputCmd bad;
+    bad.yaw = std::nanf("");
+    bad.pitch = 1e30f;
+    bad.move_x = 5;
+    write_cmd(cw, 1, bad);
+    Reader cr(cw.buf, cw.n);
+    uint32_t seq;
+    InputCmd got = read_cmd(cr, seq);
+    CHECK(std::isfinite(got.yaw) && got.pitch <= 1.56f && got.move_x <= 1.0f, "input not sanitized");
+    CHECK(clean_name("  a  b!!c\x01  ") == "A BC", "clean_name: '%s'", clean_name("  a  b!!c\x01  ").c_str());
+    CHECK(clean_name("") == "WANDERER", "empty name");
+    raw.close();
+    srv.stop();
+    std::printf("  host security: password, cookie handshake, padded queries, input sanitizing ok\n");
 }
 
 // Every difficulty still has reachable exits, harder ones have fewer; exits are always on a wall.
@@ -612,6 +705,7 @@ int main() {
     test_props();
     test_sim_soak();
     test_network();
+    test_host_security();
     if (g_fail) { std::printf("%d check(s) failed\n", g_fail); return 1; }
     std::printf("all core tests passed\n");
     return 0;

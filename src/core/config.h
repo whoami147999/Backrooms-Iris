@@ -2,10 +2,19 @@
 // together with IRIS_PROTOCOL_VERSION).
 #pragma once
 
-#define IRIS_VERSION "0.6.2"
-#define IRIS_PROTOCOL_VERSION 6
+#define IRIS_VERSION "1.0.0"
+#define IRIS_PROTOCOL_VERSION 7
 #define IRIS_DEFAULT_PORT 27315
 #define IRIS_MAX_PLAYERS 4
+
+// Multiplayer (host a game / join a friend) is PC only. The Vita build has no network code.
+#ifndef IRIS_MULTIPLAYER
+#if defined(__vita__)
+#define IRIS_MULTIPLAYER 0
+#else
+#define IRIS_MULTIPLAYER 1
+#endif
+#endif
 
 namespace iris {
 

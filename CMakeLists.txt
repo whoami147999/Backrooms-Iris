@@ -2,10 +2,12 @@
 #
 #   PC (Linux / Windows):  cmake -S . -B build && cmake --build build
 #   PS Vita:               cmake -S . -B build-vita -DCMAKE_TOOLCHAIN_FILE=$VITASDK/share/vita.toolchain.cmake
-#   Server only (FreeBSD): cmake -S . -B build-server -DIRIS_BUILD_CLIENT=OFF
+#
+# Multiplayer is PC only and peer-hosted: one player's game is the host, friends connect to it
+# directly. There is no dedicated server. The Vita build is single player and has no network code.
 #
 cmake_minimum_required(VERSION 3.16)
-project(BackroomsIris VERSION 0.1.0 LANGUAGES C CXX)
+project(BackroomsIris VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -22,14 +24,7 @@ else()
   set(IRIS_PLATFORM "unix")
 endif()
 
-# the dedicated server is POSIX-only for now (FreeBSD / Linux)
-if(VITA OR WIN32)
-  set(_server_default OFF)
-else()
-  set(_server_default ON)
-endif()
-option(IRIS_BUILD_CLIENT "Build the game client" ON)
-option(IRIS_BUILD_SERVER "Build the headless dedicated server" ${_server_default})
+option(IRIS_BUILD_CLIENT "Build the game" ON)
 
 if(MSVC)
   add_compile_options(/W3 /utf-8)
@@ -39,8 +34,8 @@ else()
 endif()
 
 # ---------------------------------------------------------------- shared core
-# Pure C++: world generation, collision, movement. Used by client AND server, so the
-# server simulates exactly what players see.
+# Pure C++: world generation, collision, movement, the game simulation. Single player runs it
+# locally; in multiplayer the host runs it for everyone.
 add_library(iris_core STATIC
   src/core/world.cpp
   src/core/collision.cpp
@@ -49,18 +44,17 @@ add_library(iris_core STATIC
 )
 target_include_directories(iris_core PUBLIC src)
 
-# networking (UDP): server core + client, used by the game and the dedicated server
-add_library(iris_net STATIC
-  src/net/udp.cpp
-  src/net/server.cpp
-  src/net/client.cpp
-)
-target_link_libraries(iris_net PUBLIC iris_core)
-if(WIN32)
-  target_link_libraries(iris_net PUBLIC ws2_32)
-endif()
-if(VITA)
-  target_link_libraries(iris_net PUBLIC SceNet_stub SceNetCtl_stub SceSysmodule_stub)
+# networking (UDP, PC only): the in-game host + the joining client
+if(NOT VITA)
+  add_library(iris_net STATIC
+    src/net/udp.cpp
+    src/net/server.cpp
+    src/net/client.cpp
+  )
+  target_link_libraries(iris_net PUBLIC iris_core)
+  if(WIN32)
+    target_link_libraries(iris_net PUBLIC ws2_32)
+  endif()
 endif()
 
 option(IRIS_BUILD_TESTS "Build the core tests (ctest)" ON)
@@ -84,7 +78,6 @@ if(IRIS_BUILD_CLIENT)
     src/client/textures.cpp
     src/client/chunk_mesh.cpp
     src/client/renderer.cpp
-    src/client/tailscale.cpp
     src/client/models.cpp
     src/client/audio.cpp
     src/platform/sdl_gamepad.cpp
@@ -99,15 +92,16 @@ if(IRIS_BUILD_CLIENT)
     set(VITA_MKSFOEX_FLAGS "${VITA_MKSFOEX_FLAGS} -d ATTRIBUTE2=12") # extended memory mode
 
     add_executable(iris_vita ${IRIS_CLIENT_SOURCES} src/platform/vita/platform_vita.cpp)
+    target_compile_definitions(iris_vita PRIVATE IRIS_MULTIPLAYER=0)
     target_compile_options(iris_vita PRIVATE -O2 -ffast-math -mfpu=neon -mcpu=cortex-a9)
     target_link_libraries(iris_vita PRIVATE
-      iris_net
+      iris_core
       SDL2
       vitaGL vitashark SceShaccCgExt mathneon taihen_stub
       SceShaccCg_stub SceKernelDmacMgr_stub SceLibKernel_stub SceAppMgr_stub SceAppUtil_stub
       SceCommonDialog_stub SceGxm_stub SceDisplay_stub SceSysmodule_stub SceCtrl_stub
       SceTouch_stub SceHid_stub SceMotion_stub SceAudio_stub SceAudioIn_stub ScePower_stub
-      SceIme_stub SceIofilemgr_stub SceProcessmgr_stub SceSysmem_stub SceNet_stub SceNetCtl_stub
+      SceIme_stub SceIofilemgr_stub SceProcessmgr_stub SceSysmem_stub
       pthread m c
     )
     vita_create_self(eboot.bin iris_vita UNSAFE)
@@ -130,7 +124,7 @@ if(IRIS_BUILD_CLIENT)
     set(OpenGL_GL_PREFERENCE GLVND)
     find_package(OpenGL REQUIRED)
 
-    add_executable(backrooms-iris ${IRIS_CLIENT_SOURCES} src/platform/pc/platform_pc.cpp)
+    add_executable(backrooms-iris ${IRIS_CLIENT_SOURCES} src/client/tailscale.cpp src/platform/pc/platform_pc.cpp)
     find_package(Threads REQUIRED)
     target_link_libraries(backrooms-iris PRIVATE iris_net OpenGL::GL Threads::Threads)
     if(WIN32)
@@ -155,12 +149,4 @@ if(IRIS_BUILD_CLIENT)
   endif()
 endif()
 
-# --------------------------------------------------------------------- server
-if(IRIS_BUILD_SERVER)
-  find_package(Threads REQUIRED)
-  add_executable(iris_server src/server/main.cpp)
-  target_link_libraries(iris_server PRIVATE iris_net Threads::Threads)
-  install(TARGETS iris_server RUNTIME DESTINATION bin)
-endif()
-
-message(STATUS "Backrooms Iris ${PROJECT_VERSION}: platform=${IRIS_PLATFORM} client=${IRIS_BUILD_CLIENT} server=${IRIS_BUILD_SERVER}")
+message(STATUS "Backrooms Iris ${PROJECT_VERSION}: platform=${IRIS_PLATFORM}")

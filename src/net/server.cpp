@@ -3,6 +3,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <ctime>
+#include <random>
 
 #include "../core/protocol.h"
 
@@ -17,8 +18,19 @@ void Server::say(const char* fmt, ...) {
     if (log) log(buf);
 }
 
+uint32_t Server::cookie_for(const NetAddr& a) const {
+    return mix32(secret_ ^ mix32(a.ip ^ mix32(a.port * 0x9e3779b9u + 0x7f4a7c15u))) | 1u; // never 0 (0 = "no cookie yet")
+}
+
 bool Server::start(const ServerConfig& cfg, std::string* error) {
     cfg_ = cfg;
+    cfg_.name = clean_name(cfg_.name);
+    cfg_.password = clean_password(cfg_.password);
+    {
+        std::random_device rd;
+        secret_ = mix32(rd() ^ (uint32_t)std::time(nullptr) ^ (uint32_t)(uintptr_t)this);
+    }
+    for (auto& s : strikes_) s = Strike{};
     if (cfg_.max_players < 1 || cfg_.max_players > IRIS_MAX_PLAYERS) cfg_.max_players = IRIS_MAX_PLAYERS;
     if (!sock_.open(cfg_.port, true, cfg_.bind.c_str())) {
         if (error) *error = "can't open UDP port " + std::to_string(cfg_.port) + " (already in use?)";
@@ -58,14 +70,16 @@ int Server::player_count() const {
 }
 
 void Server::handle(const NetAddr& from, const uint8_t* data, int len) {
-    // status query (also answered for LAN browsing and `iris_server --query`)
-    if (len == 5 && std::memcmp(data, "IRIS?", 5) == 0) {
-        char reply[400];
+    // status query for the Join list. Only answered when padded to QUERY_SIZE, and the answer
+    // is smaller than the question, so nobody can use a host to amplify traffic at someone.
+    if (len >= 5 && std::memcmp(data, "IRIS?", 5) == 0) {
+        if (len < QUERY_SIZE) return;
+        char reply[QUERY_SIZE];
         int n = std::snprintf(reply, sizeof reply,
-                              "IRIS! name=\"%s\" version=%s protocol=%d players=%d/%d level=\"%s\" difficulty=%s seed=%u uptime=%ds",
+                              "IRIS! name=\"%s\" version=%s protocol=%d players=%d/%d level=\"%s\" difficulty=%s password=%d",
                               cfg_.name.c_str(), IRIS_VERSION, IRIS_PROTOCOL_VERSION, player_count(), cfg_.max_players,
-                              level_label(sim.world.id()), diff_info(sim.difficulty).name, sim.world.seed(), (int)now());
-        sock_.send(from, reply, n);
+                              level_label(sim.world.id()), diff_info(sim.difficulty).name, cfg_.password.empty() ? 0 : 1);
+        if (n > 0) sock_.send(from, reply, std::min(n, (int)sizeof reply - 1));
         return;
     }
     Reader r(data, len);
@@ -79,17 +93,42 @@ void Server::handle(const NetAddr& from, const uint8_t* data, int len) {
     if (type == PKT_HELLO) {
         uint16_t proto = r.u16();
         std::string name = r.str();
+        uint32_t cookie = r.u32();
+        uint32_t proof = r.u32();
         Writer w;
         if (proto != IRIS_PROTOCOL_VERSION) {
             w.header(PKT_REJECT);
-            w.str("VERSION MISMATCH - SERVER IS " IRIS_VERSION);
+            w.str("OTHER VERSION (" IRIS_VERSION ")");
             sock_.send(from, w.buf, w.n);
             return;
         }
         if (!cl) {
+            const double t = now();
+            for (const auto& s : strikes_)
+                if (s.ip == from.ip && t < s.until) return; // just guessed wrong: ignore for a moment
+            // step 1: prove you can receive at this address
+            const uint32_t expect = cookie_for(from);
+            if (r.bad || cookie != expect) {
+                w.header(PKT_CHALLENGE);
+                w.u32(expect);
+                w.u8(cfg_.password.empty() ? 0 : 1);
+                sock_.send(from, w.buf, w.n);
+                return;
+            }
+            // step 2: the password, if there is one
+            if (!cfg_.password.empty() && proof != password_proof(cfg_.password, expect)) {
+                Strike* slot = &strikes_[0];
+                for (auto& s : strikes_) if (s.until < slot->until) slot = &s;
+                *slot = {from.ip, t + 1.5};
+                w.header(PKT_REJECT);
+                w.str("WRONG PASSWORD");
+                sock_.send(from, w.buf, w.n);
+                say("wrong password from %s", net_addr_str(from).c_str());
+                return;
+            }
             if (player_count() >= cfg_.max_players) {
                 w.header(PKT_REJECT);
-                w.str("SERVER IS FULL");
+                w.str("GAME IS FULL");
                 sock_.send(from, w.buf, w.n);
                 return;
             }
@@ -98,7 +137,8 @@ void Server::handle(const NetAddr& from, const uint8_t* data, int len) {
             *cl = Client{};
             cl->used = true;
             cl->addr = from;
-            cl->pid = sim.add_player(name);
+            cl->pid = sim.add_player(clean_name(name));
+            if (cl->pid < 0) { *cl = Client{}; return; }
             sim.event(sim.players[cl->pid].name + " JOINED");
             say("%s joined from %s", sim.players[cl->pid].name.c_str(), net_addr_str(from).c_str());
         }
@@ -117,7 +157,7 @@ void Server::handle(const NetAddr& from, const uint8_t* data, int len) {
             uint32_t seq;
             InputCmd cmd = read_cmd(r, seq);
             if (r.bad) break;
-            if (seq <= cl->last_seq) continue;
+            if (seq <= cl->last_seq || seq > cl->last_seq + 600 || cl->queue.size() >= 64) continue; // stale / bogus / flooding
             bool dup = false;
             for (auto& q : cl->queue) dup |= q.seq == seq;
             if (dup) continue;

@@ -5,13 +5,15 @@
 #include <string>
 #include <vector>
 
-#include "../net/client.h"
 #include "../platform/platform.h"
 #include "effects.h"
 #include "renderer.h"
 #include "session.h"
 #include "settings.h"
+#if IRIS_MULTIPLAYER
+#include "../net/client.h"
 #include "tailscale.h"
+#endif
 #include "audio.h"
 #include <unordered_map>
 
@@ -31,6 +33,7 @@ struct DevOptions {          // command-line switches used for testing / screens
     std::string screen;      // open a menu screen directly
     bool host = false;
     std::string join;
+    std::string password;    // dev: host / join password
     bool autowalk = false;
     std::string name;
     bool hud = true;
@@ -89,9 +92,13 @@ private:
     RenderSettings rs_;
     InputState in_;
     std::unique_ptr<Session> session_;
+#if IRIS_MULTIPLAYER
     NetClient browser_;          // LAN discovery for the Join screen
     double browse_t_ = 0;
     Tailscale tailscale_;        // tailnet discovery (PC): friends' games anywhere
+    double tail_t_ = -100;
+    TailStatus tail_;
+#endif
     Audio audio_;
     // what the sound code saw last frame (to notice changes)
     struct AudioState {
@@ -109,8 +116,6 @@ private:
     void update_audio(const struct GameView& v, Vec3 eye, float yaw);
     void play_at(Sfx s, Vec2 at, float vol, Vec3 eye, float yaw, const World& w, float pitch = 1);
     void item_sound(ItemType t);
-    double tail_t_ = -100;
-    TailStatus tail_;
 
     std::vector<Screen> stack_{Screen::Title};
     Menu menu_;
@@ -170,6 +175,7 @@ private:
     void start_single(bool sandbox);
     void start_host();
     void start_join(const std::string& addr);
+    uint16_t host_port() const;
     void leave_game();
     void game_input();
     void sandbox_input();

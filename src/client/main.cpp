@@ -22,7 +22,8 @@ static void usage() {
         "  --sandbox           ...in sandbox mode\n"
         "  --seed N            world seed for --level\n"
         "  --host              host a multiplayer game right away\n"
-        "  --join IP           join a multiplayer game right away\n"
+        "  --join IP[:PORT]    join a multiplayer game right away\n"
+        "  --password PW       password for --host / --join\n"
         "  --help              this text\n\n"
         "dev: --shot FILE.bmp [--after SECS] [--pos X,Z] [--yaw DEG] [--pitch DEG] [--walk SECS]\n"
         "     [--juice SECS] [--sanity N] [--health N] [--entity TYPE [--dist M]] [--screen NAME] [--autowalk] [--nohud]\n",
@@ -45,6 +46,7 @@ int main(int argc, char** argv) {
         else if (a == "--host") dev.host = true;
         else if (a == "--difficulty") { Difficulty d; if (difficulty_from_name(next(), d)) dev.difficulty = (int)d; }
         else if (a == "--join") dev.join = next();
+        else if (a == "--password") dev.password = next();
         else if (a == "--shot") dev.shot_path = next();
         else if (a == "--after") dev.shot_after = (float)std::atof(next());
         else if (a == "--pos") dev.has_pos = std::sscanf(next(), "%f,%f", &dev.pos_x, &dev.pos_z) == 2;

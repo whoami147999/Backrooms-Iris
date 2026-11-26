@@ -1,5 +1,10 @@
 #include "session.h"
 
+#if IRIS_MULTIPLAYER
+#include "../net/client.h"
+#include "../net/server.h"
+#endif
+
 #include <chrono>
 #include <cmath>
 #include <deque>
@@ -84,6 +89,7 @@ private:
     }
 };
 
+#if IRIS_MULTIPLAYER
 // ======================================================================== multiplayer
 class HostThread {
 public:
@@ -114,8 +120,9 @@ class NetSession : public Session {
 public:
     std::unique_ptr<HostThread> host;
 
-    bool connect(const std::string& addr, uint16_t port, const std::string& name, double now, std::string* err) {
-        if (!net_.connect(addr, port, name, now)) { if (err) *err = net_.error; return false; }
+    bool connect(const std::string& addr, uint16_t port, const std::string& name, const std::string& password, double now,
+                 std::string* err) {
+        if (!net_.connect(addr, port, name, password, now)) { if (err) *err = net_.error; return false; }
         v_.multiplayer = true;
         v_.picked = &net_.picked;
         return true;
@@ -217,7 +224,7 @@ private:
 
     void on_snapshot() {
         const Snapshot& s = net_.snap;
-        if (!s.players[net_.my_id].active) return;
+        if (net_.my_id < 0 || net_.my_id >= IRIS_MAX_PLAYERS || !s.players[net_.my_id].active) return;
         bool new_level = !have_state_ || s.epoch != epoch_;
         if (new_level) {
             world_ = World(s.level, s.seed, s.difficulty);
@@ -254,13 +261,16 @@ private:
     }
 };
 
+#endif // IRIS_MULTIPLAYER
+
 } // namespace
 
 std::unique_ptr<Session> make_single_player(LevelId level, uint32_t seed, const std::string& name, bool sandbox, Difficulty diff) {
     return std::unique_ptr<Session>(new SingleSession(level, seed, name, sandbox, diff));
 }
 
-std::unique_ptr<Session> make_multiplayer(const std::string& host, uint16_t port, const std::string& name,
+#if IRIS_MULTIPLAYER
+std::unique_ptr<Session> make_multiplayer(const std::string& host, uint16_t port, const std::string& name, const std::string& password,
                                           bool start_server, LevelId level, Difficulty diff, double now, std::string* error) {
     std::unique_ptr<NetSession> s(new NetSession());
     if (start_server) {
@@ -268,6 +278,7 @@ std::unique_ptr<Session> make_multiplayer(const std::string& host, uint16_t port
         ServerConfig cfg;
         cfg.name = name + "'S GAME";
         cfg.port = port;
+        cfg.password = password;
         cfg.level = level;
         cfg.difficulty = diff;
         if (!s->host->start(cfg)) {
@@ -275,8 +286,9 @@ std::unique_ptr<Session> make_multiplayer(const std::string& host, uint16_t port
             return nullptr;
         }
     }
-    if (!s->connect(start_server ? "127.0.0.1" : host, port, name, now, error)) return nullptr;
+    if (!s->connect(start_server ? "127.0.0.1" : host, port, name, password, now, error)) return nullptr;
     return std::unique_ptr<Session>(s.release());
 }
+#endif
 
 } // namespace iris

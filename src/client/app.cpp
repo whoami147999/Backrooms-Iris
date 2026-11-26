@@ -2,6 +2,8 @@
 
 #include <cctype>
 
+namespace { const char* PASSWORD_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"; }
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -101,9 +103,10 @@ bool App::init(const DevOptions& dev) {
     std::printf("[iris] renderer init\n");
     platform_boot_stage("renderer init");
     ren_.init(rs_);
+#if IRIS_MULTIPLAYER
     std::printf("[iris] net init\n");
-    platform_boot_stage("network init");
     net_init();
+#endif
     platform_boot_stage("menu setup");
     dev_setup();
     build_menu();
@@ -115,7 +118,9 @@ bool App::init(const DevOptions& dev) {
 void App::shutdown() {
     audio_.shutdown();
     session_.reset();
+#if IRIS_MULTIPLAYER
     browser_.scan_stop();
+#endif
     ren_.shutdown();
     save_settings();
     platform_boot_stage("exit");
@@ -131,15 +136,23 @@ void App::apply_display_settings() {
 // Command-line shortcuts for testing: jump straight into a level / screen / state.
 void App::dev_setup() {
     if (!dev_.name.empty()) cfg_.name = dev_.name;
+#if IRIS_MULTIPLAYER
+    if (!dev_.password.empty()) cfg_.host_password = cfg_.join_password = dev_.password;
+#endif
+#if IRIS_MULTIPLAYER
     if (dev_.host) { host_level_ = std::max(0, dev_.level); if (dev_.difficulty >= 0) cfg_.difficulty = dev_.difficulty; start_host(); }
     else if (!dev_.join.empty()) start_join(dev_.join);
-    else if (!dev_.screen.empty() && dev_.screen != "pause" && dev_.screen != "pause-settings") {
+    else
+#endif
+    if (!dev_.screen.empty() && dev_.screen != "pause" && dev_.screen != "pause-settings") {
         const std::string& s = dev_.screen;
         if (s == "single") go(Screen::Single);
         else if (s == "sandbox") go(Screen::Sandbox);
+#if IRIS_MULTIPLAYER
         else if (s == "multi") go(Screen::Multi);
         else if (s == "join") { go(Screen::Multi); go(Screen::Join); }
         else if (s == "host") { go(Screen::Multi); go(Screen::Host); }
+#endif
         else if (s == "settings") go(Screen::Settings);
         else if (s == "controls") go(Screen::Controls);
         return;
@@ -246,6 +259,7 @@ void App::build_menu() {
     };
     auto spacer = [&]() { Item it; it.kind = Item::Spacer; m.items.push_back(it); };
     auto label = [&](const std::string& l) { Item it; it.kind = Item::Label; it.label = l; m.items.push_back(it); };
+    (void)label; // (only the PC multiplayer screens use it)
     auto level_choice = [&](int* v) {
         Item lv; lv.kind = Item::Choice; lv.label = "START IN"; lv.choices = level_names(); lv.choice = v; m.items.push_back(lv);
     };
@@ -269,7 +283,9 @@ void App::build_menu() {
             } else if (platform_is_vita() && cfg_.safe_mode) m.subtitle = "SAFE MODE  -  " IRIS_VERSION;
             button("SINGLE PLAYER", [this] { go(Screen::Single); });
             button("SANDBOX", [this] { go(Screen::Sandbox); }, "SPAWN ENTITIES, ITEMS AND WEAPONS. NOTHING COUNTS.");
-            button("MULTIPLAYER", [this] { go(Screen::Multi); });
+#if IRIS_MULTIPLAYER
+            button("MULTIPLAYER", [this] { go(Screen::Multi); }, "UP TO 4 PLAYERS. ONE OF YOU HOSTS, NO SERVERS");
+#endif
             button("SETTINGS", [this] { go(Screen::Settings); });
             button("CONTROLS", [this] { go(Screen::Controls); });
             button("QUIT", [this] { in_.quit = true; });
@@ -296,64 +312,77 @@ void App::build_menu() {
             button("START", [this] { start_single(true); });
             button("BACK", [this] { back(); });
             break;
+#if IRIS_MULTIPLAYER
         case Screen::Multi: {
             m.title = "MULTIPLAYER";
-            m.subtitle = "UP TO 4 PLAYERS  -  PC AND VITA";
+            m.subtitle = "UP TO 4 PLAYERS  -  ONE OF YOU HOSTS, EVERYONE ELSE JOINS";
             Item nm; nm.kind = Item::Text; nm.label = "YOUR NAME"; nm.text = &cfg_.name;
             nm.charset = " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"; nm.maxlen = 14;
             m.items.push_back(nm);
             spacer();
-            button("HOST GAME", [this] { go(Screen::Host); }, "OTHERS JOIN YOU OVER LAN");
-            button("JOIN GAME", [this] { go(Screen::Join); }, "FIND GAMES ON YOUR NETWORK");
+            button("HOST GAME", [this] { go(Screen::Host); }, "PLAY ON YOUR PC, FRIENDS CONNECT TO YOU");
+            button("JOIN GAME", [this] { go(Screen::Join); }, "CONNECT TO A FRIEND'S GAME");
             spacer();
             button("BACK", [this] { back(); });
             break;
         }
-        case Screen::Host:
+        case Screen::Host: {
             m.title = "HOST GAME";
-            m.subtitle = "UDP PORT " + std::to_string(IRIS_DEFAULT_PORT);
+            m.subtitle = "FRIENDS CONNECT STRAIGHT TO YOUR PC  -  UDP PORT " + std::to_string(host_port());
             level_choice(&host_level_);
             diff_choice();
+            Item pw; pw.kind = Item::Text; pw.label = "PASSWORD"; pw.text = &cfg_.host_password;
+            pw.charset = PASSWORD_CHARS; pw.maxlen = 16;
+            pw.hint = "OPTIONAL. LEAVE BLANK FOR NO PASSWORD. USE ONE IF YOU FORWARD A PORT";
+            m.items.push_back(pw);
+            Item po; po.kind = Item::Text; po.label = "UDP PORT"; po.text = &cfg_.host_port;
+            po.charset = "0123456789"; po.maxlen = 5;
+            po.hint = "DEFAULT 27315. FORWARD THIS UDP PORT ON YOUR ROUTER FOR INTERNET PLAY";
+            m.items.push_back(po);
             spacer();
-            if (!platform_is_vita()) {
-                if (tail_.running && !tail_.self_ip.empty()) {
-                    label("TAILSCALE: " + tail_.self_ip + "  (" + tail_.self_name + ")");
-                    label("FRIENDS ON YOUR TAILNET SEE THIS GAME IN THEIR JOIN LIST");
-                } else if (tail_.available) label("TAILSCALE IS INSTALLED BUT NOT CONNECTED");
-                else label("ONLINE WITH FRIENDS: INSTALL TAILSCALE (SEE README)");
-            }
+            if (tail_.running && !tail_.self_ip.empty()) {
+                label("TAILSCALE: " + tail_.self_ip + "  (" + tail_.self_name + ")");
+                label("FRIENDS ON YOUR TAILNET SEE THIS GAME IN THEIR JOIN LIST");
+            } else if (tail_.available) label("TAILSCALE IS INSTALLED BUT NOT CONNECTED");
+            else label("EASIEST ONLINE: TAILSCALE (SEE README). OR FORWARD THE UDP PORT");
             button("START HOSTING", [this] { start_host(); });
             button("BACK", [this] { back(); });
             break;
+        }
         case Screen::Join: {
             m.title = "JOIN GAME";
             m.subtitle = browser_.found.empty() ? "SEARCHING YOUR NETWORK..." : "GAMES ON YOUR NETWORK AND TAILNET";
             for (const FoundServer& f : browser_.found) {
                 std::string addr = net_addr_str(f.addr);
                 char buf[160];
-                std::snprintf(buf, sizeof buf, "%s  %d/%d%s", f.name.c_str(), f.players, f.max_players, f.via.empty() ? "" : "  [TAILSCALE]");
-                std::string ip = addr.substr(0, addr.find(':'));
-                button(buf, [this, ip] { start_join(ip); },
+                std::snprintf(buf, sizeof buf, "%s  %d/%d%s%s", f.name.c_str(), f.players, f.max_players, f.locked ? "  [PASSWORD]" : "",
+                              f.via.empty() ? "" : "  [TAILSCALE]");
+                button(buf, [this, addr] { start_join(addr); },
                        f.level + "  " + (f.via.empty() ? addr : f.via + " " + addr) + (f.protocol != IRIS_PROTOCOL_VERSION ? "  (OTHER VERSION)" : ""));
             }
             if (browser_.found.empty()) label("NOTHING YET  -  SAME WIFI, OR BOTH ON TAILSCALE?");
-            if (!platform_is_vita()) {
-                int online = 0;
-                for (const TailPeer& p : tail_.peers) online += p.online;
-                if (tail_.running) label("TAILSCALE: " + tail_.self_ip + "  -  " + std::to_string(online) + " FRIEND PC(S) ONLINE");
-                else if (tail_.available) label("TAILSCALE: NOT CONNECTED (RUN TAILSCALE UP)");
-                else label("TAILSCALE: NOT INSTALLED (LAN ONLY)");
-            }
+            int online = 0;
+            for (const TailPeer& p : tail_.peers) online += p.online;
+            if (tail_.running) label("TAILSCALE: " + tail_.self_ip + "  -  " + std::to_string(online) + " FRIEND PC(S) ONLINE");
+            else if (tail_.available) label("TAILSCALE: NOT CONNECTED (RUN TAILSCALE UP)");
+            else label("TAILSCALE: NOT INSTALLED (LAN, OR TYPE THE HOST'S IP)");
             spacer();
             Item ip; ip.kind = Item::Text; ip.label = "IP OR NAME"; ip.text = &join_ip_;
-            ip.charset = platform_is_vita() ? "0123456789." : "0123456789.ABCDEFGHIJKLMNOPQRSTUVWXYZ-";
+            ip.charset = "0123456789.:ABCDEFGHIJKLMNOPQRSTUVWXYZ-";
             ip.maxlen = 40;
-            ip.hint = "A LAN IP, A TAILSCALE IP (100.X.X.X) OR A TAILSCALE MACHINE NAME";
+            ip.hint = "LAN IP, TAILSCALE IP / NAME, OR THE HOST'S PUBLIC IP. ADD :PORT IF IT'S NOT 27315";
             m.items.push_back(ip);
+            Item pw; pw.kind = Item::Text; pw.label = "PASSWORD"; pw.text = &cfg_.join_password;
+            pw.charset = PASSWORD_CHARS; pw.maxlen = 16;
+            pw.hint = "ONLY IF THE HOST SET ONE";
+            m.items.push_back(pw);
             button("CONNECT", [this] { start_join(join_ip_); });
             button("BACK", [this] { back(); });
             break;
         }
+#else
+        case Screen::Multi: case Screen::Host: case Screen::Join: break; // (PC only)
+#endif
         case Screen::Settings: {
             m.title = "SETTINGS";
             auto slider = [&](const std::string& l, float* v, float lo, float hi, float step) {
@@ -650,26 +679,43 @@ void App::start_single(bool sandbox) {
     build_menu();
 }
 
+#if IRIS_MULTIPLAYER
+uint16_t App::host_port() const {
+    long p = std::strtol(cfg_.host_port.c_str(), nullptr, 10);
+    return (p >= 1024 && p <= 65535) ? (uint16_t)p : (uint16_t)IRIS_DEFAULT_PORT;
+}
+
 void App::start_host() {
     std::string err;
+    cfg_.host_port = std::to_string(host_port()); // tidy up whatever was typed
     save_settings();
-    auto s = make_multiplayer("", IRIS_DEFAULT_PORT, cfg_.name, true, (LevelId)host_level_, (Difficulty)cfg_.difficulty, now_, &err);
+    auto s = make_multiplayer("", host_port(), cfg_.name, cfg_.host_password, true, (LevelId)host_level_, (Difficulty)cfg_.difficulty, now_, &err);
     if (!s) { error_ = err.empty() ? "COULDN'T HOST" : err; return; }
     start_session(std::move(s));
     stack_ = {Screen::Title, Screen::Connecting};
     build_menu();
 }
 
-void App::start_join(const std::string& addr) {
-    std::string err;
-    cfg_.last_ip = addr;
+// "1.2.3.4", "1.2.3.4:27316", "bigg-pc", "bigg-pc:27316"
+void App::start_join(const std::string& addr_in) {
+    std::string err, addr = addr_in;
+    uint16_t port = IRIS_DEFAULT_PORT;
+    size_t colon = addr.rfind(':');
+    if (colon != std::string::npos) {
+        long p = std::strtol(addr.c_str() + colon + 1, nullptr, 10);
+        if (p > 0 && p <= 65535) port = (uint16_t)p;
+        addr = addr.substr(0, colon);
+    }
+    if (addr.empty()) { error_ = "TYPE THE HOST'S IP FIRST"; return; }
+    cfg_.last_ip = addr_in;
     save_settings();
-    auto s = make_multiplayer(addr, IRIS_DEFAULT_PORT, cfg_.name, false, LevelId::L0, Difficulty::Medium, now_, &err);
+    auto s = make_multiplayer(addr, port, cfg_.name, cfg_.join_password, false, LevelId::L0, Difficulty::Medium, now_, &err);
     if (!s) { error_ = err.empty() ? "COULDN'T CONNECT" : err; return; }
     start_session(std::move(s));
     stack_.push_back(Screen::Connecting);
     build_menu();
 }
+#endif
 
 void App::leave_game() {
     audio_.stop_loops();
@@ -1265,8 +1311,9 @@ void App::run() {
             if (session_->failed(&why)) { leave_game(); error_ = why; }
             else if (session_->ready()) { stack_ = {Screen::Title, Screen::Playing}; build_menu(); }
         }
+#if IRIS_MULTIPLAYER
         // Tailscale: ask who's on the tailnet every few seconds while the multiplayer screens are open
-        if (!platform_is_vita() && (screen() == Screen::Join || screen() == Screen::Host || screen() == Screen::Multi)) {
+        if ((screen() == Screen::Join || screen() == Screen::Host || screen() == Screen::Multi)) {
             if (now_ - tail_t_ > 6.0) { tailscale_.refresh(); tail_t_ = now_; }
             if (!tailscale_.busy()) {
                 TailStatus st = tailscale_.status();
@@ -1293,6 +1340,7 @@ void App::run() {
                 menu_.sel = std::min(sel, (int)menu_.items.size() - 1);
             }
         }
+#endif
 
         if (game) {
             if (playing && !paused_) game_input();

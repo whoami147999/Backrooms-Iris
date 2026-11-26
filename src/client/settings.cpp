@@ -25,6 +25,9 @@ void Settings::load(const std::string& path) {
         else if (k == "show_fps") show_fps = v == "1";
         else if (k == "name") name = v.substr(0, 14);
         else if (k == "last_ip") last_ip = v.substr(0, 40);
+        else if (k == "host_password") host_password = v.substr(0, 16);
+        else if (k == "join_password") join_password = v.substr(0, 16);
+        else if (k == "host_port") host_port = v.substr(0, 5);
         else if (k == "start_level") start_level = std::atoi(v.c_str());
         else if (k == "difficulty") difficulty = std::atoi(v.c_str());
         else if (k == "film") film = v == "1";
@@ -45,8 +48,8 @@ void Settings::load(const std::string& path) {
 void Settings::save(const std::string& path) const {
     FILE* f = std::fopen(path.c_str(), "w");
     if (!f) return;
-    std::fprintf(f, "mouse_sens=%.2f\nstick_sens=%.2f\ninvert_y=%d\nfov=%.0f\nhead_bob=%d\nfullscreen=%d\nvsync=%d\nshow_fps=%d\nname=%s\nlast_ip=%s\nstart_level=%d\ndifficulty=%d\nfilm=%d\ncamcorder=%d\natmosphere=%d\nretro=%d\nvolume=%.2f\nsafe_mode=%d\n",
-                 mouse_sens, stick_sens, invert_y, fov, head_bob, fullscreen, vsync, show_fps, name.c_str(), last_ip.c_str(), start_level, difficulty, film, camcorder, atmosphere, retro, volume, safe_mode);
+    std::fprintf(f, "mouse_sens=%.2f\nstick_sens=%.2f\ninvert_y=%d\nfov=%.0f\nhead_bob=%d\nfullscreen=%d\nvsync=%d\nshow_fps=%d\nname=%s\nlast_ip=%s\nstart_level=%d\ndifficulty=%d\nfilm=%d\ncamcorder=%d\natmosphere=%d\nretro=%d\nvolume=%.2f\nsafe_mode=%d\nhost_password=%s\njoin_password=%s\nhost_port=%s\n",
+                 mouse_sens, stick_sens, invert_y, fov, head_bob, fullscreen, vsync, show_fps, name.c_str(), last_ip.c_str(), start_level, difficulty, film, camcorder, atmosphere, retro, volume, safe_mode, host_password.c_str(), join_password.c_str(), host_port.c_str());
     std::fclose(f);
 }
 
