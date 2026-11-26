@@ -95,7 +95,7 @@ if(IRIS_BUILD_CLIENT)
     include("$ENV{VITASDK}/share/vita.cmake" REQUIRED)
     set(VITA_APP_NAME "Backrooms Iris")
     set(VITA_TITLEID  "BKIR00001")
-    set(VITA_VERSION  "00.61")
+    set(VITA_VERSION  "00.62")
     set(VITA_MKSFOEX_FLAGS "${VITA_MKSFOEX_FLAGS} -d ATTRIBUTE2=12") # extended memory mode
 
     add_executable(iris_vita ${IRIS_CLIENT_SOURCES} src/platform/vita/platform_vita.cpp)

@@ -26,7 +26,7 @@ cmake --build build-vita -j
 
 Output: `build-vita/BackroomsIris.vpk` (title ID BKIR00001).
 
-Version 0.6.1 (network protocol 6, plays with 0.6.0). Sound uses SDL audio (SDL_InitSubSystem(SDL_INIT_AUDIO)); on the Vita that needs SceAudio_stub, which is already linked. The renderer uses a chunk-building worker thread (std::thread, so the Vita target
+Version 0.6.2 (network protocol 6, plays with 0.6.0+). Sound uses SDL audio (SDL_InitSubSystem(SDL_INIT_AUDIO)); on the Vita that needs SceAudio_stub, which is already linked. The renderer uses a chunk-building worker thread (std::thread, so the Vita target
 links `pthread`) and procedural textures (all power-of-two, 512 px on the Vita, generated at level load: expect
 ~2-3 s per level). The film-look GLSL shader is PC only (`#if !defined(IRIS_GL_VITA)`): the Vita draws grain, vignette
 and scanlines as plain textured quads, so vitaGL only ever sees fixed-function GL. The PS1 look's GLSL world shader is PC only too; on the Vita the retro
@@ -71,9 +71,22 @@ kills the game (C2-12828-1 etc.), the next boot finds an unfinished step there, 
   thread, no mipmaps, 256 px textures, shorter view distance. Settings > SAFE MODE turns it off again (applies on
   the next start).
 
-Steps, in order: `libshacccg check`, `clocks`, `vitagl init`, `sdl init`, `audio init`, `renderer init`,
+Steps, in order: `libshacccg check`, `libshacccg probe`, `clocks`, `vitagl init`, `sdl init`, `audio init`, `renderer init`,
 `network init`, `menu setup`, `first frame`, `level N textures`, `level N texture upload`, `level N first draw`,
 `level N meshes`, `level N playing`. The log also records free memory at boot and after vitaGL starts.
+
+### Known: crash during `vitagl init` (0.6.1 report)
+
+boot.txt said `vitagl init` on real hardware, i.e. the crash is inside `vglInitExtended()` itself, before any game
+code. Most likely causes, in order:
+
+1. **Mismatched vitaGL / vitaShaRK / SceShaccCgExt** (e.g. vitaGL built from source against an old vitaShaRK).
+   Reinstall all three from the same vdpm run: `vdpm vitaShaRK && vdpm SceShaccCgExt && vdpm vitaGL`, or use the
+   GitHub Actions workflow in `.github/workflows/vita.yml` (fresh `vitasdk/vitasdk` image every time).
+2. **A broken libshacccg.suprx**: 0.6.2 loads it once before vitaGL does and shows a message if it won't load.
+3. **Memory**: 0.6.2 logs free RAM before vitaGL starts and leaves less of it to newlib (96 MB heap).
+
+0.6.2 logs straight through sceIo (0.6.1's stdout redirect left log.txt empty on hardware).
 
 ## Optional: PC build (Linux) to check the code compiles
 

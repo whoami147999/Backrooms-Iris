@@ -30,4 +30,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: BackroomsIris-vpk
-          path: build-vita/BackroomsIris.vpk
+          path: |
+            build-vita/BackroomsIris.vpk
+            build-vita/iris_vita

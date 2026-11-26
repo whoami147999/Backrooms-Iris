@@ -7,12 +7,14 @@
 #include <psp2/display.h>
 #include <psp2/io/fcntl.h>
 #include <psp2/io/stat.h>
+#include <psp2/kernel/modulemgr.h>
 #include <psp2/kernel/processmgr.h>
 #include <psp2/kernel/sysmem.h>
 #include <psp2/power.h>
 #include <vitaGL.h>
 
 #include <cctype>
+#include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -27,7 +29,7 @@
 extern "C" {
 // newlib heap for our own allocations. vitaGL takes most of what's left for GPU memory, so
 // this stays moderate (the game itself needs well under 100 MB).
-unsigned int _newlib_heap_size_user = 128 * 1024 * 1024;
+unsigned int _newlib_heap_size_user = 96 * 1024 * 1024;
 // main thread stack (the default is small)
 unsigned int sceUserMainThreadStackSize = 1 * 1024 * 1024;
 }
@@ -36,6 +38,23 @@ namespace iris {
 namespace {
 Uint64 g_t0 = 0;
 const char* BOOT_FILE = "ux0:data/BackroomsIris/boot.txt";
+const char* LOG_FILE = "ux0:data/BackroomsIris/log.txt";
+
+// Log straight through sceIo (open, append, close every line): survives any crash, and doesn't
+// depend on newlib's stdout redirection (which left log.txt empty on real hardware).
+void vlog(const char* fmt, ...) {
+    char buf[512];
+    va_list ap;
+    va_start(ap, fmt);
+    int n = std::vsnprintf(buf, sizeof buf, fmt, ap);
+    va_end(ap);
+    if (n <= 0) return;
+    if (n >= (int)sizeof buf) n = (int)sizeof buf - 1;
+    SceUID fd = sceIoOpen(LOG_FILE, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_APPEND, 0777);
+    if (fd < 0) return;
+    sceIoWrite(fd, buf, (SceSize)n);
+    sceIoClose(fd);
+}
 std::string g_prev_stage;   // what boot.txt said when we started
 bool g_prev_read = false;
 
@@ -55,12 +74,15 @@ void read_prev_stage() {
     }
 }
 
-void log_free_memory(const char* when) {
+// returns free user RAM in bytes (-1 if unknown)
+int log_free_memory(const char* when) {
     SceKernelFreeMemorySizeInfo info;
     info.size = sizeof(info);
-    if (sceKernelGetFreeMemorySize(&info) >= 0)
-        std::printf("[iris] vita: free memory %s: user %d KB, cdram %d KB, phycont %d KB\n", when, info.size_user / 1024,
-                    info.size_cdram / 1024, info.size_phycont / 1024);
+    int r = sceKernelGetFreeMemorySize(&info);
+    if (r < 0) { vlog("[iris] vita: free memory %s: unknown (0x%08X)\n", when, (unsigned)r); return -1; }
+    vlog("[iris] vita: free memory %s: user %d KB, cdram %d KB, phycont %d KB\n", when, info.size_user / 1024,
+         info.size_cdram / 1024, info.size_phycont / 1024);
+    return info.size_user;
 }
 
 bool file_exists(const char* path) {
@@ -71,7 +93,7 @@ bool file_exists(const char* path) {
 // A text screen drawn straight into a display framebuffer (no GPU, no vitaGL), for errors that
 // happen before or instead of graphics. Waits for a button, then quits the app.
 [[noreturn]] void fatal_screen(const std::vector<std::string>& lines) {
-    for (const std::string& l : lines) std::printf("[iris] FATAL: %s\n", l.c_str());
+    for (const std::string& l : lines) vlog("[iris] FATAL: %s\n", l.c_str());
     const int W = 960, H = 544, S = 3;
     void* base = nullptr;
     SceUID mem = sceKernelAllocMemBlock("iris_fb", SCE_KERNEL_MEMBLOCK_TYPE_USER_CDRAM_RW, 2 * 1024 * 1024, nullptr);
@@ -123,7 +145,7 @@ bool file_exists(const char* path) {
 }
 
 void on_terminate() {
-    std::printf("[iris] FATAL: uncaught exception / std::terminate (out of memory?)\n");
+    vlog("[iris] FATAL: uncaught exception / std::terminate (out of memory?)\n");
     sceKernelExitProcess(0);
     std::abort();
 }
@@ -131,22 +153,29 @@ void on_terminate() {
 void open_log() {
     sceIoMkdir("ux0:data/BackroomsIris", 0777);
     read_prev_stage();
-    if (std::freopen("ux0:data/BackroomsIris/log.txt", "w", stdout)) std::setvbuf(stdout, nullptr, _IONBF, 0);
-    if (std::freopen("ux0:data/BackroomsIris/log.txt", "a", stderr)) std::setvbuf(stderr, nullptr, _IONBF, 0);
+    SceUID fd = sceIoOpen(LOG_FILE, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777); // start a fresh log
+    if (fd >= 0) sceIoClose(fd);
+    vlog("[iris] Backrooms Iris log\n");
+    // the rest of the game logs with printf: send stdout to the same file (append mode)
+    if (std::freopen(LOG_FILE, "a", stdout)) std::setvbuf(stdout, nullptr, _IONBF, 0);
 }
 } // namespace
 
 bool platform_init(const PlatformConfig& cfg) {
     std::set_terminate(on_terminate);
-    std::printf("[iris] vita: boot%s\n", cfg.safe_mode ? " (SAFE MODE)" : "");
-    if (!g_prev_stage.empty()) std::printf("[iris] vita: last run ended at stage '%s'\n", g_prev_stage.c_str());
-    log_free_memory("at boot");
+    vlog("[iris] vita: boot%s\n", cfg.safe_mode ? " (SAFE MODE)" : "");
+    if (!g_prev_stage.empty()) vlog("[iris] vita: last run ended at stage '%s'\n", g_prev_stage.c_str());
+    int free_user = log_free_memory("at boot");
     platform_boot_stage("libshacccg check");
 
     // vitaGL compiles its shaders on the console with Sony's shader compiler, which can't be
     // shipped with homebrew: it has to be extracted from the firmware with ShaRKF00D. Without
     // it vitaGL crashes on the first draw (C2-12828-1), so check first and say so.
-    if (!file_exists("ur0:data/libshacccg.suprx") && !file_exists("ur0:data/external/libshacccg.suprx"))
+    const bool shacccg_data = file_exists("ur0:data/libshacccg.suprx");
+    const bool shacccg_ext = file_exists("ur0:data/external/libshacccg.suprx");
+    vlog("[iris] vita: libshacccg.suprx in ur0:data/ %s, in ur0:data/external/ %s\n", shacccg_data ? "YES" : "no",
+         shacccg_ext ? "YES" : "no");
+    if (!shacccg_data && !shacccg_ext)
         fatal_screen({"BACKROOMS IRIS CAN'T START",
                       "LIBSHACCCG.SUPRX IS MISSING.",
                       "THE GRAPHICS NEED SONY'S SHADER COMPILER:",
@@ -155,7 +184,20 @@ bool platform_init(const PlatformConfig& cfg) {
                       "3. START BACKROOMS IRIS AGAIN",
                       "",
                       "PRESS X OR START TO EXIT"});
-    std::printf("[iris] vita: libshacccg found\n");
+    // Load (without starting) the module once to check it's a valid, signed module. A broken
+    // copy is a classic reason for vitaGL to die during init.
+    platform_boot_stage("libshacccg probe");
+    {
+        const char* path = shacccg_data ? "ur0:data/libshacccg.suprx" : "ur0:data/external/libshacccg.suprx";
+        SceUID mod = sceKernelLoadModule(path, 0, nullptr);
+        vlog("[iris] vita: probe load %s -> 0x%08X\n", path, (unsigned)mod);
+        if (mod >= 0) sceKernelUnloadModule(mod, 0, nullptr);
+        else
+            fatal_screen({"BACKROOMS IRIS CAN'T START",
+                          "LIBSHACCCG.SUPRX IS THERE BUT WON'T LOAD (BROKEN COPY?)",
+                          "DELETE IT, RUN SHARKF00D AGAIN, THEN RESTART",
+                          "", "PRESS X OR START TO EXIT"});
+    }
 
     // run the CPU/GPU at full clocks
     platform_boot_stage("clocks");
@@ -167,25 +209,26 @@ bool platform_init(const PlatformConfig& cfg) {
     // 960x544 native. vitaGL grabs all free RAM minus the threshold for the GPU, so the
     // threshold is what's left for thread stacks, SDL audio and the network. Safe mode: no MSAA
     // and twice the headroom.
+    int headroom = (cfg.safe_mode ? 32 : 24) * 1024 * 1024;
+    if (free_user > 0 && free_user < headroom * 3) headroom = free_user / 3; // little RAM: still leave vitaGL most of it
     platform_boot_stage("vitagl init");
-    std::printf("[iris] vita: vglInitExtended (%s)\n", cfg.safe_mode ? "no msaa, 32 MB headroom" : "2x msaa, 24 MB headroom");
-    if (!vglInitExtended(0, 960, 544, (cfg.safe_mode ? 32 : 24) * 1024 * 1024,
-                         cfg.safe_mode ? SCE_GXM_MULTISAMPLE_NONE : SCE_GXM_MULTISAMPLE_2X)) {
-        std::printf("[iris] vita: vglInitExtended failed\n");
+    vlog("[iris] vita: vglInitExtended(%s, %d KB headroom)\n", cfg.safe_mode ? "no msaa" : "2x msaa", headroom / 1024);
+    if (!vglInitExtended(0, 960, 544, headroom, cfg.safe_mode ? SCE_GXM_MULTISAMPLE_NONE : SCE_GXM_MULTISAMPLE_2X)) {
+        vlog("[iris] vita: vglInitExtended failed\n");
         fatal_screen({"BACKROOMS IRIS CAN'T START", "VITAGL FAILED TO START (GPU / SHADER COMPILER)",
                       "RE-EXTRACT LIBSHACCCG.SUPRX WITH SHARKF00D", "", "PRESS X OR START TO EXIT"});
     }
-    std::printf("[iris] vita: vitaGL ready\n");
+    vlog("[iris] vita: vitaGL ready\n");
     log_free_memory("after vitaGL");
     platform_boot_stage("sdl init");
 
     if (SDL_Init(SDL_INIT_GAMECONTROLLER | SDL_INIT_JOYSTICK | SDL_INIT_TIMER) != 0) {
-        std::printf("[iris] vita: SDL_Init failed: %s\n", SDL_GetError());
+        vlog("[iris] vita: SDL_Init failed: %s\n", SDL_GetError());
         fatal_screen({"BACKROOMS IRIS CAN'T START", "SDL_INIT FAILED (INPUT)", "", "PRESS X OR START TO EXIT"});
     }
     gamepad_init();
     g_t0 = SDL_GetPerformanceCounter();
-    std::printf("[iris] vita: SDL ready\n");
+    vlog("[iris] vita: SDL ready\n");
     return true;
 }
 
@@ -206,7 +249,7 @@ void platform_poll(InputState& in) {
 }
 
 void platform_boot_stage(const char* stage) {
-    std::printf("[iris] stage: %s\n", stage);
+    vlog("[iris] stage: %s\n", stage);
     SceUID fd = sceIoOpen(BOOT_FILE, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
     if (fd < 0) return;
     sceIoWrite(fd, stage, (SceSize)std::strlen(stage));
