@@ -7,6 +7,7 @@
 
 #include "../core/config.h"
 #include "../core/hash.h"
+#include "../platform/platform.h"
 #include "font.h"
 #include "gl.h"
 #include "models.h"
@@ -94,7 +95,8 @@ bool Renderer::init(const RenderSettings& s) {
     glFogi(GL_FOG_MODE, GL_EXP2);
     glHint(GL_FOG_HINT, GL_NICEST);
     glAlphaFunc(GL_GREATER, 0.02f);
-    try {
+    if (!s_.threaded) threaded_ = false;
+    else try {
         worker_ = std::thread(&Renderer::worker_loop, this);
         threaded_ = true;
     } catch (const std::exception& e) {
@@ -160,10 +162,13 @@ void Renderer::set_world(const World& w) {
         if (tex_[0]) glDeleteTextures(MAT_COUNT, tex_);
         std::printf("[iris] textures: level %s\n", level_info(w.id()).number);
         Image imgs[MAT_COUNT];
+        platform_boot_stage((std::string("level ") + level_info(w.id()).number + " textures").c_str());
         make_level_textures(w.id(), s_.texture_size, imgs);
-        for (int i = 0; i < MAT_COUNT; i++) tex_[i] = upload_texture(imgs[i], true, false, true);
+        platform_boot_stage((std::string("level ") + level_info(w.id()).number + " texture upload").c_str());
+        for (int i = 0; i < MAT_COUNT; i++) tex_[i] = upload_texture(imgs[i], s_.mipmaps, false, true);
         apply_texture_filtering();
         std::printf("[iris] textures uploaded\n");
+        platform_boot_stage((std::string("level ") + level_info(w.id()).number + " first draw").c_str());
     }
     level_ = w.id();
     seed_ = w.seed();
@@ -1307,7 +1312,8 @@ void Renderer::apply_texture_filtering() {
         if (!tex_[i]) continue;
         glBindTexture(GL_TEXTURE_2D, tex_[i]);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, s_.retro ? GL_NEAREST : GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, s_.retro ? GL_NEAREST_MIPMAP_LINEAR : GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, !s_.mipmaps ? (s_.retro ? GL_NEAREST : GL_LINEAR)
+                                                                          : (s_.retro ? GL_NEAREST_MIPMAP_LINEAR : GL_LINEAR_MIPMAP_LINEAR));
     }
 }
 

@@ -5,6 +5,7 @@
 #include <SDL.h>
 #include <psp2/ctrl.h>
 #include <psp2/display.h>
+#include <psp2/io/fcntl.h>
 #include <psp2/io/stat.h>
 #include <psp2/kernel/processmgr.h>
 #include <psp2/kernel/sysmem.h>
@@ -14,6 +15,7 @@
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <exception>
 #include <string>
 #include <vector>
@@ -33,6 +35,33 @@ unsigned int sceUserMainThreadStackSize = 1 * 1024 * 1024;
 namespace iris {
 namespace {
 Uint64 g_t0 = 0;
+const char* BOOT_FILE = "ux0:data/BackroomsIris/boot.txt";
+std::string g_prev_stage;   // what boot.txt said when we started
+bool g_prev_read = false;
+
+void read_prev_stage() {
+    if (g_prev_read) return;
+    g_prev_read = true;
+    SceUID fd = sceIoOpen(BOOT_FILE, SCE_O_RDONLY, 0);
+    if (fd < 0) return;
+    char buf[96] = {0};
+    int n = sceIoRead(fd, buf, sizeof buf - 1);
+    sceIoClose(fd);
+    if (n > 0) {
+        buf[n] = 0;
+        g_prev_stage = buf;
+        while (!g_prev_stage.empty() && (g_prev_stage.back() == '\n' || g_prev_stage.back() == '\r' || g_prev_stage.back() == ' '))
+            g_prev_stage.pop_back();
+    }
+}
+
+void log_free_memory(const char* when) {
+    SceKernelFreeMemorySizeInfo info;
+    info.size = sizeof(info);
+    if (sceKernelGetFreeMemorySize(&info) >= 0)
+        std::printf("[iris] vita: free memory %s: user %d KB, cdram %d KB, phycont %d KB\n", when, info.size_user / 1024,
+                    info.size_cdram / 1024, info.size_phycont / 1024);
+}
 
 bool file_exists(const char* path) {
     SceIoStat st;
@@ -101,14 +130,18 @@ void on_terminate() {
 
 void open_log() {
     sceIoMkdir("ux0:data/BackroomsIris", 0777);
+    read_prev_stage();
     if (std::freopen("ux0:data/BackroomsIris/log.txt", "w", stdout)) std::setvbuf(stdout, nullptr, _IONBF, 0);
     if (std::freopen("ux0:data/BackroomsIris/log.txt", "a", stderr)) std::setvbuf(stderr, nullptr, _IONBF, 0);
 }
 } // namespace
 
-bool platform_init(const PlatformConfig&) {
+bool platform_init(const PlatformConfig& cfg) {
     std::set_terminate(on_terminate);
-    std::printf("[iris] vita: boot\n");
+    std::printf("[iris] vita: boot%s\n", cfg.safe_mode ? " (SAFE MODE)" : "");
+    if (!g_prev_stage.empty()) std::printf("[iris] vita: last run ended at stage '%s'\n", g_prev_stage.c_str());
+    log_free_memory("at boot");
+    platform_boot_stage("libshacccg check");
 
     // vitaGL compiles its shaders on the console with Sony's shader compiler, which can't be
     // shipped with homebrew: it has to be extracted from the firmware with ShaRKF00D. Without
@@ -125,15 +158,26 @@ bool platform_init(const PlatformConfig&) {
     std::printf("[iris] vita: libshacccg found\n");
 
     // run the CPU/GPU at full clocks
+    platform_boot_stage("clocks");
     scePowerSetArmClockFrequency(444);
     scePowerSetBusClockFrequency(222);
     scePowerSetGpuClockFrequency(222);
     scePowerSetGpuXbarClockFrequency(166);
 
-    // 960x544 native, 2x MSAA, keep 16 MB of RAM headroom before vitaGL spills to it
-    std::printf("[iris] vita: vglInitExtended\n");
-    vglInitExtended(0, 960, 544, 16 * 1024 * 1024, SCE_GXM_MULTISAMPLE_2X);
+    // 960x544 native. vitaGL grabs all free RAM minus the threshold for the GPU, so the
+    // threshold is what's left for thread stacks, SDL audio and the network. Safe mode: no MSAA
+    // and twice the headroom.
+    platform_boot_stage("vitagl init");
+    std::printf("[iris] vita: vglInitExtended (%s)\n", cfg.safe_mode ? "no msaa, 32 MB headroom" : "2x msaa, 24 MB headroom");
+    if (!vglInitExtended(0, 960, 544, (cfg.safe_mode ? 32 : 24) * 1024 * 1024,
+                         cfg.safe_mode ? SCE_GXM_MULTISAMPLE_NONE : SCE_GXM_MULTISAMPLE_2X)) {
+        std::printf("[iris] vita: vglInitExtended failed\n");
+        fatal_screen({"BACKROOMS IRIS CAN'T START", "VITAGL FAILED TO START (GPU / SHADER COMPILER)",
+                      "RE-EXTRACT LIBSHACCCG.SUPRX WITH SHARKF00D", "", "PRESS X OR START TO EXIT"});
+    }
     std::printf("[iris] vita: vitaGL ready\n");
+    log_free_memory("after vitaGL");
+    platform_boot_stage("sdl init");
 
     if (SDL_Init(SDL_INIT_GAMECONTROLLER | SDL_INIT_JOYSTICK | SDL_INIT_TIMER) != 0) {
         std::printf("[iris] vita: SDL_Init failed: %s\n", SDL_GetError());
@@ -159,6 +203,22 @@ void platform_poll(InputState& in) {
     in.width = 960;
     in.height = 544;
     (void)prev;
+}
+
+void platform_boot_stage(const char* stage) {
+    std::printf("[iris] stage: %s\n", stage);
+    SceUID fd = sceIoOpen(BOOT_FILE, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
+    if (fd < 0) return;
+    sceIoWrite(fd, stage, (SceSize)std::strlen(stage));
+    sceIoClose(fd);
+}
+
+std::string platform_last_crash() {
+    read_prev_stage();
+    const std::string& s = g_prev_stage;
+    if (s.empty() || s == "exit") return {};
+    if (s.size() >= 3 && s.compare(s.size() - 3, 3, "-ok") == 0) return {};
+    return s;
 }
 
 void platform_set_fullscreen(bool) {}

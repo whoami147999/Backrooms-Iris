@@ -28,6 +28,8 @@ struct RenderSettings {
     bool film = true;             // film look: bloom, grain, aberration, grading (PC shader; overlays on Vita)
     bool camcorder = false;       // found-footage look: scanlines, tracking noise, REC
     bool atmosphere = true;       // light halos and shafts, dust, flicker
+    bool threaded = true;         // build chunk meshes on a worker thread
+    bool mipmaps = true;          // mipmapped world textures
     bool retro = true;            // PS1 look: crisp texels, wobbly vertices + affine textures (PC), pixels + dither (PC)
 };
 

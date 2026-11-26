@@ -1,5 +1,7 @@
 #include "app.h"
 
+#include <cctype>
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -51,8 +53,18 @@ bool App::init(const DevOptions& dev) {
     if (dev.camcorder >= 0) cfg_.camcorder = dev.camcorder != 0;
     if (dev.film >= 0) cfg_.film = dev.film != 0;
     if (dev.retro >= 0) cfg_.retro = dev.retro != 0;
+    if (platform_is_vita()) {
+        crash_note_ = platform_last_crash();
+        if (!crash_note_.empty()) {
+            std::printf("[iris] last run crashed during '%s': safe mode on\n", crash_note_.c_str());
+            cfg_.safe_mode = true;
+            save_settings();
+        }
+    }
+    const bool safe = (platform_is_vita() && cfg_.safe_mode) || dev.safe;
 
     PlatformConfig pc;
+    pc.safe_mode = safe;
     pc.fullscreen = cfg_.fullscreen && dev.shot_path.empty();
     pc.vsync = cfg_.vsync;
     pc.hidden = !dev.shot_path.empty();
@@ -69,18 +81,34 @@ bool App::init(const DevOptions& dev) {
         rs_.texture_size = 1024;    // PC: double resolution textures
         rs_.mesh_detail = 2;        // and finer lighting grids
     }
+    if (safe) { // the bare minimum: no worker thread, no mipmaps, small textures
+        rs_.threaded = false;
+        rs_.mipmaps = false;
+        rs_.texture_size = 256;
+        rs_.view_dist = 20.0f;
+        rs_.mesh_detail = 1;
+        rs_.chunk_builds_per_frame = 1;
+    }
     rs_.film = cfg_.film;
     rs_.camcorder = cfg_.camcorder;
     rs_.atmosphere = cfg_.atmosphere;
     rs_.retro = cfg_.retro;
-    if (dev.shot_path.empty() && audio_.init()) audio_.set_master(cfg_.volume); // (screenshots stay silent)
+    if (safe) std::printf("[iris] safe mode: no sound\n");
+    else if (dev.shot_path.empty()) { // (screenshots stay silent)
+        platform_boot_stage("audio init");
+        if (audio_.init()) audio_.set_master(cfg_.volume);
+    }
     std::printf("[iris] renderer init\n");
+    platform_boot_stage("renderer init");
     ren_.init(rs_);
     std::printf("[iris] net init\n");
+    platform_boot_stage("network init");
     net_init();
+    platform_boot_stage("menu setup");
     dev_setup();
     build_menu();
     std::printf("[iris] init done\n");
+    stage("first frame");
     return true;
 }
 
@@ -90,6 +118,7 @@ void App::shutdown() {
     browser_.scan_stop();
     ren_.shutdown();
     save_settings();
+    platform_boot_stage("exit");
     platform_shutdown();
 }
 
@@ -233,6 +262,11 @@ void App::build_menu() {
         case Screen::Title:
             m.title = "BACKROOMS IRIS";
             m.subtitle = "CO-OP HORROR  -  " IRIS_VERSION;
+            if (!crash_note_.empty()) {
+                std::string up = crash_note_;
+                for (char& c : up) c = (char)std::toupper((unsigned char)c);
+                m.subtitle = "SAFE MODE - LAST RUN CRASHED AT: " + up;
+            } else if (platform_is_vita() && cfg_.safe_mode) m.subtitle = "SAFE MODE  -  " IRIS_VERSION;
             button("SINGLE PLAYER", [this] { go(Screen::Single); });
             button("SANDBOX", [this] { go(Screen::Sandbox); }, "SPAWN ENTITIES, ITEMS AND WEAPONS. NOTHING COUNTS.");
             button("MULTIPLAYER", [this] { go(Screen::Multi); });
@@ -347,6 +381,10 @@ void App::build_menu() {
             toggle("LIGHT HALOS + DUST", &cfg_.atmosphere, [this] { apply_display_settings(); });
             m.items.back().hint = "GLOWING LAMPS, LIGHT SHAFTS, FLICKERING TUBES, DUST";
             toggle("SHOW FPS", &cfg_.show_fps);
+            if (platform_is_vita()) {
+                toggle("SAFE MODE", &cfg_.safe_mode, [this] { save_settings(); });
+                m.items.back().hint = "NO SOUND, MSAA OR MIPMAPS. FOR CRASHES. RESTART THE GAME TO APPLY";
+            }
             spacer();
             button("BACK", [this] { back(); });
             break;
@@ -1091,8 +1129,10 @@ void App::draw_game(bool overlay_menu) {
         ren_.set_world(v.world);
         level_title_t_ = now_;
         if (v.escaped && !v.multiplayer) { escaped_t_ = now_; session_->clear_escaped(); }
+        stage(std::string("level ") + v.world.info().number + " meshes");
         ren_.update_chunks(v.world, v.me.pos + Vec3{0, v.me.eye_height(), 0}, -1);
         std::printf("[iris] level %s loaded\n", v.world.info().number);
+        stage(std::string("level ") + v.world.info().number + " playing");
     }
     ren_.set_world(v.world); // no-op unless something else (a menu) changed it
 
@@ -1288,6 +1328,10 @@ void App::run() {
         }
         platform_swap();
         if (frames_total_ < 3 && ++frames_total_ <= 2) std::printf("[iris] frame %d drawn\n", frames_total_);
+        if (stage_pending_ && now_ - stage_t_ > 4.0) { // survived a few seconds: whatever ran last was fine
+            platform_boot_stage(in_game() ? "play-ok" : "menu-ok");
+            stage_pending_ = false;
+        }
 
         if (in_.screenshot) {
             std::string path = data_dir_ + "iris_" + timestamp() + ".bmp";

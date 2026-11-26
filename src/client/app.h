@@ -46,9 +46,10 @@ struct DevOptions {          // command-line switches used for testing / screens
     int camcorder = -1;      // force the camcorder look on/off
     int film = -1;
     int retro = -1;
-    float at_exit = -1;
+    float at_exit = -1;      // stand this far in front of the nearest exit door, facing it
     bool nv = false;         // night vision goggles on
-    bool at_camp = false;    // stand next to the nearest wanderers' camp      // stand this far in front of the nearest exit door, facing it
+    bool at_camp = false;    // stand next to the nearest wanderers' camp
+    bool safe = false;       // dev: run with the Vita safe-mode settings
 };
 
 class App {
@@ -140,6 +141,10 @@ private:
     bool compass_ok_ = false;
     int frames_ = 0;
     int frames_total_ = 0;   // boot log: first frames only
+    std::string crash_note_; // Vita: the stage the last run died in (shown on the title screen)
+    bool stage_pending_ = false;
+    double stage_t_ = 0;
+    void stage(const std::string& s) { platform_boot_stage(s.c_str()); stage_pending_ = true; stage_t_ = platform_time(); }
     double fps_t_ = 0;
     bool debug_ = false;
     int single_level_ = 0;

@@ -45,6 +45,7 @@ struct PlatformConfig {
     bool vsync = true;
     bool hidden = false;          // dev: render without showing a window (screenshots)
     int msaa = 4;
+    bool safe_mode = false;       // Vita: no MSAA, more memory headroom (after a crashed boot)
 };
 
 bool platform_init(const PlatformConfig& cfg);
@@ -59,5 +60,11 @@ const char* platform_name();
 bool platform_is_vita();
 std::string platform_data_dir();      // writable dir for screenshots/settings, ends with '/'
 void platform_shutdown();
+
+// Boot breadcrumbs. Each stage is written to disk (Vita) before it starts, so if the console
+// kills the game, the next boot knows where it died: it says so on screen and turns on safe mode.
+// Stages ending in "-ok" (and "exit") mean "fine so far"; anything else left over is a crash.
+void platform_boot_stage(const char* stage);
+std::string platform_last_crash();    // stage the previous run died in, "" if it didn't
 
 } // namespace iris

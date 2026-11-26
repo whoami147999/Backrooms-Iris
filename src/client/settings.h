@@ -22,6 +22,7 @@ struct Settings {
     bool atmosphere = true;     // light halos/shafts, dust, flicker
     bool retro = true;          // PS1 look
     float volume = 0.8f;        // master volume 0..1
+    bool safe_mode = false;     // Vita: no MSAA, sound, mipmaps or worker thread (turned on after a crashed boot)
 
     void load(const std::string& path);
     void save(const std::string& path) const;
