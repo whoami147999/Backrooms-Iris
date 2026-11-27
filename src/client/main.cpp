@@ -74,6 +74,8 @@ int main(int argc, char** argv) {
         else if (a == "--noretro") dev.retro = 0;
         else if (a == "--nv") dev.nv = true;
         else if (a == "--safe") dev.safe = true;
+        else if (a == "--vita-like") dev.vita_like = true;
+        else if (a == "--quality") dev.quality = std::atoi(next());
         else if (a == "--at-camp") dev.at_camp = true;
         else if (a == "--at-exit") dev.at_exit = (float)std::atof(next());
         else if (a == "--nohud") dev.hud = false;

@@ -227,11 +227,12 @@ bool platform_init(const PlatformConfig& cfg) {
     int headroom = (cfg.safe_mode ? 32 : 24) * 1024 * 1024;
     if (free_user > 0 && free_user < headroom * 3) headroom = free_user / 3; // little RAM: still leave vitaGL most of it
     platform_boot_stage("vitagl init");
-    vlog("[iris] vita: vglInitExtended(%s, %d KB headroom)\n", cfg.safe_mode ? "no msaa" : "2x msaa", headroom / 1024);
+    const bool msaa = !cfg.safe_mode && cfg.msaa > 0;
+    vlog("[iris] vita: vglInitExtended(%s, %d KB headroom)\n", msaa ? "2x msaa" : "no msaa", headroom / 1024);
     // NB: vglInit* return GL_FALSE on success. GL_TRUE means "worked, but had to fall back to a
     // smaller resolution" (reading it the other way round leaves the game stuck behind vitaGL's
     // spinning boot logo, which stays up until our first frame).
-    GLboolean fell_back = vglInitExtended(0, 960, 544, headroom, cfg.safe_mode ? SCE_GXM_MULTISAMPLE_NONE : SCE_GXM_MULTISAMPLE_2X);
+    GLboolean fell_back = vglInitExtended(0, 960, 544, headroom, msaa ? SCE_GXM_MULTISAMPLE_2X : SCE_GXM_MULTISAMPLE_NONE);
     g_vgl_up = true;
     vlog("[iris] vita: vitaGL ready%s\n", fell_back ? " (resolution fallback)" : "");
     log_free_memory("after vitaGL");

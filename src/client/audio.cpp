@@ -487,7 +487,7 @@ bool Audio::init() {
         return false;
     }
     SDL_AudioSpec want{}, have{};
-    want.freq = 44100;
+    want.freq = platform_is_vita() ? 22050 : 44100; // (sounds are synthesized at 22050: the Vita mixes at that, half the work)
     want.format = AUDIO_S16SYS;
     want.channels = 2;
     want.samples = 1024;
@@ -586,7 +586,9 @@ void Audio::mix(int16_t* out, int frames) {
     for (Voice& v : voices_) run(v);
     for (Voice& v : loops_) if (v.target > 0.0005f || v.vol > 0.0005f) run(v);
     for (int i = 0; i < frames * 2; i++) {
-        float x = std::tanh(acc[(size_t)i] * master_ * 1.6f); // soft limit: no harsh clipping
+        // soft limit (no harsh clipping): a rational tanh, much cheaper than std::tanh per sample
+        float v = std::max(-3.0f, std::min(3.0f, acc[(size_t)i] * master_ * 1.6f));
+        float x = v * (27.0f + v * v) / (27.0f + 9.0f * v * v);
         out[i] = (int16_t)(x * 32000.0f);
     }
 }

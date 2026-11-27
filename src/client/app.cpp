@@ -38,6 +38,39 @@ uint32_t random_seed() { return (uint32_t)std::time(nullptr) * 2654435761u + 7; 
 
 // =================================================================== setup
 // 2x on a 544p Vita / 720p, 4x on 1080p: always crisp, always readable
+// Graphics presets. Everything here really changes what gets drawn: how far you see, texture
+// resolution, how fine the baked lighting grid is, anti-aliasing, dust, model detail and the PC
+// screen-warp effects. The Vita's presets sit lower: its LOW is the 30 fps one.
+App::Quality App::quality_preset(int level, bool vita) {
+    static const Quality PC[4] = {
+        // view   tex   mesh msaa particles entity warp
+        {24.0f,  512,  1,   0,   0.0f,     0.7f,  false}, // LOW
+        {30.0f,  512,  1,   2,   0.5f,     1.0f,  true},  // MEDIUM
+        {34.0f,  1024, 2,   4,   1.0f,     1.0f,  true},  // HIGH
+        {46.0f,  1024, 2,   8,   1.6f,     1.4f,  true},  // ULTRA
+    };
+    static const Quality VITA[4] = {
+        {18.0f,  256,  1,   0,   0.0f,     0.7f,  false},
+        {22.0f,  256,  1,   0,   0.4f,     0.85f, false},
+        {26.0f,  512,  1,   2,   0.8f,     1.0f,  false},
+        {30.0f,  512,  2,   2,   1.0f,     1.1f,  false},
+    };
+    level = std::max(0, std::min(3, level));
+    return vita ? VITA[level] : PC[level];
+}
+
+void App::apply_quality() {
+    const bool vita = platform_is_vita() || dev_.vita_like;
+    Quality q = quality_preset(cfg_.quality, vita);
+    if ((platform_is_vita() && cfg_.safe_mode) || dev_.safe) { q.texture_size = 256; q.view_dist = std::min(q.view_dist, 20.0f); q.mesh_detail = 1; }
+    rs_.view_dist = q.view_dist;
+    rs_.texture_size = q.texture_size;
+    rs_.mesh_detail = q.mesh_detail;
+    rs_.particles = q.particles;
+    rs_.entity_detail = q.entity_detail;
+    ren_.set_quality(q.view_dist, q.texture_size, q.mesh_detail, q.particles, q.entity_detail);
+}
+
 float App::ui() const { return std::max(1.0f, std::floor(ren_.height / 270.0f)); }
 
 std::string App::key_hint(const char* kb, const char* pad) const {
@@ -70,25 +103,27 @@ bool App::init(const DevOptions& dev) {
         }
     }
     const bool safe = (platform_is_vita() && cfg_.safe_mode) || dev.safe;
+    const bool vita = platform_is_vita() || dev.vita_like;
+    if (dev.quality >= 0) cfg_.quality = std::min(3, dev.quality);
+    if (cfg_.quality < 0) cfg_.quality = vita ? 0 : 2; // Vita: LOW (speed first), PC: HIGH
+    const Quality q = quality_preset(cfg_.quality, vita);
 
     PlatformConfig pc;
     pc.safe_mode = safe;
+    pc.msaa = safe ? 0 : q.msaa;
     pc.fullscreen = cfg_.fullscreen && dev.shot_path.empty();
     pc.vsync = cfg_.vsync;
     pc.hidden = !dev.shot_path.empty();
     if (!platform_init(pc)) return false;
     std::printf("[iris] Backrooms Iris %s on %s\n", IRIS_VERSION, platform_name());
 
-    if (platform_is_vita()) {
-        rs_.view_dist = 24.0f;
-        rs_.texture_size = 256;     // 4x less work than 512 at every level load (the Vita CPU is slow)
-        rs_.chunk_builds_per_frame = 1;
-        rs_.post_effects = false;
-        rs_.mesh_detail = 1;
-    } else {
-        rs_.texture_size = 1024;    // PC: double resolution textures
-        rs_.mesh_detail = 2;        // and finer lighting grids
-    }
+    rs_.view_dist = q.view_dist;
+    rs_.texture_size = q.texture_size;
+    rs_.mesh_detail = q.mesh_detail;
+    rs_.particles = q.particles;
+    rs_.entity_detail = q.entity_detail;
+    rs_.post_effects = q.post_effects;
+    if (vita) rs_.chunk_builds_per_frame = 1;
     if (safe) { // the bare minimum: no worker thread, no mipmaps, small textures
         rs_.threaded = false;
         rs_.mipmaps = false;
@@ -416,6 +451,17 @@ void App::build_menu() {
                 toggle("FULLSCREEN", &cfg_.fullscreen, [this] { apply_display_settings(); });
                 toggle("VSYNC", &cfg_.vsync, [this] { apply_display_settings(); });
             }
+            {
+                Item gq; gq.kind = Item::Choice; gq.label = "GRAPHICS QUALITY"; gq.choice = &cfg_.quality;
+                gq.choices = {"LOW", "MEDIUM", "HIGH", "ULTRA"};
+                const char* aa = platform_is_vita() ? " (2X AA AFTER A RESTART)" : " (AA AFTER A RESTART)";
+                gq.hints = {platform_is_vita() ? "FASTEST. SHORT VIEW, NO DUST, SIMPLER MODELS" : "FASTEST. SHORTER VIEW, NO DUST, NO AA",
+                            platform_is_vita() ? "A LITTLE FURTHER, SOME DUST" : std::string("BALANCED") + aa,
+                            platform_is_vita() ? std::string("SHARPER TEXTURES, FURTHER VIEW") + aa : std::string("SHARP TEXTURES, FINE LIGHTING") + aa,
+                            platform_is_vita() ? std::string("EVERYTHING. EXPECT SLOWDOWN") + aa : std::string("FURTHEST VIEW, MOST DUST, SMOOTHEST MODELS") + aa};
+                gq.on = [this] { apply_quality(); save_settings(); };
+                m.items.push_back(gq);
+            }
             toggle("RETRO PS1 LOOK", &cfg_.retro, [this] { apply_display_settings(); });
             m.items.back().hint = platform_is_vita() ? "CRISP PIXEL TEXTURES" : "CHUNKY PIXELS, DITHERING, WOBBLY VERTICES, CRISP TEXTURES";
             toggle("FILM EFFECTS", &cfg_.film, [this] { apply_display_settings(); });
@@ -529,6 +575,7 @@ void App::menu_input() {
             if (dir || activate) {
                 int n = (int)cur.choices.size();
                 *cur.choice = (*cur.choice + (dir ? dir : 1) + n) % n;
+                if (cur.on) cur.on();
             }
             break;
         case Item::Slider:
@@ -1150,8 +1197,8 @@ void App::draw_hud(const GameView& v, const ScreenFx& fx) {
     }
     if (cfg_.show_fps || debug_) {
         char buf[96];
-        if (v.multiplayer) std::snprintf(buf, sizeof buf, "%.0f FPS  PING %.0f MS", fps_, v.ping_ms);
-        else std::snprintf(buf, sizeof buf, "%.0f FPS  %.0f,%.0f", fps_, me.pos.x, me.pos.z);
+        if (v.multiplayer) std::snprintf(buf, sizeof buf, "%.0f FPS  %d DRAWS  PING %.0f MS", fps_, ren_.draw_calls(), v.ping_ms);
+        else std::snprintf(buf, sizeof buf, "%.0f FPS  %d DRAWS  %.0f,%.0f", fps_, ren_.draw_calls(), me.pos.x, me.pos.z);
         ren_.text(W / 2, 4 * s, s, buf, rgba(0.6f, 1, 0.6f, 0.8f), 1);
     }
     if (sb_open_) draw_sandbox_menu();
@@ -1404,6 +1451,7 @@ void App::run() {
             }
         }
         if (!dev_.shot_path.empty() && now_ - start >= dev_.shot_after && ++shot_frames > 3) {
+            std::printf("[iris] dev: %d draw calls last frame\n", ren_.draw_calls());
             bool ok = platform_save_screenshot(dev_.shot_path);
             std::printf("[iris] %s %s\n", ok ? "saved" : "FAILED", dev_.shot_path.c_str());
             break;

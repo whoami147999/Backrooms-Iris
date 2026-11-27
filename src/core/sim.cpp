@@ -884,19 +884,25 @@ void GameSim::update_entity(Entity& e, float dt) {
         // Tall, thin, fast. Freezes for a heartbeat when it spots you, then runs you down.
         // It turns slowly: corners and doors are how you lose it.
         case EntityType::Bacteria: {
-            if (e.state == EntState::Wander || e.state == EntState::Retreat) {
+            if (e.state == EntState::Retreat && e.state_t < 6.0f) { // gave up: wanders off for a while
+                wander(1.4f);
+            } else if (e.state == EntState::Wander || e.state == EntState::Retreat) {
                 set_state(EntState::Wander);
                 wander(1.4f);
-                if (los && pd < 24.0f * sense) { set_state(EntState::Notice); e.target = pi; }
-            } else if (e.state == EntState::Notice) {
+                if (los && pd < 22.0f * sense) { set_state(EntState::Notice); e.target = pi; e.stare_t = 0; }
+            } else if (e.state == EntState::Notice) { // it freezes when it spots you: that's your head start
                 if (tp) e.yaw = turn_toward(e.yaw, angle_to(e.pos, ppos), 6 * dt);
-                if (e.state_t > 1.1f) set_state(EntState::Chase);
+                if (e.state_t > 1.6f) set_state(EntState::Chase);
             } else if (e.state == EntState::Chase) {
+                // 1.1: a bit slower than a sprint (4.4 m/s), so running and breaking line of sight
+                // works. It still outruns walking, and it gives up after a long chase.
+                e.stare_t += dt;  // (reused: total chase time)
                 if (los) { e.last_seen = ppos; e.state_t = 0; }
-                move_entity(e, los ? ppos : e.last_seen, 4.95f, dt);
+                move_entity(e, los ? ppos : e.last_seen, 4.15f, dt);
                 if (!los && (e.last_seen - e.pos).len() < 1.0f) set_state(EntState::Search);
-                if (e.state_t > 3.5f) set_state(EntState::Search);
-                if (contact(0.9f)) lethal_touch(pi, e, DeathCause::Bacteria);
+                if (e.state_t > 2.5f) set_state(EntState::Search);
+                if (e.stare_t > 14.0f) { e.stare_t = 0; set_state(EntState::Retreat); }
+                if (contact(0.75f)) lethal_touch(pi, e, DeathCause::Bacteria);
             } else { // Search
                 wander(2.0f);
                 if (los && pd < 18.0f * sense) set_state(EntState::Chase);

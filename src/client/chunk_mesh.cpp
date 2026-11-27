@@ -763,7 +763,7 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
         }
         if (y + hh * 0.5f > top - 0.02f) y = top - 0.02f - hh * 0.5f;
         float along = (0.2f + 0.6f * hash01(W.seed(), hx, hz, 7131)) * len;
-        Vec3 c = Vec3{o.x, 0, o.z} + ad * along + n * 0.008f;
+        Vec3 c = Vec3{o.x, 0, o.z} + ad * along + n * 0.012f;
         Vec3 A = ad * w, Bv{0, hh, 0};
         B.decal(c - A * 0.5f + Vec3{0, y - hh * 0.5f, 0}, A, Bv, n, d);
     };
@@ -811,7 +811,7 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
                         float sx = 0.6f, sz = 0.3f;
                         if (W.hotel()) { sx = sz = (W.floor_mat(cx, cz) == 1 ? 0.7f : 0.22f); } // chandelier vs sconce
                         if (id == LevelId::L1) { sx = 0.75f; sz = 0.12f; }                                // long tube
-                        float y = (id == LevelId::L1 ? li.light_y : (cave ? ceiling_y(W, cxm, czm) : H)) - 0.015f;
+                        float y = (id == LevelId::L1 ? li.light_y : (cave ? ceiling_y(W, cxm, czm) : H)) - 0.03f;
                         out.lights.push_back({{cxm, y, czm}, sx, sz, ls});
                         B.quad(MAT_LIGHT, {cxm - sx, y, czm - sz}, {cxm + sx, y, czm - sz}, {cxm + sx, y, czm + sz}, {cxm - sx, y, czm + sz}, lum);
                         if (id == LevelId::L1) { // hanging cables
@@ -834,7 +834,7 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
                     B.grid(MAT_DOOR, dor, t * DW, Vec3{0, DH, 0}, 1, 2, n,
                            [&](Vec3 p, float& u, float& tt) { u = (p - dor).dot(t) / DW; tt = 1.0f - p.y / DH; },
                            [](Vec3 p) { return p.y < 0.01f ? 0.8f : 1.0f; });
-                    B.vface(MAT_PROP, c + n * 0.006f - t * (DW * 0.5f), n * (face - 0.006f), t * -1.0f, 0, DH, 0.1f, DH, 1, 1, false);
+                    B.vface(MAT_PROP, c + n * 0.012f - t * (DW * 0.5f), n * (face - 0.012f), t * -1.0f, 0, DH, 0.1f, DH, 1, 1, false);
                     B.vface(MAT_PROP, c + n * face + t * (DW * 0.5f), n * -(face - 0.006f), t, 0, DH, 0.1f, DH, 1, 1, false);
                     // a deep steel frame: two jambs and a header standing proud of the wall
                     auto frame = [&](Vec3 m, float half_t, float y0, float y1) {

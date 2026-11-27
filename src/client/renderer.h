@@ -28,6 +28,8 @@ struct RenderSettings {
     bool film = true;             // film look: bloom, grain, aberration, grading (PC shader; overlays on Vita)
     bool camcorder = false;       // found-footage look: scanlines, tracking noise, REC
     bool atmosphere = true;       // light halos and shafts, dust, flicker
+    float particles = 1.0f;       // dust density (0 = none)
+    float entity_detail = 1.0f;   // entity / player model tessellation
     bool threaded = true;         // build chunk meshes on a worker thread
     bool mipmaps = true;          // mipmapped world textures
     bool retro = true;            // PS1 look: crisp texels, wobbly vertices + affine textures (PC), pixels + dither (PC)
@@ -96,6 +98,7 @@ struct Phantom {
 
 class Renderer {
 public:
+    int draw_calls() const { return last_draws_; } // last finished frame
     int width = 1, height = 1;
 
     bool init(const RenderSettings& s);
@@ -124,6 +127,8 @@ public:
     // Film look over the finished 3D frame (PC with GLSL). Returns false if it couldn't run.
     bool post_film(const FilmParams& f);
     void set_style(bool film, bool camcorder, bool atmosphere, bool retro);
+    // graphics preset changes: view distance and detail now; textures / lighting grids rebuild
+    void set_quality(float view_dist, int texture_size, int mesh_detail, float particles, float entity_detail);
     // How much a nearby flickering light is darkening the view right now (0..1), set by draw_world.
     float flicker_dim() const { return flicker_dim_; }
 
@@ -150,6 +155,12 @@ private:
     };
     // background chunk building: the worker thread turns (world, chunk) into a ChunkMesh,
     // the main thread uploads it to the GPU
+    std::vector<const GpuChunk*> visible_;   // (reused every frame)
+    int draws_ = 0, last_draws_ = 0;
+    bool in_2d_ = false, batch_add_ = false;  // 2D batching state
+    uint32_t batch_tex_ = 0;
+    void pre2d(uint32_t tex, bool additive);
+    void post2d(uint32_t tex, bool additive);
     struct Job { int kx, kz; uint32_t gen; World world; };
     struct Done { int kx, kz; uint32_t gen; ChunkMesh mesh; };
     std::thread worker_;

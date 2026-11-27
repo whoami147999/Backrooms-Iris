@@ -53,6 +53,8 @@ struct DevOptions {          // command-line switches used for testing / screens
     bool nv = false;         // night vision goggles on
     bool at_camp = false;    // stand next to the nearest wanderers' camp
     bool safe = false;       // dev: run with the Vita safe-mode settings
+    bool vita_like = false;  // dev: PC with the Vita's render settings (profiling)
+    int quality = -1;        // dev: graphics preset 0-3
 };
 
 class App {
@@ -176,6 +178,9 @@ private:
     void start_host();
     void start_join(const std::string& addr);
     uint16_t host_port() const;
+    struct Quality { float view_dist; int texture_size; int mesh_detail; int msaa; float particles; float entity_detail; bool post_effects; };
+    static Quality quality_preset(int level, bool vita);
+    void apply_quality();
     void leave_game();
     void game_input();
     void sandbox_input();

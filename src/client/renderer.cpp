@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdio>
+#include <cstdlib>
 #include <exception>
 
 #include "../core/config.h"
@@ -295,7 +296,7 @@ void Renderer::flush_dyn(uint32_t tex, bool additive, bool fog) {
     if (additive) glBlendFunc(GL_SRC_ALPHA, GL_ONE);
     if (!fog) glDisable(GL_FOG);
     set_pointers(dyn_.data());
-    glDrawArrays(GL_TRIANGLES, 0, (GLsizei)dyn_.size());
+    draws_++; glDrawArrays(GL_TRIANGLES, 0, (GLsizei)dyn_.size());
     if (additive) glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     if (!fog) glEnable(GL_FOG);
     dyn_.clear();
@@ -352,7 +353,7 @@ void Renderer::draw_entity(const World& w, const DrawEntity& e, float time) {
     float light = clampf(w.light_level({e.pos.x, 1.2f, e.pos.z}) * 0.75f + 0.12f, 0.08f, 0.95f);
     float stride = std::min(1.0f, e.speed / 2.2f);
     float breathe = std::sin(time * 1.6f + e.id) * 0.012f;
-    const int seg = s_.mesh_detail >= 2 ? 10 : 6;
+    const int seg = std::max(4, (int)std::lround((s_.mesh_detail >= 2 ? 10 : 6) * s_.entity_detail));
     ModelBuilder m(dyn_, seg);
     m.place(e.pos, e.yaw);
     m.set_light(light, {0.35f, 0.85f, 0.45f});
@@ -518,7 +519,7 @@ void Renderer::draw_player(const World& w, const DrawPlayer& p, float time) {
     const float* c = COLORS[p.id & 3];
     float light = clampf(w.light_level(p.pos + Vec3{0, 1.2f, 0}) * 0.75f + 0.15f, 0.12f, 0.95f);
     if (!p.alive) light *= 0.5f;
-    const int seg = s_.mesh_detail >= 2 ? 10 : 6;
+    const int seg = std::max(4, (int)std::lround((s_.mesh_detail >= 2 ? 10 : 6) * s_.entity_detail));
     ModelBuilder m(dyn_, seg);
     m.place({p.pos.x, p.pos.z}, p.yaw);
     m.set_light(light, {0.35f, 0.85f, 0.45f});
@@ -560,7 +561,7 @@ void Renderer::draw_viewmodel(const ViewModel& vm) {
     glEnableClientState(GL_VERTEX_ARRAY);
     glEnableClientState(GL_TEXTURE_COORD_ARRAY);
     glEnableClientState(GL_COLOR_ARRAY);
-    const int seg = s_.mesh_detail >= 2 ? 12 : 7;
+    const int seg = std::max(5, (int)std::lround((s_.mesh_detail >= 2 ? 12 : 7) * s_.entity_detail));
     ModelBuilder m(dyn_, seg);
     m.place_camera();
     m.set_light(clampf(vm.light, 0.25f, 1.1f), {-0.35f, 0.8f, 0.5f});
@@ -652,6 +653,8 @@ void Renderer::draw_viewmodel(const ViewModel& vm) {
 
 // =================================================================== frame
 void Renderer::begin_frame(int w, int h) {
+    last_draws_ = draws_;
+    draws_ = 0;
     width = std::max(1, w);
     height = std::max(1, h);
     glViewport(0, 0, width, height);
@@ -752,13 +755,21 @@ void Renderer::draw_world(const World& w, const Camera& cam, float time, float f
     // ----- static chunks
     Vec2 fwd = yaw_forward(cam.yaw);
     const float half_diag = CHUNK_SIZE * 0.7072f;
-    std::vector<const GpuChunk*> visible;
+    // view cone: half the horizontal field of view (wider when looking up or down, where the
+    // view reaches round to the sides), plus a margin for each chunk's bounding circle
+    const float aspect = height > 0 ? (float)width / (float)height : 1.7f;
+    const float hhalf = std::min(1.5f, std::atan(std::tan(cam.fov_deg * PI / 360.0f) * aspect) + std::fabs(cam.pitch) * 0.9f + 0.08f);
+    const float ch = std::cos(hhalf), sh = std::sin(hhalf);
+    std::vector<const GpuChunk*>& visible = visible_;
+    visible.clear();
     for (auto& kv : chunks_) {
         const GpuChunk& g = kv.second;
         float cx = (g.kx + 0.5f) * CHUNK_SIZE - cam.eye.x, cz = (g.kz + 0.5f) * CHUNK_SIZE - cam.eye.z;
         float d = std::sqrt(cx * cx + cz * cz);
         if (d - half_diag > s_.view_dist) continue;
-        if (cx * fwd.x + cz * fwd.z < -half_diag) continue; // behind the camera
+        float f = cx * fwd.x + cz * fwd.z, r = std::fabs(cx * -fwd.z + cz * fwd.x); // forward / sideways
+        if (f < -half_diag) continue;                        // behind the camera
+        if (!getenv("IRIS_NOCULL") && d > half_diag * 1.5f && r * ch - f * sh > half_diag) continue; // outside the view cone
         visible.push_back(&g);
     }
     bool retro_shader = use_retro_shader();
@@ -768,17 +779,21 @@ void Renderer::draw_world(const World& w, const Camera& cam, float time, float f
         bool emissive = mat == MAT_LIGHT;
         if (emissive) glFogf(GL_FOG_DENSITY, fog_density_ * 0.45f); // lights cut through the haze a bit
         if (mat == MAT_DECAL || mat == MAT_CROP) { glEnable(GL_ALPHA_TEST); glAlphaFunc(GL_GREATER, 0.5f); } // hard-edged details
+        // decals and light panels lie a hair off a wall / ceiling: always win the depth test (no z-fighting)
+        const bool overlay = mat == MAT_DECAL || mat == MAT_LIGHT;
+        if (overlay) { glEnable(GL_POLYGON_OFFSET_FILL); glPolygonOffset(-1.0f, -4.0f); }
         if (mat == MAT_CROP) glDisable(GL_CULL_FACE); // wheat is seen from both sides
         for (const GpuChunk* g : visible) {
             if (!g->count[mat]) continue;
             glBindBuffer(GL_ARRAY_BUFFER, g->vbo);
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g->ibo);
             set_pointers(nullptr);
-            glDrawElements(GL_TRIANGLES, (GLsizei)g->count[mat], GL_UNSIGNED_SHORT,
+            draws_++; glDrawElements(GL_TRIANGLES, (GLsizei)g->count[mat], GL_UNSIGNED_SHORT,
                            (const void*)(uintptr_t)(g->first[mat] * sizeof(uint16_t)));
         }
         if (emissive) glFogf(GL_FOG_DENSITY, fog_density_);
         if (mat == MAT_DECAL || mat == MAT_CROP) { glDisable(GL_ALPHA_TEST); glAlphaFunc(GL_GREATER, 0.02f); }
+        if (overlay) glDisable(GL_POLYGON_OFFSET_FILL);
         if (mat == MAT_CROP) glEnable(GL_CULL_FACE);
     }
     glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -1037,7 +1052,7 @@ void Renderer::post_warp(float wobble, float ghost, float time) {
                 dyn_.insert(dyn_.end(), {q[0], q[1], q[2], q[0], q[2], q[3]});
             }
         set_pointers(dyn_.data());
-        glDrawArrays(GL_TRIANGLES, 0, (GLsizei)dyn_.size());
+        draws_++; glDrawArrays(GL_TRIANGLES, 0, (GLsizei)dyn_.size());
         dyn_.clear();
     };
     pass(0, 0, 1.0f);
@@ -1152,10 +1167,11 @@ void Renderer::draw_atmosphere(const World& w, const std::vector<const GpuChunk*
     dyn_ = shafts;
     flush_dyn(spr_[SPR_CONE], true, false);
     // dust drifting in the air around you (catches the light)
-    if (!li.outdoor) {
+    const int motes = (int)(70 * s_.particles);
+    if (!li.outdoor && motes > 0) {
         float amb = clampf(w.light_level(cam_.eye) * 0.6f, 0.05f, 0.7f);
         const float R = 5.0f;
-        for (int i = 0; i < 70; i++) {
+        for (int i = 0; i < motes; i++) {
             float hx = hash01(911, i, 0, 1), hz = hash01(911, i, 1, 1), hy = hash01(911, i, 2, 1);
             float x = cam_.eye.x + std::fmod(hx * 2 * R + time * (0.05f + hx * 0.08f) + 1000.0f * R, 2 * R) - R;
             float z = cam_.eye.z + std::fmod(hz * 2 * R + std::sin(time * 0.3f + i) * 0.4f + 1000.0f * R, 2 * R) - R;
@@ -1304,6 +1320,19 @@ bool Renderer::use_retro_shader() {
 #endif
 }
 
+void Renderer::set_quality(float view_dist, int texture_size, int mesh_detail, float particles, float entity_detail) {
+    s_.view_dist = view_dist;
+    s_.particles = particles;
+    s_.entity_detail = entity_detail;
+    bool retex = texture_size != s_.texture_size, remesh = mesh_detail != s_.mesh_detail;
+    s_.texture_size = texture_size;
+    s_.mesh_detail = mesh_detail;
+    if (retex || remesh) { // forget the level: set_world() rebuilds textures and chunks next frame
+        level_ = LevelId::COUNT;
+        seed_ = 0;
+    }
+}
+
 void Renderer::set_style(bool film, bool camcorder, bool atmosphere, bool retro) {
     s_.film = film;
     s_.camcorder = camcorder;
@@ -1316,9 +1345,10 @@ void Renderer::apply_texture_filtering() {
     for (int i = 0; i < MAT_COUNT; i++) {
         if (!tex_[i]) continue;
         glBindTexture(GL_TEXTURE_2D, tex_[i]);
+        // Retro keeps texels crisp up close (nearest magnification) but always filters in the
+        // distance: point-sampled minification made carpets and ceilings sparkle ("flicker") as you moved.
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, s_.retro ? GL_NEAREST : GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, !s_.mipmaps ? (s_.retro ? GL_NEAREST : GL_LINEAR)
-                                                                          : (s_.retro ? GL_NEAREST_MIPMAP_LINEAR : GL_LINEAR_MIPMAP_LINEAR));
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, s_.mipmaps ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR);
     }
 }
 
@@ -1381,7 +1411,7 @@ bool Renderer::post_film(const FilmParams& f) {
                    {1, 1, 0, 1, 1, 255, 255, 255, 255}, {0, 1, 0, 0, 1, 255, 255, 255, 255}};
     dyn_.insert(dyn_.end(), {q[0], q[1], q[2], q[0], q[2], q[3]});
     set_pointers(dyn_.data());
-    glDrawArrays(GL_TRIANGLES, 0, 6);
+    draws_++; glDrawArrays(GL_TRIANGLES, 0, 6);
     dyn_.clear();
     iris_glUseProgram(0);
     glDisableClientState(GL_TEXTURE_COORD_ARRAY);
@@ -1400,13 +1430,13 @@ void Renderer::night_vision(float time) {
         push_quad({0, (float)height, 0}, {(float)width, (float)height, 0}, {(float)width, 0, 0}, {0, 0, 0}, rgba(1, 1, 1, 1));
         set_pointers(dyn_.data());
         glBindTexture(GL_TEXTURE_2D, spr_[SPR_WHITE]);
-        glDrawArrays(GL_TRIANGLES, 0, (GLsizei)dyn_.size());
+        draws_++; glDrawArrays(GL_TRIANGLES, 0, (GLsizei)dyn_.size());
         dyn_.clear();
     }
     glBlendFunc(GL_DST_COLOR, GL_ZERO);
     push_quad({0, (float)height, 0}, {(float)width, (float)height, 0}, {(float)width, 0, 0}, {0, 0, 0}, rgba(0.42f, 1.0f, 0.48f, 1));
     set_pointers(dyn_.data());
-    glDrawArrays(GL_TRIANGLES, 0, (GLsizei)dyn_.size());
+    draws_++; glDrawArrays(GL_TRIANGLES, 0, (GLsizei)dyn_.size());
     dyn_.clear();
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     float ox = hash01(91, (int)(time * 24), 0, 1), oy = hash01(91, (int)(time * 24), 1, 1); // sensor noise
@@ -1430,7 +1460,7 @@ void Renderer::flashlight_overlay(float strength, float flicker) {
         push_quad({width * 0.5f - w2, height * 0.52f + w2, 0}, {width * 0.5f + w2, height * 0.52f + w2, 0},
                   {width * 0.5f + w2, height * 0.52f - w2, 0}, {width * 0.5f - w2, height * 0.52f - w2, 0}, rgba(k, k, k, 1));
         set_pointers(dyn_.data());
-        glDrawArrays(GL_TRIANGLES, 0, (GLsizei)dyn_.size());
+        draws_++; glDrawArrays(GL_TRIANGLES, 0, (GLsizei)dyn_.size());
         dyn_.clear();
     }
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -1438,7 +1468,23 @@ void Renderer::flashlight_overlay(float strength, float flicker) {
 }
 
 // =================================================================== 2D
+// 2D batching: between begin_2d and end_2d, consecutive sprites / text with the same texture and
+// blend mode go out as one draw call (the HUD was ~45 draws a frame, one per string and icon).
+// A change of texture flushes first, so the drawing order never changes.
+void Renderer::pre2d(uint32_t tex, bool additive) {
+    if (!in_2d_) return;
+    if (!dyn_.empty() && (tex != batch_tex_ || additive != batch_add_)) flush_dyn(batch_tex_, batch_add_, true);
+    batch_tex_ = tex;
+    batch_add_ = additive;
+}
+
+void Renderer::post2d(uint32_t tex, bool additive) {
+    if (!in_2d_ || dyn_.size() > 6000) flush_dyn(tex, additive, true);
+}
+
 void Renderer::begin_2d() {
+    if (in_2d_ && !dyn_.empty()) flush_dyn(batch_tex_, batch_add_, true);
+    in_2d_ = true;
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
     glOrtho(0, width, height, 0, -1, 1);
@@ -1456,6 +1502,8 @@ void Renderer::begin_2d() {
 }
 
 void Renderer::end_2d() {
+    if (in_2d_ && !dyn_.empty()) flush_dyn(batch_tex_, batch_add_, true);
+    in_2d_ = false;
     glDisableClientState(GL_TEXTURE_COORD_ARRAY);
     glDisableClientState(GL_COLOR_ARRAY);
     glDisableClientState(GL_VERTEX_ARRAY);
@@ -1467,18 +1515,20 @@ void Renderer::end_2d() {
 void Renderer::rect(float x, float y, float w, float h, uint32_t c) { sprite(SPR_WHITE, x, y, w, h, c); }
 
 void Renderer::tiled(Sprite s, float x, float y, float w, float h, uint32_t c, float tile_px, float ox, float oy) {
+    pre2d(spr_[s], false);
     push_quad({x, y + h, 0}, {x + w, y + h, 0}, {x + w, y, 0}, {x, y, 0}, c, ox, oy, ox + w / tile_px, oy + h / tile_px);
-    flush_dyn(spr_[s], false, true);
+    post2d(spr_[s], false);
 }
 
 void Renderer::sprite(Sprite s, float x, float y, float w, float h, uint32_t c, float rot, bool additive) {
     float cx = x + w * 0.5f, cy = y + h * 0.5f, co = std::cos(rot), si = std::sin(rot);
     auto P = [&](float lx, float ly) { return Vec3{cx + lx * co - ly * si, cy + lx * si + ly * co, 0}; };
     Vec3 a = P(-w / 2, h / 2), b = P(w / 2, h / 2), cc = P(w / 2, -h / 2), d = P(-w / 2, -h / 2);
+    pre2d(spr_[s], additive);
     // push_quad maps a/b to v1 (bottom); in screen space y grows down, so flip v
     push_quad(a, b, cc, d, c, 0, 0, 1, 1);
     for (size_t i = dyn_.size() - 6; i < dyn_.size(); i++) dyn_[i].v = 1 - dyn_[i].v;
-    flush_dyn(spr_[s], additive, true);
+    post2d(spr_[s], additive);
 }
 
 float Renderer::text(float x, float y, float px, const std::string& s, uint32_t c, int align) {
@@ -1494,6 +1544,7 @@ float Renderer::text_raw(float x, float y, float px, const std::string& s, uint3
     else if (align == 2) x -= w;
     x = std::floor(x);
     y = std::floor(y);
+    pre2d(spr_[SPR_FONT], false);
     for (size_t i = 0; i < s.size(); i++) {
         int ch = (unsigned char)s[i];
         if (ch >= 'a' && ch <= 'z') ch -= 32;
@@ -1509,7 +1560,7 @@ float Renderer::text_raw(float x, float y, float px, const std::string& s, uint3
         Vertex vc{cc.x, cc.y, 0, u1, v0, r, g, bl, al}, vd{d.x, d.y, 0, u0, v0, r, g, bl, al};
         dyn_.insert(dyn_.end(), {va, vb, vc, va, vc, vd});
     }
-    flush_dyn(spr_[SPR_FONT], false, true);
+    post2d(spr_[SPR_FONT], false);
     return w;
 }
 
