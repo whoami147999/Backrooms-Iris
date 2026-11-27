@@ -2,7 +2,9 @@
 
 #include <cctype>
 
+#if IRIS_MULTIPLAYER
 namespace { const char* PASSWORD_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"; }
+#endif
 
 #include <algorithm>
 #include <cmath>

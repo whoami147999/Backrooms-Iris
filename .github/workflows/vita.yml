@@ -13,14 +13,13 @@ jobs:
       - name: Tools
         run: apk add --no-cache cmake make git bash python3 || true
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - name: Vita libraries (vitaGL, SDL2, ...)
+      # vitasdk/vitasdk ships every library this needs (vitaGL, vitaShaRK, SceShaccCgExt, taihen,
+      # SDL2 as sdl2_vitagl, math-neon), so nothing is installed here. Just log the versions.
+      - name: Vita libraries
         run: |
-          # the image usually ships these already; install any that are missing
-          for p in vitaGL vitaShaRK SceShaccCgExt taihen sdl2 math-neon; do
-            vdpm "$p" || echo "vdpm: $p not installed (may already be present)"
-          done
+          ls "$VITASDK/arm-vita-eabi/lib" | grep -iE "vitagl|vitashark|shacccg|sdl2|mathneon|taihen" || true
 
       - name: Build
         run: |

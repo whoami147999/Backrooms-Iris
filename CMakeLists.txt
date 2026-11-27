@@ -93,6 +93,8 @@ if(IRIS_BUILD_CLIENT)
 
     add_executable(iris_vita ${IRIS_CLIENT_SOURCES} src/platform/vita/platform_vita.cpp)
     target_compile_definitions(iris_vita PRIVATE IRIS_MULTIPLAYER=0)
+    # VitaSDK's SDL2 (sdl2 or sdl2_vitagl) keeps its headers in include/SDL2 (we include <SDL.h>)
+    target_include_directories(iris_vita PRIVATE "$ENV{VITASDK}/arm-vita-eabi/include/SDL2")
     target_compile_options(iris_vita PRIVATE -O2 -ffast-math -mfpu=neon -mcpu=cortex-a9)
     target_link_libraries(iris_vita PRIVATE
       iris_core
