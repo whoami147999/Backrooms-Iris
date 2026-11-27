@@ -292,11 +292,15 @@ void App::dev_setup() {
 void App::go(Screen s) {
     stack_.push_back(s);
     editing_ = false;
+    menu_t_ = now_;
+    menu_sel_y_ = -1;
     build_menu();
 }
 
 void App::back() {
     editing_ = false;
+    menu_t_ = now_;
+    menu_sel_y_ = -1;
     if (stack_.size() > 1) stack_.pop_back();
     if (screen() == Screen::Connecting) stack_.pop_back();
     save_settings();
@@ -626,9 +630,15 @@ void App::draw_menu() {
     float tp = s * 4;
     float ty = H * 0.11f;
     float jit = (hash01(1, (int)(now_ * 12), 0, 1) < 0.06f) ? s * 2 : 0;
-    ren_.text(W / 2 - s + jit, ty, tp, menu_.title, rgba(1, 0.2f, 0.15f, 0.5f), 1);
-    ren_.text(W / 2 + s, ty, tp, menu_.title, rgba(0.2f, 0.6f, 1, 0.4f), 1);
-    ren_.text(W / 2, ty, tp, menu_.title, rgba(0.95f, 0.9f, 0.7f), 1);
+    float neon = hash01(2, (int)(now_ * 15), 0, 1) < 0.03f ? 0.45f : 1.0f; // the sign stutters now and then
+    ren_.sprite(SPR_GLOW, W / 2 - W * 0.32f, ty - 6 * tp, W * 0.64f, 20 * tp, rgba(1, 0.85f, 0.5f, 0.07f * neon), 0, true);
+    ren_.text(W / 2 - s + jit, ty, tp, menu_.title, rgba(1, 0.2f, 0.15f, 0.5f * neon), 1);
+    ren_.text(W / 2 + s, ty, tp, menu_.title, rgba(0.2f, 0.6f, 1, 0.4f * neon), 1);
+    ren_.text(W / 2, ty, tp, menu_.title, rgba(0.95f * neon, 0.9f * neon, 0.7f * neon), 1);
+    { // a faint band rolling down the screen, like an old tube
+        float band = (float)std::fmod(now_ * 0.12, 1.3) * H - 0.15f * H;
+        ren_.rect(0, band, W, 0.12f * H, rgba(1, 0.95f, 0.85f, 0.025f));
+    }
     if (!menu_.subtitle.empty()) ren_.text(W / 2, ty + 9 * tp, s, menu_.subtitle, rgba(0.85f, 0.8f, 0.6f, 0.8f), 1);
 
     float y0 = H * 0.36f, row = 13 * s;
@@ -667,9 +677,13 @@ void App::draw_menu() {
         if (it.kind == Item::Spacer) continue;
         uint32_t col = sel ? rgba(1, 0.95f, 0.65f) : rgba(0.78f, 0.74f, 0.62f);
         if (it.kind == Item::Label) { ren_.text(W / 2, y, s, it.label, rgba(0.6f, 0.58f, 0.5f), 1); continue; }
-        if (sel) {
-            ren_.rect(W * 0.2f, y - 3 * s, W * 0.6f, 11 * s, rgba(0.9f, 0.8f, 0.4f, 0.12f));
-            ren_.rect(W * 0.2f, y - 3 * s, 2 * s, 11 * s, rgba(1, 0.9f, 0.5f, 0.9f));
+        if (sel) { // the selection bar glides to the item instead of jumping
+            if (menu_sel_y_ < 0) menu_sel_y_ = y;
+            menu_sel_y_ += (y - menu_sel_y_) * std::min(1.0f, (float)frame_dt_ * 18.0f);
+            float gy = menu_sel_y_;
+            ren_.rect(W * 0.2f, gy - 3 * s, W * 0.6f, 11 * s, rgba(0.9f, 0.8f, 0.4f, 0.12f));
+            ren_.rect(W * 0.2f, gy - 3 * s, 2 * s, 11 * s, rgba(1, 0.9f, 0.5f, 0.9f));
+            ren_.rect(W * 0.8f - 2 * s, gy - 3 * s, 2 * s, 11 * s, rgba(1, 0.9f, 0.5f, 0.35f));
         }
         if (it.kind == Item::Button) {
             ren_.text(W / 2, y, s, it.label, col, 1);
@@ -696,6 +710,10 @@ void App::draw_menu() {
         } else {
             ren_.text(W / 2 + 10 * s, y, s, val, col);
         }
+    }
+    { // each screen fades in
+        float fade = clampf((float)(now_ - menu_t_) / 0.22f, 0, 1);
+        if (fade < 1) ren_.rect(0, H * 0.3f, W, H * 0.7f, rgba(0, 0, 0, (1 - fade) * 0.85f));
     }
     // help line at the bottom
     const Item* cur = menu_.items.empty() ? nullptr : &menu_.items[(size_t)menu_.sel];
@@ -844,7 +862,10 @@ void App::game_input() {
             if (is_weapon(selected_)) cmd_.attack_ctr++;
             else if (selected_ == ItemType::Flashlight) cmd_.light_ctr++;
             else if (selected_ == ItemType::Compass || selected_ == ItemType::Radio) {} // passive tools
-            else { cmd_.use_item = (uint8_t)selected_; cmd_.use_ctr++; item_sound(selected_); }
+            else {
+                cmd_.use_item = (uint8_t)selected_; cmd_.use_ctr++; item_sound(selected_);
+                if (selected_ != ItemType::NightVision) { use_anim_t_ = now_; use_anim_item_ = selected_; } // you see yourself drink it
+            }
         }
     } else if (!v.multiplayer && (in_.accept || in_.interact)) {
         session_->request_respawn();
@@ -1043,13 +1064,26 @@ void App::draw_hud(const GameView& v, const ScreenFx& fx) {
         if (me.flash < 1.2f) ren_.rect(0, 0, W, H, rgba(1, 1, 0.95f, 1.0f - me.flash / 1.2f)); // flash bulb
 
         // ----- bars, bottom left
-        float bx = 8 * s, by = H - 42 * s, bw = 64 * s, bh = 3 * s;
+        float bx = 8 * s, by = H - 42 * s, bw = 64 * s, bh = 4 * s;
+        { // a dark panel behind the vitals, with a thin warm rule on top
+            bool lightbar = me.has(ItemType::Flashlight) || me.has(ItemType::NightVision);
+            float ph = (lightbar ? 38.0f : 29.0f) * s;
+            ren_.rect(bx - 5 * s, by - 6 * s, 122 * s, ph, rgba(0.02f, 0.02f, 0.02f, 0.42f));
+            ren_.rect(bx - 5 * s, by - 6 * s, 122 * s, std::max(1.0f, 0.5f * s), rgba(0.95f, 0.82f, 0.5f, 0.3f));
+        }
         auto bar = [&](float y, const char* name, float frac, uint32_t col, float shake) {
             float jx = shake > 0 ? (hash01(5, (int)(now_ * 25), (int)y, 1) - 0.5f) * shake * s * 2 : 0;
-            ren_.text(bx + jx, y - 1 * s, s, name, rgba(0.85f, 0.82f, 0.72f, 0.85f));
+            frac = clampf(frac, 0, 1);
+            bool low = frac < 0.25f;
+            float pulse = low ? 0.55f + 0.45f * std::sin((float)now_ * 9.0f) : 1.0f; // low: it throbs
+            ren_.text(bx + jx, y - 0.5f * s, s, name, low ? rgba(1, 0.55f, 0.45f, 0.95f) : rgba(0.85f, 0.82f, 0.72f, 0.85f));
             float x = bx + 46 * s + jx;
-            ren_.rect(x - s, y - s, bw + 2 * s, bh + 2 * s, rgba(0, 0, 0, 0.55f));
-            ren_.rect(x, y, bw * clampf(frac, 0, 1), bh, col);
+            ren_.rect(x - s, y - s, bw + 2 * s, bh + 2 * s, rgba(0.9f, 0.85f, 0.7f, 0.22f)); // frame
+            ren_.rect(x, y, bw, bh, rgba(0, 0, 0, 0.7f));
+            uint8_t a = (uint8_t)((col & 0xff) * pulse);
+            ren_.rect(x, y, bw * frac, bh, (col & 0xffffff00u) | a);
+            ren_.rect(x, y, bw * frac, bh * 0.4f, rgba(1, 1, 1, 0.16f * pulse)); // a little shine on top
+            for (int k = 1; k < 10; k++) ren_.rect(x + bw * k / 10.0f, y, std::max(1.0f, 0.5f * s), bh, rgba(0, 0, 0, 0.35f)); // ticks
         };
         bar(by, "HEALTH", me.health / 100, rgba(0.85f, 0.2f, 0.15f, 0.9f), 0);
         bar(by + 9 * s, "STAMINA", me.stamina, me.exhausted ? rgba(0.7f, 0.3f, 0.2f, 0.9f) : (me.boost > 0 ? rgba(0.4f, 1, 0.3f, 0.9f) : rgba(0.95f, 0.85f, 0.5f, 0.9f)), 0);
@@ -1066,6 +1100,10 @@ void App::draw_hud(const GameView& v, const ScreenFx& fx) {
         // ----- hotbar, bottom right
         std::vector<ItemType> have = owned();
         float sz = 18 * s, gap = 3 * s;
+        { // a long inventory shrinks to fit beside the vitals panel instead of running over it
+            float room = W - (bx + 124 * s) - 6 * s;
+            if (!have.empty() && have.size() * (sz + gap) > room) { sz = std::max(9 * s, room / have.size() - gap); gap = std::min(gap, sz * 0.15f); }
+        }
         float hx = W - have.size() * (sz + gap) - 6 * s, hy = H - sz - 8 * s;
         for (size_t i = 0; i < have.size(); i++) {
             ItemType t = have[i];
@@ -1182,13 +1220,19 @@ void App::draw_hud(const GameView& v, const ScreenFx& fx) {
 
     // ----- dead
     if (!me.alive) {
-        ren_.rect(0, 0, W, H, rgba(0.05f, 0, 0, 0.55f));
-        ren_.text(W / 2, H * 0.38f, s * 2, death_text(me.cause), rgba(0.95f, 0.3f, 0.25f), 1);
+        if (death_t_ < 0) death_t_ = now_;
+        float dt = (float)(now_ - death_t_);
+        float a = clampf(dt / 1.4f, 0, 1), ta = clampf((dt - 0.7f) / 0.8f, 0, 1);
+        ren_.rect(0, 0, W, H, rgba(0.06f, 0, 0, 0.7f * a));
+        ren_.sprite(SPR_VIGNETTE, -W * 0.1f, -H * 0.1f, W * 1.2f, H * 1.2f, rgba(0.6f, 0.02f, 0.02f, 0.8f * a));
+        ren_.text(W / 2, H * 0.38f - 16 * s, s, "Y O U   D I E D", rgba(0.75f, 0.7f, 0.65f, 0.8f * ta), 1);
+        ren_.text(W / 2, H * 0.38f, s * 2, death_text(me.cause), rgba(0.95f, 0.3f, 0.25f, ta), 1);
         std::string sub = v.multiplayer ? "RESPAWNING IN " + std::to_string((int)std::ceil(std::max(0.0f, v.respawn_t)))
                                         : key_hint("PRESS ENTER TO TRY AGAIN", platform_is_vita() ? "PRESS CROSS TO TRY AGAIN" : "PRESS A TO TRY AGAIN");
-        ren_.text(W / 2, H * 0.38f + 24 * s, s, sub, rgba(0.85f, 0.8f, 0.7f), 1);
-        ren_.text(W / 2, H * 0.38f + 34 * s, s, "YOUR THINGS ARE WHERE YOU FELL", rgba(0.6f, 0.55f, 0.5f), 1);
-    }
+        float sa = clampf((dt - 1.4f) / 0.6f, 0, 1);
+        ren_.text(W / 2, H * 0.38f + 24 * s, s, sub, rgba(0.85f, 0.8f, 0.7f, sa), 1);
+        ren_.text(W / 2, H * 0.38f + 34 * s, s, "YOUR THINGS ARE WHERE YOU FELL", rgba(0.6f, 0.55f, 0.5f, sa), 1);
+    } else death_t_ = -1;
     // ----- escaped (single player)
     double et = now_ - escaped_t_;
     if (et < 8.0) {
@@ -1299,6 +1343,8 @@ void App::draw_game(bool overlay_menu) {
         vm.sway_x = vm_sway_;
         vm.sway_y = -std::fabs(std::sin(v.me.bob * 0.5f)) * 0.01f * std::min(1.0f, v.me.speed / WALK_SPEED);
         vm.light = v.world.light_level(cam.eye) * 0.8f + 0.3f + (v.me.light_on ? 0.35f : 0.0f);
+        vm.use = (float)((now_ - use_anim_t_) / 0.75);
+        vm.use_item = use_anim_item_;
         ren_.draw_viewmodel(vm);
     }
     float beam = li.dark ? (li.ambient[0] < 0.4f ? 1.3f : 1.1f) : (dark ? 0.9f : 0.5f);
@@ -1344,6 +1390,10 @@ void App::draw_game(bool overlay_menu) {
         if (ren_.flicker_dim() > 0) ren_.rect(0, 0, W, H, rgba(0, 0, 0, ren_.flicker_dim()));
     }
     draw_fx_overlays(fx);
+    { // a new level fades in from black
+        double lf = now_ - level_title_t_;
+        if (lf >= 0 && lf < 1.1) ren_.rect(0, 0, (float)ren_.width, (float)ren_.height, rgba(0, 0, 0, (float)std::max(0.0, 1.0 - lf / 1.1)));
+    }
     if (cfg_.camcorder && dev_.hud) { // REC and a running clock, top right
         float s = ui(), W = (float)ren_.width;
         int t = (int)v.level_time;

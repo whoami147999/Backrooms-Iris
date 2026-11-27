@@ -351,7 +351,12 @@ static void add_part(std::vector<Vertex>& out, const Part& p, Vec2 pos, float ya
 
 void Renderer::draw_entity(const World& w, const DrawEntity& e, float time) {
     float light = clampf(w.light_level({e.pos.x, 1.2f, e.pos.z}) * 0.75f + 0.12f, 0.08f, 0.95f);
-    float stride = std::min(1.0f, e.speed / 2.2f);
+    PoseSmooth& ps = pose_[e.id];
+    ps.seen = time;
+    const float cam_d = (Vec2{cam_.eye.x, cam_.eye.z} - e.pos).len();
+    const bool lunge = e.state == EntState::Chase && cam_d < 2.4f; // about to grab you: arms out, body forward
+    if (!ps.init) { ps.init = true; ps.stride = std::min(1.0f, e.speed / 2.2f); }
+    float stride = ease(ps.stride, std::min(1.0f, e.speed / 2.2f), 10.0f);
     float breathe = std::sin(time * 1.6f + e.id) * 0.012f;
     const int seg = std::max(4, (int)std::lround((s_.mesh_detail >= 2 ? 10 : 6) * s_.entity_detail));
     ModelBuilder m(dyn_, seg);
@@ -373,9 +378,10 @@ void Renderer::draw_entity(const World& w, const DrawEntity& e, float time) {
             Rgb k{0.035f, 0.035f, 0.045f}, k2{0.07f, 0.07f, 0.09f};
             h.skin = k; h.top = k; h.legs = k; h.feet = k2; h.hands = k2; h.has_hair = false;
             h.phase = e.anim; h.stride = stride;
-            h.lean = e.state == EntState::Chase ? 0.38f : 0.1f + breathe;
+            h.lean = ease(ps.lean, e.state == EntState::Chase ? (lunge ? 0.55f : 0.38f) : 0.1f, 5.0f) + breathe;
             h.arm_swing = 0.45f;
-            h.head_tilt = 0.25f + tw;
+            h.arm_forward = ease(ps.arms, lunge ? 1.25f : (e.state == EntState::Notice ? 0.3f : 0.0f), 7.0f); // the claws come up
+            h.head_tilt = ease(ps.head, e.state == EntState::Notice ? 0.0f : 0.25f, 4.0f) + tw;            // it straightens to look at you
             h.build(m);
             for (int s2 = 0; s2 < 2; s2++) // three long claws per hand
                 for (int c = -1; c <= 1; c++) m.cone(h.hand[s2], h.hand[s2] + Vec3{c * 0.035f, -0.26f, 0.04f + std::fabs((float)c) * -0.02f}, 0.012f, k2);
@@ -388,8 +394,9 @@ void Renderer::draw_entity(const World& w, const DrawEntity& e, float time) {
         case EntityType::Hound: {
             // a person on all fours: grey, starved, ribs showing, black hair over its head and spine
             Rgb sk{0.52f, 0.5f, 0.47f}, dk{0.36f, 0.34f, 0.32f}, hair{0.03f, 0.03f, 0.03f};
-            float head_up = e.state == EntState::Stare ? 0.18f : 0.0f;
+            float head_up = ease(ps.head, e.state == EntState::Stare ? 0.18f : (lunge ? -0.08f : 0.0f), 6.0f);
             float y0 = 0.55f + breathe;
+            if (ease(ps.lean, lunge ? 0.25f : 0.0f, 8.0f) > 0.01f) m.push_pose({0, 0, -0.3f}, ps.lean); // lunging: the front drops
             m.ellipsoid({0, y0, 0.0f}, {0.16f, 0.13f, 0.4f}, sk);
             m.ellipsoid({0, y0 + 0.03f, 0.2f}, {0.2f, 0.16f, 0.22f}, sk);           // ribcage
             for (int r = 0; r < 3; r++) m.ellipsoid({0, y0 + 0.02f, 0.12f + r * 0.08f}, {0.205f, 0.15f, 0.012f}, dk, 0.7f); // ribs
@@ -419,6 +426,7 @@ void Renderer::draw_entity(const World& w, const DrawEntity& e, float time) {
                 Vec3 a{sx, st < 3 ? head.y + 0.02f : y0 + 0.12f, sz};
                 m.capsule(a, a + Vec3{sx * 0.6f, -0.32f + std::sin(time * 2 + st) * 0.02f, 0.03f}, 0.018f, 0.008f, hair, false);
             }
+            if (ps.lean > 0.01f) m.pop_pose();
             break;
         }
         case EntityType::SkinStealer: {
@@ -431,7 +439,7 @@ void Renderer::draw_entity(const World& w, const DrawEntity& e, float time) {
             h.skin = {0.88f, 0.76f, 0.68f}; h.top = {0.80f, 0.6f, 0.52f}; h.legs = {0.86f, 0.74f, 0.66f};
             h.feet = {0.6f, 0.45f, 0.4f}; h.hands = {0.85f, 0.7f, 0.62f}; h.hair = {0.12f, 0.08f, 0.06f};
             h.phase = e.anim; h.stride = stride; h.lean = 0.18f + breathe;
-            h.arm_forward = e.state == EntState::Chase ? 0.5f : 0.05f;
+            h.arm_forward = ease(ps.arms, e.state == EntState::Chase ? (lunge ? 1.1f : 0.5f) : 0.05f, 6.0f);
             h.head_tilt = 0.12f;
             h.build(m);
             Rgb raw{0.55f, 0.1f, 0.08f}, hole{0.02f, 0.0f, 0.0f};
@@ -455,7 +463,7 @@ void Renderer::draw_entity(const World& w, const DrawEntity& e, float time) {
             Rgb y{0.95f, 0.8f, 0.2f};
             h.skin = y; h.top = y; h.legs = y; h.feet = {0.25f, 0.12f, 0.35f}; h.hands = {0.96f, 0.96f, 0.93f}; h.has_hair = false;
             h.phase = e.anim; h.stride = stride * 0.8f; h.arm_swing = 0.4f;
-            h.arm_forward = e.state == EntState::Chase ? 0.9f : 0.0f; // arms out for a hug
+            h.arm_forward = ease(ps.arms, e.state == EntState::Chase ? 0.9f : 0.0f, 4.0f); // arms out for a hug
             h.build(m);
             Vec3 ht = h.head_c + Vec3{0, h.head.y * 0.85f, 0};
             m.cone(ht, ht + Vec3{0.02f, 0.3f, 0}, 0.11f, {0.85f, 0.15f, 0.2f});
@@ -471,7 +479,8 @@ void Renderer::draw_entity(const World& w, const DrawEntity& e, float time) {
             Rgb shadow{0.015f, 0.015f, 0.02f}, suit{0.07f, 0.07f, 0.08f};
             h.skin = shadow; h.top = suit; h.legs = suit; h.feet = {0.02f, 0.02f, 0.02f}; h.hands = shadow; h.has_hair = false;
             h.phase = e.anim; h.stride = stride; h.arm_swing = 0.35f;
-            h.lean = e.state == EntState::Chase ? 0.22f : 0.03f + breathe;
+            h.lean = ease(ps.lean, e.state == EntState::Chase ? 0.22f : 0.03f, 4.0f) + breathe;
+            h.arm_forward = ease(ps.arms, lunge ? 1.0f : 0.0f, 6.0f);
             h.build(m);
             Vec3 hat = h.head_c + Vec3{0, h.head.y * 0.62f, 0};
             m.push_pose(h.head_c, h.head_tilt);
@@ -490,7 +499,7 @@ void Renderer::draw_entity(const World& w, const DrawEntity& e, float time) {
             h.skin = {0.84f, 0.74f, 0.66f}; h.top = {0.05f, 0.05f, 0.06f}; h.legs = {0.2f, 0.25f, 0.35f};
             h.feet = {0.08f, 0.08f, 0.08f}; h.hands = h.skin; h.has_hair = false;
             h.phase = e.anim; h.stride = stride; h.arm_swing = 0.5f;
-            h.arm_forward = e.state == EntState::Chase ? 0.35f : 0.0f;
+            h.arm_forward = ease(ps.arms, e.state == EntState::Chase ? (lunge ? 1.1f : 0.35f) : 0.0f, 6.0f);
             h.lean = 0.06f + breathe;
             h.build(m);
             m.push_pose(h.head_c, h.head_tilt);
@@ -522,7 +531,7 @@ void Renderer::draw_entity(const World& w, const DrawEntity& e, float time) {
             Rgb ink{0.03f, 0.03f, 0.03f};
             h.skin = ink; h.top = ink; h.legs = ink; h.feet = {0.35f, 0.18f, 0.1f}; h.hands = {0.97f, 0.97f, 0.95f}; h.has_hair = false;
             h.phase = e.anim; h.stride = std::min(1.0f, stride * 1.4f); h.arm_swing = 1.0f;
-            h.arm_forward = e.state == EntState::Chase ? 0.7f : 0.0f;
+            h.arm_forward = e.state == EntState::Chase ? 0.7f : 0.0f; // (stop-motion: no easing, it snaps on purpose)
             h.build(m);
             for (int s2 = 0; s2 < 2; s2++) m.ellipsoid(h.hand[s2], {0.09f, 0.08f, 0.09f}, h.hands, 0.7f); // big gloves
             for (int s2 = 0; s2 < 2; s2++) m.ellipsoid(h.foot[s2] + Vec3{0, 0, 0.06f}, {0.09f, 0.06f, 0.15f}, h.feet, 0.7f);
@@ -589,8 +598,9 @@ void Renderer::draw_entity(const World& w, const DrawEntity& e, float time) {
         glDisable(GL_BLEND);
     } else if (e.type == EntityType::Smiler) {
         // just the face: full bright, no fog, so it's the only thing you see in the dark
-        float charge = e.state == EntState::Charge ? 1.0f : 0.0f;
-        float flick = 0.85f + 0.15f * std::sin(time * 11 + e.id);
+        float charge = ease(ps.arms, e.state == EntState::Charge ? 1.0f : 0.0f, 3.0f);
+        float fade = ease(ps.alpha, e.state == EntState::Retreat ? 0.0f : 1.0f, e.state == EntState::Retreat ? 4.0f : 1.5f); // it fades into the dark
+        float flick = (0.85f + 0.15f * std::sin(time * 11 + e.id)) * fade;
         float size = 1.35f + charge * 0.6f;
         Vec3 c{e.pos.x, 1.6f + std::sin(time * 1.7f + e.id) * 0.05f, e.pos.z};
         glDepthMask(GL_FALSE);
@@ -647,10 +657,15 @@ void Renderer::draw_player(const World& w, const DrawPlayer& p, float time) {
 
 // =================================================================== first-person view models
 // Drawn in camera space after the world (own depth, own projection), lit by the light where you stand.
-void Renderer::draw_viewmodel(const ViewModel& vm) {
-    if (vm.item == ItemType::None) return;
+void Renderer::draw_viewmodel(const ViewModel& vm_in) {
+    ViewModel vm = vm_in;
+    if (vm.use > 0 && vm.use < 1) { // drinking, eating, throwing: the item comes up into view (other hands put away)
+        vm.item = vm.use_item;
+        vm.light_on = false;
+    } else if (vm.item == ItemType::None) return;
     bool gun = is_gun(vm.item);
-    if (!gun && vm.item != ItemType::Crowbar && !(vm.item == ItemType::Flashlight || vm.light_on)) return;
+    const bool using_item = vm.use > 0 && vm.use < 1;
+    if (!using_item && !gun && vm.item != ItemType::Crowbar && !(vm.item == ItemType::Flashlight || vm.light_on)) return;
     glClear(GL_DEPTH_BUFFER_BIT);
     Mat4 proj = Mat4::perspective(54.0f * PI / 180.0f, (float)width / (float)height, 0.01f, 6.0f);
     glMatrixMode(GL_PROJECTION);
@@ -674,7 +689,30 @@ void Renderer::draw_viewmodel(const ViewModel& vm) {
     float bx = 0.17f + vm.sway_x, by = -0.17f + std::sin(vm.bob) * 0.008f + vm.sway_y, bz = -0.42f + vm.kick * 0.06f;
     Vec3 grip{bx, by, bz};
     float pitch_kick = vm.kick * 0.18f;
-    if (gun) {
+    if (using_item) {
+        // up toward your mouth and back down (drinks tip back), or a throw that leaves the hand
+        ItemType it = vm.use_item;
+        bool thrown = it == ItemType::Firesalt || it == ItemType::FlashBulb || it == ItemType::GlowStick || it == ItemType::MusicBox || it == ItemType::Chalk;
+        bool drink = it == ItemType::AlmondWater || it == ItemType::EnergyDrink || it == ItemType::MemoryJuice || it == ItemType::LiquidPain ||
+                     it == ItemType::CashewWater || it == ItemType::LuckyMilk || it == ItemType::SuperAlmond || it == ItemType::LiquidSilence;
+        float u = vm.use, arc = std::sin(u * PI);
+        Vec3 hand = thrown ? Vec3{0.18f - u * 0.1f, -0.2f + arc * 0.25f, -0.42f - u * 0.4f}
+                           : Vec3{0.16f - arc * 0.13f, -0.22f + arc * 0.16f, -0.4f + arc * 0.17f};
+        m.capsule(hand + Vec3{0.06f, -0.12f, 0.25f}, hand + Vec3{0.01f, -0.03f, 0.06f}, 0.04f, 0.035f, sleeve);
+        m.ellipsoid(hand, {0.04f, 0.045f, 0.05f}, skin);
+        if (!(thrown && u > 0.55f)) { // (the thrown thing has left your hand)
+            m.push_pose(hand, drink ? -arc * 0.9f : 0.0f);
+            if (drink) {
+                Rgb liq = it == ItemType::EnergyDrink ? Rgb{0.2f, 0.8f, 0.3f} : it == ItemType::MemoryJuice ? Rgb{0.55f, 0.2f, 0.7f} :
+                          it == ItemType::LiquidPain ? Rgb{0.7f, 0.1f, 0.1f} : it == ItemType::LuckyMilk ? Rgb{0.95f, 0.95f, 0.9f} : Rgb{0.75f, 0.85f, 0.95f};
+                m.tube(hand + Vec3{0, -0.05f, 0}, hand + Vec3{0, 0.12f, 0}, 0.032f, liq);           // the bottle
+                m.tube(hand + Vec3{0, 0.12f, 0}, hand + Vec3{0, 0.17f, 0}, 0.012f, {0.85f, 0.85f, 0.85f}); // its neck
+            } else {
+                m.box(hand + Vec3{0, 0.03f, 0}, {0.04f, 0.03f, 0.05f}, thrown ? Rgb{0.85f, 0.4f, 0.15f} : Rgb{0.85f, 0.85f, 0.8f});
+            }
+            m.pop_pose();
+        }
+    } else if (gun) {
         m.push_pose(grip, pitch_kick);
         if (vm.item == ItemType::Pistol) {
             m.box(grip + Vec3{0, 0.06f, -0.08f}, {0.017f, 0.025f, 0.11f}, gunmetal);              // slide
@@ -778,6 +816,10 @@ void Renderer::draw_world(const World& w, const Camera& cam, float time, float f
                           const std::vector<DrawPlayer>& players, const std::vector<DrawProp>& props,
                           const std::vector<Phantom>& phantoms) {
     cam_ = cam;
+    pose_dt_ = clampf(time - last_world_time_, 0.0f, 0.1f);
+    last_world_time_ = time;
+    if (pose_.size() > 64) // forget entities that haven't been drawn for a while
+        for (auto it = pose_.begin(); it != pose_.end();) it = time - it->second.seen > 5.0f ? pose_.erase(it) : std::next(it);
     const LevelInfo& li = w.info();
     // day and night: the sky and the haze go dark (0Zero: pitch black, the others a deep blue)
     const float dk = darkness_;
@@ -1341,6 +1383,47 @@ void Renderer::draw_atmosphere(const World& w, const std::vector<const GpuChunk*
     dyn_ = shafts;
     flush_dyn(spr_[SPR_CONE], true, false);
     // dust drifting in the air around you (catches the light)
+    // sparks from failing tubes, and water dripping from the ceiling on the wet levels
+    if (s_.particles > 0) {
+        for (const GpuChunk* g : visible)
+            for (const auto& L : g->lights) {
+                if (L.state != LightState::Flicker || L.sx < 0) continue;
+                Vec3 lp = L.pos;
+                if ((Vec2{lp.x - cam_.eye.x, lp.z - cam_.eye.z}).len() > 12.0f) continue;
+                int slot = (int)std::floor(time * 1.6f);
+                if (hash01(lp.x * 7, lp.z * 7 + slot, 0, 4401) > 0.07f) continue;
+                float t = time * 1.6f - slot; // 0..1 through this slot: a burst in the first part
+                if (t > 0.6f) continue;
+                for (int k = 0; k < 7; k++) {
+                    float a = hash01(slot, k, (int)lp.x, 4402) * 2 * PI, sp = 0.5f + hash01(slot, k, (int)lp.z, 4403);
+                    Vec3 p{lp.x + std::cos(a) * sp * t, lp.y - 4.9f * t * t - 0.05f, lp.z + std::sin(a) * sp * t};
+                    billboard(p, 0.035f, 0.035f, rgba(1, 0.75f, 0.35f, 1.0f - t / 0.6f));
+                }
+            }
+        flush_dyn(spr_[SPR_GLOW], true, true);
+        const LevelId wid = w.id();
+        if (wid == LevelId::L1 || wid == LevelId::L2 || wid == LevelId::L3 || wid == LevelId::L22 || wid == LevelId::L13 || wid == LevelId::L7) {
+            int pcx = floor_to_int(cam_.eye.x / CELL), pcz = floor_to_int(cam_.eye.z / CELL);
+            for (int dz = -4; dz <= 4; dz++)
+                for (int dx = -4; dx <= 4; dx++) {
+                    int cx = pcx + dx, cz = pcz + dz;
+                    if (hash01(w.seed(), cx, cz, 4411) > 0.07f || w.solid(cx, cz)) continue;
+                    float period = 1.6f + hash01(w.seed(), cx, cz, 4412) * 1.6f;
+                    float t = std::fmod(time + hash01(w.seed(), cx, cz, 4413) * 5.0f, period);
+                    float px = (cx + 0.3f + 0.4f * hash01(w.seed(), cx, cz, 4414)) * CELL, pz = (cz + 0.3f + 0.4f * hash01(w.seed(), cx, cz, 4415)) * CELL;
+                    float top = li.ceil_h - 0.02f;
+                    float fall_t = std::sqrt(2.0f * top / 9.8f);
+                    if (t < fall_t) { // a drop falling
+                        float y = top - 4.9f * t * t;
+                        push_quad({px - 0.006f, y - 0.05f, pz}, {px + 0.006f, y - 0.05f, pz}, {px + 0.006f, y + 0.02f, pz}, {px - 0.006f, y + 0.02f, pz}, rgba(0.8f, 0.85f, 0.9f, 0.55f));
+                    } else if (t < fall_t + 0.25f) { // and the splash
+                        float k = (t - fall_t) / 0.25f, r = 0.04f + k * 0.12f;
+                        push_quad({px - r, 0.01f, pz + r}, {px + r, 0.01f, pz + r}, {px + r, 0.01f, pz - r}, {px - r, 0.01f, pz - r}, rgba(0.75f, 0.8f, 0.85f, 0.35f * (1 - k)));
+                    }
+                }
+            flush_dyn(spr_[SPR_GLOW], false, true);
+        }
+    }
     const int motes = (int)(70 * s_.particles);
     if (!li.outdoor && motes > 0) {
         float amb = clampf(w.light_level(cam_.eye) * 0.6f, 0.05f, 0.7f);

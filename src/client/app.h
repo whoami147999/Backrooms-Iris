@@ -151,6 +151,11 @@ private:
     int frames_total_ = 0;   // boot log: first frames only
     std::string crash_note_; // Vita: the stage the last run died in (shown on the title screen)
     bool night_shown_ = false;  // the level's day/night as last announced
+    double use_anim_t_ = -100;  // last time you drank / ate / threw something (view model animation)
+    ItemType use_anim_item_ = ItemType::None;
+    double menu_t_ = 0;         // when the current menu screen opened (fade in)
+    float menu_sel_y_ = -1;     // the selection bar glides between items
+    double death_t_ = -100;     // when you died (the death screen fades in)
     bool stage_pending_ = false;
     double stage_t_ = 0;
     void stage(const std::string& s) { platform_boot_stage(s.c_str()); stage_pending_ = true; stage_t_ = platform_time(); }

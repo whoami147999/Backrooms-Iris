@@ -54,6 +54,8 @@ struct ViewModel {
     float bob = 0, kick = 0, swing = 0;   // kick: 1 right after a shot, falling to 0; swing: 0..1 crowbar arc
     float sway_x = 0, sway_y = 0;
     float light = 1;
+    float use = 0;                        // 0..1 through drinking / eating / throwing something
+    ItemType use_item = ItemType::None;
 };
 
 struct Camera {
@@ -160,6 +162,11 @@ private:
     std::vector<const GpuChunk*> visible_;   // (reused every frame)
     int draws_ = 0, last_draws_ = 0;
     float darkness_ = 0;
+    // entity poses ease from state to state instead of snapping (keyed by entity id)
+    struct PoseSmooth { float lean = 0, arms = 0, head = 0, stride = 0, alpha = 1, seen = 0; bool init = false; };
+    std::unordered_map<uint16_t, PoseSmooth> pose_;
+    float pose_dt_ = 0.016f, last_world_time_ = 0;
+    float ease(float& v, float target, float rate) const { v += (target - v) * (1.0f - std::exp(-pose_dt_ * rate)); return v; }
     bool in_2d_ = false, batch_add_ = false;  // 2D batching state
     uint32_t batch_tex_ = 0;
     void pre2d(uint32_t tex, bool additive);
