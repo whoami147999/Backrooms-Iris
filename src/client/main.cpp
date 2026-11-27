@@ -18,7 +18,7 @@ using namespace iris;
 static void usage() {
     std::printf(
         "Backrooms Iris %s\n\n"
-        "  --level N           jump straight into level N (0 1 2 3 4 5 6 7 8 9 10 11 13 19 21 22 24 33 36 37 51 fun ! grey black mansion hope)\n"
+        "  --level N           jump straight into level N (0 1 2 3 4 5 6 7 8 9 10 11 13 19 21 22 24 33 36 37 51 70 94 188 fun ! 0zero 1one 2two 3three 4four hope 2far end)\n"
         "  --sandbox           ...in sandbox mode\n"
         "  --seed N            world seed for --level\n"
         "  --host              host a multiplayer game right away\n"
@@ -26,7 +26,8 @@ static void usage() {
         "  --password PW       password for --host / --join\n"
         "  --help              this text\n\n"
         "dev: --shot FILE.bmp [--after SECS] [--pos X,Z] [--yaw DEG] [--pitch DEG] [--walk SECS]\n"
-        "     [--juice SECS] [--sanity N] [--health N] [--entity TYPE [--dist M]] [--screen NAME] [--autowalk] [--nohud]\n",
+        "     [--juice SECS] [--sanity N] [--health N] [--entity TYPE [--dist M]] [--screen NAME] [--autowalk] [--nohud]\n"
+        "     [--time SECS] [--quality 0-3] [--vita-like] [--safe]\n",
         IRIS_VERSION);
 }
 

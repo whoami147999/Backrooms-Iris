@@ -3,7 +3,7 @@
 Open-source co-op Backrooms horror. Survive, keep your head together, find the exit, and don't get found.
 Up to 4 players on PC (one of you hosts, no servers involved), and single player on PS Vita.
 
-![Level 0](docs/screenshots/02-level0.jpg)
+![Level 70 - Froidetown](docs/screenshots/11-01-level70.jpg)
 
 > Inspired by Backrooms games and the community wiki lore. Every texture, model and sound is original and
 > generated in code: no assets, maps, art or audio copied from any other game.
@@ -12,18 +12,38 @@ Up to 4 players on PC (one of you hosts, no servers involved), and single player
 
 ## Features
 
-- **27 endless levels**, generated from a seed, so the same seed gives the same world everywhere.
-- **5 entities** that each hunt differently, and **27 items** (24 to find + 3 sandbox guns).
+- **34 endless levels**, generated from a seed, so the same seed gives the same world everywhere. Some have a
+  **day/night cycle**, and the houses on the outdoor levels are **furnished and enterable**.
+- **10 entities** that each hunt differently, and **27 items** (24 to find + 3 sandbox guns).
 - **Objectives** on every level that reward the whole run with a perk.
 - **Difficulties:** Easy, Medium, Hard, Nightmare.
 - **Sandbox mode:** spawn entities, items and weapons, and toggle god mode / noclip.
 - **Co-op for up to 4 players:** host from inside the game, friends join over LAN, Tailscale or a forwarded port.
   You can set an optional password.
 - **Look:** PS1-style visuals, film grain, an optional camcorder look, and night vision.
+  **Graphics quality** presets (Low / Medium / High / Ultra) for slow PCs and the Vita.
 - **Sound:** fully procedural, positional and muffled through walls.
+
+## What's new in 1.1
+
+- **TH3 SH4DY GR3Y, rebuilt from the wiki:** 0Zero (a greyscale jungle; the sky goes black without warning,
+  only the shack's clock warns you), 1One (the mansion, and The Landlord), 2Two (a forest of snow that's 38 °C;
+  the fallen angels push you through), 3Three (a toxic sea of floating clocks), 4Four (a glitching city on a
+  river: Facelings rob you, the Mangled step on you), L0ST H0P3, 2 F4R, TH3 3ND.
+- **New levels:** Level 70 "Froidetown" (frozen city: get inside before you freeze), Level 94 "Motion"
+  (a stop-motion 1930s town and its clay hills; at night the Animations come out), Level 188
+  "Courtyard of Windows".
+- **Furnished houses** on Levels 9, 70 and 94: living rooms, bedrooms, kitchens.
+- **Bacteria** are easier to outrun; the **PS1 look** doesn't flicker any more.
+- **Vita performance:** about 40% fewer draw calls, lighter audio, cheaper defaults; graphics presets.
+- **Polish:** entity animations ease between poses (and lunge up close), sparks and dripping water,
+  you see yourself drink, a new HUD, menus and death screen.
 
 | | |
 |---|---|
+| ![](docs/screenshots/11-02-level94.jpg) | ![](docs/screenshots/11-03-level94-night-animation.jpg) |
+| ![](docs/screenshots/11-07-tsg2-angel.jpg) | ![](docs/screenshots/11-06-tsg1-landlord.jpg) |
+| ![](docs/screenshots/11-04-level188.jpg) | ![](docs/screenshots/11-11-house-interior.jpg) |
 | ![](docs/screenshots/03-hound.jpg) | ![](docs/screenshots/04-hotel-room.jpg) |
 | ![](docs/screenshots/06-poolrooms.jpg) | ![](docs/screenshots/10-mall.jpg) |
 | ![](docs/screenshots/05-shotgun.jpg) | ![](docs/screenshots/07-suburbs.jpg) |
@@ -32,11 +52,11 @@ Up to 4 players on PC (one of you hosts, no servers involved), and single player
 
 The ready-to-play builds are in [`dist/`](dist):
 
-- **Windows:** [`backrooms-iris-1.0-windows-x64.zip`](dist/backrooms-iris-1.0-windows-x64.zip). Unzip and run
+- **Windows:** [`backrooms-iris-1.1-windows-x64.zip`](dist/backrooms-iris-1.1-windows-x64.zip). Unzip and run
   `backrooms-iris.exe` (keep `SDL2.dll` next to it).
-- **Linux:** [`backrooms-iris-1.0-linux-x86_64.tar.gz`](dist/backrooms-iris-1.0-linux-x86_64.tar.gz). Untar and run
+- **Linux:** [`backrooms-iris-1.1-linux-x86_64.tar.gz`](dist/backrooms-iris-1.1-linux-x86_64.tar.gz). Untar and run
   `./backrooms-iris`. Needs SDL2 and OpenGL (`sdl2-compat` + `mesa` on Arch).
-- **PS Vita:** [`backrooms-iris-1.0-vita.vpk`](dist/backrooms-iris-1.0-vita.vpk). Install with VitaShell. Needs
+- **PS Vita:** [`backrooms-iris-1.1-vita.vpk`](dist/backrooms-iris-1.1-vita.vpk). Install with VitaShell. Needs
   `libshacccg.suprx` on the console (extract it with ShaRKF00D). Single player.
 
 Every push also builds a fresh `.vpk` in the **Vita VPK** workflow (Actions tab → latest run → Artifacts).
@@ -52,11 +72,12 @@ Dying drops your items. In co-op, dead players come back after 10 seconds.
 0 The Lobby, 1 Habitable Zone, 2 Pipe Dreams, 3 Electrical Station, 4 Abandoned Office, 5 Terror Hotel,
 6 Lights Out, 7 Thalassophobia, 8 Cave System, 9 The Suburbs, 10 Bumper Crop, 11 The Endless City (safe),
 13 Infinite Apartments, 19 The Attic, 21 Numbered Doors, 22 The Car Park, 24 The Moon, 33 The Infinite Mall,
-36 Airport, 37 Sublimity (safe), 51 The Forgotten City, Level Fun =), Level ! (Run For Your Life), and
-TH3 SH4DY GR3Y with its sub-levels B14CK, M4NS10N and L0ST H0P3.
+36 Airport, 37 Sublimity (safe), 51 The Forgotten City, 70 Froidetown, 94 Motion, 188 Courtyard of Windows,
+Level Fun =), Level ! (Run For Your Life), and TH3 SH4DY GR3Y: 0Zero, 1One, 2Two, 3Three, 4Four, L0ST H0P3,
+2 F4R and TH3 3ND (which leads back to the beginning).
 
 You can walk into most of what you see: hotel rooms, apartments, offices behind numbered doors, mall shops,
-wanderer camps.
+wanderer camps, and the houses in the suburbs, in Froidetown and in Motion.
 
 ### Entities
 
@@ -67,6 +88,11 @@ wanderer camps.
 | **Smiler** | a grin in the dark that drifts closer while you're not looking | don't stare, don't sprint, get to the light. Flashlights hurt it |
 | **Skin-Stealer** | patrols the suburbs, chases on sight, hits hard | sprint, or an energy drink |
 | **Partygoer** | `=)` slow, but it never stops following | keep moving, find the exit |
+| **The Landlord** | a shadow in a suit patrolling 1One. Nothing hurts him | be quiet, keep opening doors |
+| **Faceling** | 4Four's muggers: take something and leave | hand over almond water and they leave you alone |
+| **The Mangled** | taller than the buildings, slow | don't be where it steps |
+| **Animation** | Motion's cartoons, out at night, moving in stop-motion bursts | get indoors, wait for the sun |
+| **Fallen angel** | 2Two's angels. Docile | ask one to push you through |
 
 ### Items
 
