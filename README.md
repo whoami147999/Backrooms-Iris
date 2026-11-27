@@ -30,11 +30,16 @@ Up to 4 players on PC (one of you hosts, no servers involved), and single player
 
 ## Download
 
-Grab the latest build from the Releases page:
+The ready-to-play builds are in [`dist/`](dist):
 
-- **Windows:** unzip and run `backrooms-iris.exe` (keep `SDL2.dll` next to it).
-- **Linux:** untar and run `./backrooms-iris`. Needs SDL2 and OpenGL (`sdl2-compat` + `mesa` on Arch).
-- **PS Vita:** build the `.vpk` yourself (see [Building](#building)). Releases don't ship one.
+- **Windows:** [`backrooms-iris-1.0-windows-x64.zip`](dist/backrooms-iris-1.0-windows-x64.zip). Unzip and run
+  `backrooms-iris.exe` (keep `SDL2.dll` next to it).
+- **Linux:** [`backrooms-iris-1.0-linux-x86_64.tar.gz`](dist/backrooms-iris-1.0-linux-x86_64.tar.gz). Untar and run
+  `./backrooms-iris`. Needs SDL2 and OpenGL (`sdl2-compat` + `mesa` on Arch).
+- **PS Vita:** [`backrooms-iris-1.0-vita.vpk`](dist/backrooms-iris-1.0-vita.vpk). Install with VitaShell. Needs
+  `libshacccg.suprx` on the console (extract it with ShaRKF00D). Single player.
+
+Every push also builds a fresh `.vpk` in the **Vita VPK** workflow (Actions tab → latest run → Artifacts).
 
 ## How to play
 
