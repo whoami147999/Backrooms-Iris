@@ -737,6 +737,154 @@ static void test_props() {
     std::printf("  props: %d pieces, %d camps\n", total, camps);
 }
 
+// 1.2: locked exits, shells, the safe zone, M.E.G. outposts, items on furniture, the lobby, sandbox commands.
+static void test_12() {
+    // exits stay shut on a level with a required objective, until it's done
+    {
+        GameSim sim(11);
+        sim.start_level(LevelId::L3, 11);
+        int p = sim.add_player("A");
+        CHECK(sim.objective.required, "Level 3's objective should be required");
+        Vec2 ex;
+        ExitDoor door;
+        CHECK(sim.nearest_exit({sim.players[p].st.pos.x, sim.players[p].st.pos.z}, ex, &door), "no exit near Level 3's spawn");
+        sim.players[p].st.pos = {door.pos.x + door.normal.x * 0.3f, 0, door.pos.z + door.normal.z * 0.3f};
+        uint32_t ep = sim.epoch;
+        sim.tick(1.0f / 60);
+        CHECK(sim.epoch == ep, "a locked exit let you through");
+        sim.objective.have = sim.objective.need;
+        sim.objective.done = true;
+        sim.tick(1.0f / 60);
+        CHECK(sim.epoch != ep, "the exit should open once the objective is done");
+    }
+    // the shotgun needs shells outside the sandbox, and uses one per shot
+    {
+        GameSim sim(12);
+        sim.auto_spawn = false;
+        sim.start_level(LevelId::L0, 12);
+        int p = sim.add_player("A");
+        PlayerState& st = sim.players[p].st;
+        st.inv[(int)ItemType::Shotgun] = 1;
+        InputCmd cmd;
+        sim.apply_input(p, cmd);
+        cmd.attack_item = (uint8_t)ItemType::Shotgun;
+        for (int t = 0; t < 120; t++) { sim.apply_input(p, cmd); sim.tick(1.0f / 60); }
+        cmd.attack_ctr++;
+        sim.apply_input(p, cmd);
+        CHECK(st.swing > 0.3f, "the shotgun fired with no shells");
+        st.inv[(int)ItemType::Shells] = 2;
+        for (int t = 0; t < 120; t++) { sim.apply_input(p, cmd); sim.tick(1.0f / 60); }
+        cmd.attack_ctr++;
+        sim.apply_input(p, cmd);
+        CHECK(st.inv[(int)ItemType::Shells] == 1 && st.swing < 0.05f, "a shot should use one shell");
+        CHECK(!item_info(ItemType::Shotgun).sandbox_only, "the shotgun turns up in the normal game now");
+    }
+    // nothing hostile walks into the spawn's safe zone
+    {
+        GameSim sim(13);
+        sim.auto_spawn = false;
+        sim.start_level(LevelId::L0, 13);
+        int p = sim.add_player("A");
+        Vec3 s = sim.world.spawn_point();
+        Entity& e = sim.spawn_entity(EntityType::Bacteria, {s.x + SPAWN_SAFE_R + 4.0f, s.z}, 0);
+        e.state = EntState::Chase;
+        e.target = p;
+        uint16_t id = e.id;
+        for (int t = 0; t < 60 * 10; t++) sim.tick(1.0f / 60);
+        for (auto& x : sim.ents)
+            if (x.id == id) CHECK((x.pos - Vec2{s.x, s.z}).len() >= SPAWN_SAFE_R - 0.05f, "a bacteria got into the safe zone (%.1f m)", (x.pos - Vec2{s.x, s.z}).len());
+    }
+    // M.E.G. outposts: officials walk out when you come near, and the medic patches you up
+    {
+        GameSim sim(14);
+        sim.start_level(LevelId::L1, 4242);
+        int p = sim.add_player("A");
+        int ox = 0, oz = 0;
+        bool found = false;
+        for (int r = 1; r < 6 && !found; r++)
+            for (int b = -r; b <= r && !found; b++)
+                for (int a = -r; a <= r && !found; a++) found = sim.world.outpost_region(a, b, ox, oz);
+        CHECK(found, "no M.E.G. outpost on Level 1");
+        if (found) {
+            PlayerState& st = sim.players[p].st;
+            st.pos = {(ox + 0.5f) * CELL, 0, (oz + 2.2f) * CELL};
+            st.health = 20;
+            for (int t = 0; t < 60 * 3; t++) sim.tick(1.0f / 60);
+            int megs = 0;
+            for (auto& x : sim.ents) megs += x.type == EntityType::MegMedic || x.type == EntityType::MegScout;
+            CHECK(megs == 2, "expected two M.E.G. officials at the outpost, got %d", megs);
+            for (auto& x : sim.ents) if (x.type == EntityType::MegMedic) { st.pos = {x.pos.x + 1.0f, 0, x.pos.z}; }
+            InputCmd cmd;
+            sim.apply_input(p, cmd);
+            cmd.pickup_ctr++;
+            sim.apply_input(p, cmd);
+            CHECK(st.health >= 99.0f, "the medic should heal you (%.0f)", st.health);
+        }
+    }
+    // items lie on furniture when there is some, and where they lie is a pure function
+    {
+        World w(LevelId::L5, 777);
+        int on = 0, total = 0;
+        for (int cz = -30; cz < 30; cz++)
+            for (int cx = -30; cx < 30; cx++) {
+                if (w.item(cx, cz) == ItemType::None) continue;
+                total++;
+                Vec2 a, b;
+                float ya, yb;
+                bool fa = w.item_spot(cx, cz, a, ya), fb = w.item_spot(cx, cz, b, yb);
+                CHECK(fa == fb && a.x == b.x && a.z == b.z && ya == yb, "item spot isn't deterministic");
+                on += ya > 0.1f;
+            }
+        CHECK(total > 0 && on * 2 > total, "most hotel items should be on furniture (%d of %d)", on, total);
+    }
+    // the lobby, and a run started from it; sandbox commands
+    {
+        GameSim sim(15);
+        sim.start_level(LevelId::Hub, 15);
+        int p = sim.add_player("A");
+        CHECK(sim.objective.type == ObjType::None, "the lobby has no objective");
+        sim.start_run(LevelId::L2, Difficulty::Hard, true, 99);
+        CHECK(sim.world.id() == LevelId::L2 && sim.sandbox && sim.difficulty == Difficulty::Hard, "start_run didn't start the run");
+        size_t n = sim.ents.size();
+        sim.sandbox_cmd(p, GameSim::SB_SPAWN_ENTITY, (uint8_t)EntityType::Hound, 0);
+        CHECK(sim.ents.size() == n + 1, "sandbox spawn didn't spawn");
+        sim.sandbox = false;
+        sim.sandbox_cmd(p, GameSim::SB_SPAWN_ENTITY, (uint8_t)EntityType::Hound, 0);
+        CHECK(sim.ents.size() == n + 1, "sandbox commands must be ignored outside sandbox mode");
+        sim.sandbox_cmd(p, GameSim::SB_SPAWN_ENTITY, 250, 0);
+        CHECK(sim.ents.size() == n + 1, "bad entity type spawned something");
+    }
+    // walking out of TH3 3ND wins
+    {
+        GameSim sim(16);
+        sim.start_level(LevelId::TSGEnd, 16);
+        int p = sim.add_player("A");
+        Vec2 ex;
+        ExitDoor door;
+        if (sim.nearest_exit({sim.players[p].st.pos.x, sim.players[p].st.pos.z}, ex, &door)) {
+            sim.players[p].st.pos = {door.pos.x, 0, door.pos.z};
+            sim.tick(1.0f / 60);
+            CHECK(sim.escaped && sim.world.id() == LevelId::TSGEnd, "walking out of TH3 3ND should win (and stay there)");
+        } else CHECK(false, "no door in TH3 3ND");
+    }
+    // terrain: pools have depth, Motion has hills, the player follows the ground
+    {
+        World w(LevelId::L37, 4242);
+        CHECK(w.floor_y(-3 * CELL + 1.25f, 5 * CELL + 1.25f) < -1.5f, "Level 37's pools should be deep");
+        CHECK(w.floor_y(1.25f, 1.25f) == 0.0f, "the poolrooms' spawn should be dry");
+        World h(LevelId::L94, 4242);
+        float top = 0;
+        for (int cz = -40; cz < 40; cz += 2) for (int cx = -40; cx < 40; cx += 2) top = std::max(top, h.floor_y(cx * CELL, cz * CELL));
+        CHECK(top > 8.0f, "Motion's hills should be big (%.1f m)", top);
+        PlayerState ps;
+        ps.pos = {-3 * CELL + 1.25f, 0, 5 * CELL + 1.25f};
+        InputCmd c;
+        for (int t = 0; t < 120; t++) player_tick(ps, c, w, 1.0f / 60);
+        CHECK(ps.pos.y < -1.0f, "the player should sink into the pool (%.2f)", ps.pos.y);
+    }
+    std::printf("  1.2: locked exits, shells, safe zone, outposts, items on furniture, lobby, sandbox, the end, terrain ok\n");
+}
+
 int main() {
     test_determinism();
     test_connectivity();
@@ -757,6 +905,7 @@ int main() {
     test_sim_soak();
     test_network();
     test_host_security();
+    test_12();
     if (g_fail) { std::printf("%d check(s) failed\n", g_fail); return 1; }
     std::printf("all core tests passed\n");
     return 0;

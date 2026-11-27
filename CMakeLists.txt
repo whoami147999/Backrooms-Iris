@@ -7,7 +7,7 @@
 # directly. There is no dedicated server. The Vita build is single player and has no network code.
 #
 cmake_minimum_required(VERSION 3.16)
-project(BackroomsIris VERSION 1.1 LANGUAGES C CXX)
+project(BackroomsIris VERSION 1.2 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -88,7 +88,7 @@ if(IRIS_BUILD_CLIENT)
     include("$ENV{VITASDK}/share/vita.cmake" REQUIRED)
     set(VITA_APP_NAME "Backrooms Iris")
     set(VITA_TITLEID  "BKIR00001")
-    set(VITA_VERSION  "01.10")
+    set(VITA_VERSION  "01.20")
     set(VITA_MKSFOEX_FLAGS "${VITA_MKSFOEX_FLAGS} -d ATTRIBUTE2=12") # extended memory mode
 
     add_executable(iris_vita ${IRIS_CLIENT_SOURCES} src/platform/vita/platform_vita.cpp)
