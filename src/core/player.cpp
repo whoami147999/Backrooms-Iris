@@ -79,6 +79,10 @@ void player_tick(PlayerState& p, const InputCmd& cmd, const World& world, float 
     if (boosted) speed *= juiced ? 1.65f : BOOST_MULT;
     if (p.slow > 0) speed *= 0.72f;
     if (world.water(floor_to_int(p.pos.x / CELL), floor_to_int(p.pos.z / CELL))) speed *= 0.62f; // wading through the sea
+    if (world.terrain()) {
+        float wy = world.water_y(p.pos.x, p.pos.z);
+        if (wy > -1e8f) speed *= 1.0f - 0.45f * clampf((wy - p.pos.y) / 1.2f, 0, 1); // wading, then swimming
+    }
     Vec2 fwd = yaw_forward(p.yaw), right = yaw_right(p.yaw);
     Vec2 target = (fwd * mz + right * mx) * speed;
 
@@ -92,6 +96,12 @@ void player_tick(PlayerState& p, const InputCmd& cmd, const World& world, float 
     if (!p.noclip) collide_circle(world, pos, PLAYER_RADIUS);
     p.pos.x = pos.x;
     p.pos.z = pos.z;
+    if (world.terrain()) { // pools and hills: follow the ground (a little smoothing on the way down)
+        float gy = world.floor_y(pos.x, pos.z);
+        p.pos.y = gy > p.pos.y ? gy : approach(p.pos.y, gy, dt * 6.0f);
+    } else {
+        p.pos.y = 0;
+    }
 
     float moved = (pos - before).len();
     p.speed = moved / dt;

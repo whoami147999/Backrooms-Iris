@@ -41,7 +41,7 @@ Vec3 ModelBuilder::xf_point(Vec3 p) const {
     }
     if (camera_) return p;
     float cy = std::cos(yaw_), sy = std::sin(yaw_);
-    return {pos_.x + p.x * cy - p.z * sy, p.y, pos_.z - p.x * sy - p.z * cy};
+    return {pos_.x + p.x * cy - p.z * sy, p.y + ground_, pos_.z - p.x * sy - p.z * cy};
 }
 
 uint8_t ModelBuilder::shade(Vec3 n, float base) const {

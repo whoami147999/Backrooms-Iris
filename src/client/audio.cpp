@@ -479,6 +479,110 @@ void synth_all(std::vector<float> out[SFX_COUNT]) {
         normalize(b, 0.45f);
         out[SFX_WHISPERS] = b;
     }
+    // ----- 1.2: music. All of it is generated here too: a slow, sad theme for the menus, something
+    // calmer and emptier for the safe places, and a pulse that won't let up for Level !.
+    {
+        auto note_hz = [](int midi) { return 440.0f * std::pow(2.0f, (midi - 69) / 12.0f); };
+        auto piano = [&](float hz, float t) { // a decaying tone with a few overtones: soft, glassy
+            if (t < 0 || t > 4.0f) return 0.0f;
+            float e = env(t, 0.004f, 1.1f);
+            return (std::sin(TAU * hz * t) + 0.35f * std::sin(TAU * hz * 2.0f * t) * std::exp(-t * 2.0f) +
+                    0.12f * std::sin(TAU * hz * 3.01f * t) * std::exp(-t * 4.0f)) * e;
+        };
+        auto reverb = [&](std::vector<float>& b, float mix) { // three feedback combs, a cheap hall
+            const int D[3] = {(int)(0.0297f * R), (int)(0.0371f * R), (int)(0.0411f * R)};
+            std::vector<float> wet(b.size(), 0.0f);
+            for (int k = 0; k < 3; k++) {
+                std::vector<float> line((size_t)D[k], 0.0f);
+                size_t p = 0;
+                LP damp(2500.0f);
+                for (size_t i = 0; i < b.size(); i++) {
+                    float y = line[p];
+                    line[p] = b[i] + damp(y) * 0.84f;
+                    p = (p + 1) % line.size();
+                    wet[i] += y / 3.0f;
+                }
+            }
+            for (size_t i = 0; i < b.size(); i++) b[i] = b[i] * (1 - mix) + wet[i] * mix;
+        };
+        { // the menu: A minor, Am - F - C - G, a slow arpeggio over a pad
+            const float bpm = 66.0f, beat = 60.0f / bpm;
+            const int chords[4][3] = {{57, 60, 64}, {53, 57, 60}, {48, 52, 55}, {55, 59, 62}};
+            const int bars = 8;
+            auto b = make(bars * 4 * beat + 3.0f);
+            for (size_t i = 0; i < b.size(); i++) {
+                float t = (float)i / R;
+                int bar = std::min(bars - 1, (int)(t / (4 * beat)));
+                const int* ch = chords[bar % 4];
+                float x = 0;
+                // pad: three detuned tones per chord note, swelling with each bar
+                float bt = t - bar * 4 * beat;
+                float sw = std::min(1.0f, bt / 1.2f) * (bar == bars - 1 ? std::max(0.0f, 1.0f - std::max(0.0f, bt - 3 * beat) / beat) : 1.0f);
+                for (int k = 0; k < 3; k++) {
+                    float hz = note_hz(ch[k] - 12);
+                    x += (std::sin(TAU * hz * t) + std::sin(TAU * hz * 1.003f * t) * 0.7f) * 0.06f * sw;
+                }
+                b[i] = x;
+            }
+            // the arpeggio: up through the chord, an octave up, every half beat
+            for (int bar = 0; bar < bars; bar++)
+                for (int k = 0; k < 8; k++) {
+                    const int* ch = chords[bar % 4];
+                    int m = ch[k % 3] + (k >= 3 ? 12 : 0) + (k == 7 ? 7 : 0);
+                    float t0 = (bar * 4 + k * 0.5f) * beat;
+                    float hz = note_hz(m);
+                    size_t s0 = (size_t)(t0 * R);
+                    float vel = 0.22f * (k == 0 ? 1.0f : 0.75f);
+                    for (size_t i = s0; i < std::min(b.size(), s0 + (size_t)(3.5f * R)); i++) b[i] += piano(hz, (float)(i - s0) / R) * vel;
+                }
+            reverb(b, 0.35f);
+            seamless(b, 2.5f);
+            normalize(b, 0.55f);
+            out[SFX_MUSIC_MENU] = b;
+        }
+        { // the safe places: sparse high notes, long gaps, a low hum under them
+            auto b = make(40.0f);
+            Rand rnd(4242);
+            const int scale[6] = {69, 72, 74, 76, 79, 81};
+            for (size_t i = 0; i < b.size(); i++) { float t = (float)i / R; b[i] = std::sin(TAU * 55.0f * t) * 0.03f * (0.6f + 0.4f * std::sin(TAU * 0.05f * t)); }
+            float t0 = 0.5f;
+            while (t0 < 36.0f) {
+                int m = scale[(int)((rnd.f() * 0.5f + 0.5f) * 5.99f)];
+                size_t s0 = (size_t)(t0 * R);
+                for (size_t i = s0; i < std::min(b.size(), s0 + (size_t)(3.5f * R)); i++) b[i] += piano(note_hz(m), (float)(i - s0) / R) * 0.16f;
+                t0 += 1.6f + (rnd.f() * 0.5f + 0.5f) * 2.6f;
+            }
+            reverb(b, 0.5f);
+            seamless(b, 3.0f);
+            normalize(b, 0.4f);
+            out[SFX_MUSIC_CALM] = b;
+        }
+        { // Level !: 140 bpm, a pulsing bass, a kick, a nervous figure on top
+            const float beat = 60.0f / 140.0f;
+            const int bars = 8;
+            auto b = make(bars * 4 * beat + 1.0f);
+            const int roots[4] = {40, 40, 43, 38};
+            LP bass_lp(420.0f);
+            for (size_t i = 0; i < b.size(); i++) {
+                float t = (float)i / R;
+                int bar = std::min(bars - 1, (int)(t / (4 * beat)));
+                float e8 = std::fmod(t, beat * 0.5f);
+                float hz = note_hz(roots[bar % 4]);
+                float saw = 2.0f * std::fmod(hz * t, 1.0f) - 1.0f;
+                float x = bass_lp(saw) * 0.35f * env(e8, 0.003f, 0.12f);
+                float kb = std::fmod(t, beat);
+                x += std::sin(TAU * (50.0f + 90.0f * std::exp(-kb * 30.0f)) * kb) * env(kb, 0.001f, 0.12f) * 0.6f;
+                float e16 = std::fmod(t, beat * 0.25f);
+                int step16 = (int)(t / (beat * 0.25f)) % 16;
+                static const int FIG[16] = {12, 0, 15, 0, 12, 19, 0, 15, 12, 0, 15, 17, 0, 15, 12, 10};
+                if (FIG[step16]) x += std::sin(TAU * note_hz(roots[bar % 4] + 24 + FIG[step16]) * e16) * env(e16, 0.002f, 0.05f) * 0.12f;
+                b[i] = x;
+            }
+            seamless(b, 0.5f);
+            normalize(b, 0.6f);
+            out[SFX_MUSIC_RUN] = b;
+        }
+    }
 }
 
 bool Audio::init() {
@@ -584,7 +688,18 @@ void Audio::mix(int16_t* out, int frames) {
         }
     };
     for (Voice& v : voices_) run(v);
-    for (Voice& v : loops_) if (v.target > 0.0005f || v.vol > 0.0005f) run(v);
+    for (int l = 0; l < LOOP_COUNT; l++) {
+        Voice& v = loops_[l];
+        if (!(v.target > 0.0005f || v.vol > 0.0005f)) continue;
+        if (l == LOOP_BGM) { // music: its own volume (applied by scaling the target, so changes stay smooth)
+            float t = v.target;
+            v.target = t * music_;
+            float vol0 = v.vol;
+            (void)vol0;
+            run(v);
+            v.target = t;
+        } else run(v);
+    }
     for (int i = 0; i < frames * 2; i++) {
         // soft limit (no harsh clipping): a rational tanh, much cheaper than std::tanh per sample
         float v = std::max(-3.0f, std::min(3.0f, acc[(size_t)i] * master_ * 1.6f));

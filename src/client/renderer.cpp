@@ -195,6 +195,8 @@ void Renderer::upload(GpuChunk& g, const ChunkMesh& m) {
     g.items = m.items;
     g.balloons = m.balloons;
     g.lights = m.lights;
+    g.water = m.water;
+    g.shadows = m.shadows;
 }
 
 void Renderer::update_chunks(const World& w, Vec3 eye, int budget) {
@@ -360,7 +362,8 @@ void Renderer::draw_entity(const World& w, const DrawEntity& e, float time) {
     float breathe = std::sin(time * 1.6f + e.id) * 0.012f;
     const int seg = std::max(4, (int)std::lround((s_.mesh_detail >= 2 ? 10 : 6) * s_.entity_detail));
     ModelBuilder m(dyn_, seg);
-    m.place(e.pos, e.yaw);
+    const float gy = w.floor_y(e.pos.x, e.pos.z); // pools and hills
+    m.place(e.pos, e.yaw, gy);
     m.set_light(light, {0.35f, 0.85f, 0.45f});
     bool stunned = e.state == EntState::Stunned;
     if (stunned) m.push_pose({0, 0.12f, 0}, 0, 0, 1.35f); // knocked over onto its side
@@ -574,6 +577,43 @@ void Renderer::draw_entity(const World& w, const DrawEntity& e, float time) {
             m.ellipsoid(h.chest_c + Vec3{0.08f, -0.05f, 0.13f}, {0.05f, 0.05f, 0.02f}, {0.35f, 0.04f, 0.03f}, 0.6f); // the wound
             break;
         }
+        case EntityType::MegMedic: case EntityType::MegScout: {
+            // M.E.G. field staff: navy coveralls, an olive vest, a helmet with a lamp; the medic has a red
+            // cross on the arm and a bag, the scout carries a rifle
+            const bool scout = e.type == EntityType::MegScout;
+            Humanoid h;
+            h.top = {0.12f, 0.15f, 0.24f}; h.legs = {0.11f, 0.13f, 0.21f}; h.feet = {0.06f, 0.05f, 0.05f};
+            h.hands = {0.1f, 0.1f, 0.1f}; h.skin = {0.78f, 0.6f, 0.5f}; h.has_hair = false;
+            h.phase = e.anim; h.stride = stride; h.lean = 0.05f + breathe;
+            bool ready = scout && e.state == EntState::Chase;
+            h.arm_forward = ease(ps.arms, ready ? 0.9f : (scout ? 0.35f : 0.0f), 6.0f);
+            h.head_tilt = ease(ps.head, 0.05f, 4.0f);
+            h.build(m);
+            const Rgb olive{0.3f, 0.32f, 0.22f}, dark{0.08f, 0.08f, 0.09f}, white{0.9f, 0.9f, 0.88f}, red{0.75f, 0.08f, 0.06f};
+            m.push_pose(h.chest_c, h.lean);
+            m.box(h.chest_c + Vec3{0, -0.02f, 0.0f}, {0.2f, 0.22f, 0.135f}, olive);        // vest
+            for (int k = 0; k < 3; k++) m.box(h.chest_c + Vec3{-0.11f + k * 0.11f, -0.12f, 0.14f}, {0.045f, 0.05f, 0.02f}, {0.26f, 0.28f, 0.19f}); // pouches
+            m.box(h.chest_c + Vec3{0, 0.05f, -0.17f}, {0.15f, 0.18f, 0.07f}, olive);        // pack
+            m.pop_pose();
+            m.ellipsoid(h.head_c + Vec3{0, 0.06f, -0.01f}, {0.135f, 0.09f, 0.145f}, dark);   // helmet
+            m.ellipsoid(h.head_c + Vec3{0, -0.03f, 0.09f}, {0.085f, 0.06f, 0.05f}, dark, 0.7f); // respirator
+            m.tube(h.head_c + Vec3{0, 0.08f, 0.13f}, h.head_c + Vec3{0, 0.08f, 0.17f}, 0.025f, {0.9f, 0.85f, 0.6f});
+            m.box(h.shoulder[0] + Vec3{0, -0.1f, 0}, {0.052f, 0.045f, 0.052f}, white);     // armband
+            if (!scout) {
+                m.box(h.shoulder[0] + Vec3{-0.053f, -0.1f, 0}, {0.003f, 0.03f, 0.008f}, red);
+                m.box(h.shoulder[0] + Vec3{-0.053f, -0.1f, 0}, {0.003f, 0.008f, 0.03f}, red);
+                m.box(h.hand[1] + Vec3{0, -0.12f, 0}, {0.12f, 0.09f, 0.07f}, white);       // the med bag
+                m.box(h.hand[1] + Vec3{0, -0.12f, 0.072f}, {0.03f, 0.008f, 0.002f}, red);
+            } else { // the rifle, held across the body or up at the ready
+                Vec3 a = (h.hand[0] + h.hand[1]) * 0.5f;
+                Vec3 fwd{0, ready ? 0.0f : -0.15f, 1};
+                fwd = fwd * (1.0f / fwd.len());
+                m.box(a, {0.025f, 0.05f, 0.18f}, dark);
+                m.tube(a + fwd * 0.15f, a + fwd * 0.55f, 0.012f, dark);
+                m.box(a - fwd * 0.22f + Vec3{0, -0.02f, 0}, {0.022f, 0.045f, 0.1f}, {0.2f, 0.16f, 0.1f});
+            }
+            break;
+        }
         case EntityType::Smiler: break;
         default: break;
     }
@@ -582,13 +622,13 @@ void Renderer::draw_entity(const World& w, const DrawEntity& e, float time) {
     if (e.type == EntityType::Partygoer && !stunned) {
         // the =) face, and a balloon on a string
         Vec2 r = yaw_right(e.yaw);
-        Vec3 c{e.pos.x + f.x * 0.18f, 1.62f, e.pos.z + f.z * 0.18f};
+        Vec3 c{e.pos.x + f.x * 0.18f, 1.62f + gy, e.pos.z + f.z * 0.18f};
         Vec3 rr{r.x * 0.15f, 0, r.z * 0.15f}, up{0, 0.15f, 0};
         uint32_t lc = rgba(light, light, light);
         push_quad(c + rr - up, c - rr - up, c - rr + up, c + rr + up, lc);
         flush_dyn(spr_[SPR_PARTY_FACE]);
-        Vec3 hand{e.pos.x + r.x * 0.33f, 1.0f, e.pos.z + r.z * 0.33f};
-        Vec3 bal{hand.x + std::sin(time * 1.3f + e.id) * 0.1f, 2.45f, hand.z};
+        Vec3 hand{e.pos.x + r.x * 0.33f, 1.0f + gy, e.pos.z + r.z * 0.33f};
+        Vec3 bal{hand.x + std::sin(time * 1.3f + e.id) * 0.1f, 2.45f + gy, hand.z};
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         billboard(bal, 0.38f, 0.46f, rgba(0.85f * light + 0.15f, 0.08f, 0.12f, 1));
@@ -602,7 +642,7 @@ void Renderer::draw_entity(const World& w, const DrawEntity& e, float time) {
         float fade = ease(ps.alpha, e.state == EntState::Retreat ? 0.0f : 1.0f, e.state == EntState::Retreat ? 4.0f : 1.5f); // it fades into the dark
         float flick = (0.85f + 0.15f * std::sin(time * 11 + e.id)) * fade;
         float size = 1.35f + charge * 0.6f;
-        Vec3 c{e.pos.x, 1.6f + std::sin(time * 1.7f + e.id) * 0.05f, e.pos.z};
+        Vec3 c{e.pos.x, 1.6f + gy + std::sin(time * 1.7f + e.id) * 0.05f, e.pos.z};
         glDepthMask(GL_FALSE);
         glEnable(GL_BLEND);
         billboard(c, size * 2.2f, size * 1.6f, rgba(1, 1, 0.9f, 0.06f * flick));
@@ -613,14 +653,14 @@ void Renderer::draw_entity(const World& w, const DrawEntity& e, float time) {
     } else if (e.type == EntityType::Hound && e.state == EntState::Stare) {
         Vec2 r = yaw_right(e.yaw);
         for (int s2 = -1; s2 <= 1; s2 += 2) {
-            Vec3 c{e.pos.x + f.x * 0.75f + r.x * 0.05f * s2, 0.66f + 0.18f, e.pos.z + f.z * 0.75f + r.z * 0.05f * s2};
+            Vec3 c{e.pos.x + f.x * 0.75f + r.x * 0.05f * s2, 0.66f + 0.18f + gy, e.pos.z + f.z * 0.75f + r.z * 0.05f * s2};
             billboard(c, 0.06f, 0.06f, rgba(1, 0.9f, 0.6f, 0.9f));
         }
         flush_dyn(spr_[SPR_GLOW], true, false);
     } else if (e.type == EntityType::Bacteria && e.state == EntState::Chase) {
         Vec2 r = yaw_right(e.yaw);
         for (int s2 = -1; s2 <= 1; s2 += 2) {
-            Vec3 c{e.pos.x + f.x * 0.55f + r.x * 0.035f * s2, 2.45f, e.pos.z + f.z * 0.55f + r.z * 0.035f * s2};
+            Vec3 c{e.pos.x + f.x * 0.55f + r.x * 0.035f * s2, 2.45f + gy, e.pos.z + f.z * 0.55f + r.z * 0.035f * s2};
             billboard(c, 0.05f, 0.05f, rgba(1, 1, 1, 0.8f));
         }
         flush_dyn(spr_[SPR_GLOW], true, false);
@@ -634,7 +674,7 @@ void Renderer::draw_player(const World& w, const DrawPlayer& p, float time) {
     if (!p.alive) light *= 0.5f;
     const int seg = std::max(4, (int)std::lround((s_.mesh_detail >= 2 ? 10 : 6) * s_.entity_detail));
     ModelBuilder m(dyn_, seg);
-    m.place({p.pos.x, p.pos.z}, p.yaw);
+    m.place({p.pos.x, p.pos.z}, p.yaw, w.floor_y(p.pos.x, p.pos.z));
     m.set_light(light, {0.35f, 0.85f, 0.45f});
     if (!p.alive) m.push_pose({0, 0.15f, 0}, -1.5f); // lying on the floor
     Humanoid h;
@@ -828,7 +868,9 @@ void Renderer::draw_world(const World& w, const Camera& cam, float time, float f
         const float night[3] = {w.id() == LevelId::TSG0 ? 0.0f : 0.02f, w.id() == LevelId::TSG0 ? 0.0f : 0.025f, w.id() == LevelId::TSG0 ? 0.0f : 0.05f};
         for (int k = 0; k < 3; k++) fogc[k] = lerpf(li.fog[k], night[k], dk);
     }
-    glClearColor(fogc[0], fogc[1], fogc[2], 1.0f);
+    static const bool void_debug = std::getenv("IRIS_VOID_DEBUG") != nullptr; // dev: holes in the world show up magenta
+    if (void_debug) glClearColor(1, 0, 1, 1);
+    else glClearColor(fogc[0], fogc[1], fogc[2], 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     float far_z = li.outdoor ? s_.view_dist + 60.0f : s_.view_dist + 20.0f;
@@ -864,6 +906,7 @@ void Renderer::draw_world(const World& w, const Camera& cam, float time, float f
     fog_density_ = li.fog_density * fog_mult;
 #endif
     fog_density_ *= 1.0f + dk * (w.id() == LevelId::TSG0 ? 3.5f : 1.6f); // night closes in
+    if (void_debug) fog_density_ = 0.001f;
     glFogf(GL_FOG_DENSITY, fog_density_);
     glEnable(GL_TEXTURE_2D);
     glDisable(GL_BLEND);
@@ -988,23 +1031,57 @@ void Renderer::draw_world(const World& w, const Camera& cam, float time, float f
     glEnable(GL_ALPHA_TEST);
     glDisable(GL_CULL_FACE);
 
-    // soft contact shadows under everything that walks
+    // soft contact shadows under everything that walks (and, with enhanced graphics, under the furniture)
     glDepthMask(GL_FALSE);
     for (const DrawEntity& e : ents)
-        if (e.type != EntityType::Smiler) blob_shadow(e.pos, e.type == EntityType::Hound ? 0.75f : 0.55f, e.state == EntState::Stunned ? 0.35f : 0.5f);
-    for (const DrawPlayer& p : players) blob_shadow({p.pos.x, p.pos.z}, 0.5f, 0.45f);
+        if (e.type != EntityType::Smiler) blob_shadow(e.pos, e.type == EntityType::Hound ? 0.75f : 0.55f, e.state == EntState::Stunned ? 0.35f : 0.5f, w.floor_y(e.pos.x, e.pos.z) + 0.015f);
+    for (const DrawPlayer& p : players) blob_shadow({p.pos.x, p.pos.z}, 0.5f, 0.45f, w.floor_y(p.pos.x, p.pos.z) + 0.015f);
+    if (s_.shadows) {
+        for (const GpuChunk* g : visible)
+            for (const ChunkMesh::Shadow& sh : g->shadows) {
+                float d = (Vec2{cam.eye.x, cam.eye.z} - Vec2{sh.x, sh.z}).len();
+                if (d > 22.0f) continue;
+                float a = 0.55f * clampf((22.0f - d) / 6.0f, 0, 1);
+                push_quad({sh.x - sh.hx, sh.y, sh.z + sh.hz}, {sh.x + sh.hx, sh.y, sh.z + sh.hz}, {sh.x + sh.hx, sh.y, sh.z - sh.hz}, {sh.x - sh.hx, sh.y, sh.z - sh.hz}, rgba(0, 0, 0, a));
+            }
+    }
+    if (!dyn_.empty()) flush_dyn(spr_[SPR_GLOW], false, true);
+    // enhanced graphics: the lamps reflected in shiny floors and in the pools, smeared toward you
+    const bool glossy = w.id() == LevelId::L37 || w.id() == LevelId::L33 || w.id() == LevelId::L36 || w.id() == LevelId::L5 ||
+                        w.id() == LevelId::TSG1 || w.id() == LevelId::L13 || w.id() == LevelId::L1 || w.id() == LevelId::Hub || w.id() == LevelId::L22;
+    if (s_.reflections && glossy) {
+        const float* lc = w.info().light_color;
+        for (const GpuChunk* g : visible)
+            for (const ChunkMesh::LightMark& l : g->lights) {
+                if (l.sx < 0 || l.state == LightState::Dead || l.pos.y < 1.5f) continue;
+                Vec2 lp{l.pos.x, l.pos.z}, eye{cam.eye.x, cam.eye.z};
+                Vec2 to = lp - eye;
+                float d = to.len();
+                if (d > 20.0f || d < 0.3f) continue;
+                Vec2 dir = to * (1.0f / d), side{-dir.z, dir.x};
+                float fy = w.floor_y(l.pos.x, l.pos.z), wy = w.water_y(l.pos.x, l.pos.z);
+                float y = (wy > -1e8f ? wy : fy) + 0.02f;
+                float len = 0.8f + std::min(2.0f, d * 0.12f), wid = std::max(l.sx, l.sz) * 1.4f + 0.25f;
+                float a = 0.22f * fog_factor(d) * (l.state == LightState::Flicker ? 0.6f : 1.0f);
+                Vec2 c = lp - dir * (len * 0.35f);
+                Vec3 p0{c.x - dir.x * len - side.x * wid, y, c.z - dir.z * len - side.z * wid}, p1{c.x - dir.x * len + side.x * wid, y, c.z - dir.z * len + side.z * wid};
+                Vec3 p2{c.x + dir.x * len + side.x * wid, y, c.z + dir.z * len + side.z * wid}, p3{c.x + dir.x * len - side.x * wid, y, c.z + dir.z * len - side.z * wid};
+                push_quad(p0, p1, p2, p3, rgba(lc[0], lc[1], lc[2], a));
+            }
+        if (!dyn_.empty()) flush_dyn(spr_[SPR_GLOW], true, false);
+    }
     glDepthMask(GL_TRUE);
 
     // items: little bobbing billboards with a faint glow so you can spot them nearby
-    auto item_billboard = [&](ItemType t, Vec2 p, uint32_t id) {
-        float bob = std::sin(time * 2.2f + (float)(id & 255)) * 0.04f;
-        float l = clampf(w.light_level({p.x, 0.5f, p.z}) * 0.8f + 0.35f, 0.3f, 1.2f);
-        billboard({p.x, 0.26f + bob, p.z}, 0.36f, 0.36f, rgba(l, l, l));
+    // 1.2: items sit on what they were left on (no bobbing), with only a faint glint up close
+    auto item_billboard = [&](ItemType t, Vec2 p, uint32_t id, float y) {
+        float l = clampf(w.light_level({p.x, y + 0.4f, p.z}) * 0.8f + 0.3f, 0.25f, 1.2f);
+        billboard({p.x, y + 0.15f, p.z}, 0.3f, 0.3f, rgba(l, l, l));
         flush_dyn(spr_[item_sprite(t)]);
         float d = (Vec2{cam.eye.x, cam.eye.z} - p).len();
-        float pulse = (0.22f + 0.08f * std::sin(time * 3 + (float)(id & 63))) * fog_factor(d);
-        if (pulse < 0.01f) return;
-        billboard({p.x, 0.25f, p.z}, 0.9f, 0.9f, t == ItemType::MemoryJuice ? rgba(0.8f, 0.3f, 1, pulse) : rgba(1, 0.95f, 0.7f, pulse));
+        if (d > 7.0f) return;
+        float pulse = (0.10f + 0.05f * std::sin(time * 3 + (float)(id & 63))) * (1.0f - d / 7.0f);
+        billboard({p.x, y + 0.15f, p.z}, 0.6f, 0.6f, t == ItemType::MemoryJuice ? rgba(0.8f, 0.3f, 1, pulse) : rgba(1, 0.95f, 0.7f, pulse));
         flush_dyn(spr_[SPR_GLOW], true, false);
     };
     for (const GpuChunk* g : visible) {
@@ -1012,7 +1089,10 @@ void Renderer::draw_world(const World& w, const Camera& cam, float time, float f
             if (picked.count(id)) continue;
             int cx, cz;
             World::item_cell(id, cx, cz);
-            item_billboard(w.item(cx, cz), w.item_pos(cx, cz), id);
+            Vec2 ip;
+            float iy;
+            w.item_spot(cx, cz, ip, iy);
+            item_billboard(w.item(cx, cz), ip, id, iy);
         }
         for (const Vec3& b : g->balloons) { // Level Fun: balloons drifting under the ceiling
             static const float BC[5][3] = {{0.95f, 0.2f, 0.3f}, {0.2f, 0.55f, 0.95f}, {0.98f, 0.8f, 0.1f}, {0.3f, 0.85f, 0.4f}, {0.8f, 0.3f, 0.9f}};
@@ -1026,7 +1106,21 @@ void Renderer::draw_world(const World& w, const Camera& cam, float time, float f
     for (const DrawProp& p : props) {
         float d = (Vec2{cam.eye.x, cam.eye.z} - p.pos).len();
         if (d > s_.view_dist) continue;
-        if (p.kind == PropKind::Item) { item_billboard(p.item, p.pos, p.id); continue; }
+        if (p.kind == PropKind::Item) { item_billboard(p.item, p.pos, p.id, w.floor_y(p.pos.x, p.pos.z)); continue; }
+        if (p.kind == PropKind::Key) { // a keycard, blue with a white stripe, glinting
+            float light = clampf(w.light_level({p.pos.x, 0.5f, p.pos.z}) + 0.25f, 0.2f, 1.3f);
+            float yaw = (uint8_t)p.item / 255.0f * 2 * PI;
+            Part card{0, 0, 0, 0.09f, 0.006f, 0.055f, 0.15f, 0.35f, 0.8f, 0};
+            Part stripe{0, 0.006f, -0.02f, 0.09f, 0.002f, 0.012f, 0.95f, 0.95f, 0.95f, 0};
+            Part chip{0.03f, 0.006f, 0.015f, 0.018f, 0.002f, 0.015f, 0.85f, 0.7f, 0.2f, 0};
+            Vec2 kp = p.pos;
+            for (const Part& pt : {card, stripe, chip}) add_part(dyn_, pt, kp, yaw, light);
+            flush_dyn(spr_[SPR_WHITE]);
+            float pulse = 0.5f + 0.5f * std::sin(time * 2.5f + p.id);
+            billboard({p.pos.x, 0.1f, p.pos.z}, 0.45f, 0.45f, rgba(0.5f, 0.75f, 1.0f, 0.10f + 0.12f * pulse));
+            flush_dyn(spr_[SPR_GLOW], true, false);
+            continue;
+        }
         if (p.kind == PropKind::Tape) { // a VHS tape on the floor, with a faint glint so it can be found
             float light = clampf(w.light_level({p.pos.x, 0.5f, p.pos.z}) + 0.25f, 0.2f, 1.3f);
             float yaw = (uint8_t)p.item / 255.0f * 2 * PI;
@@ -1191,6 +1285,29 @@ void Renderer::draw_world(const World& w, const Camera& cam, float time, float f
                 glDisable(GL_BLEND);
             }
     }
+    { // pool water: see-through, rippling
+        bool any = false;
+        for (const GpuChunk* g : visible) any |= !g->water.empty();
+        if (any) {
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            glDisable(GL_CULL_FACE);
+            glDepthMask(GL_FALSE);
+            float t = time * 0.04f;
+            for (const GpuChunk* g : visible)
+                for (const ChunkMesh::Water& wt : g->water)
+                    push_quad({wt.x0, wt.y, wt.z1}, {wt.x1, wt.y, wt.z1}, {wt.x1, wt.y, wt.z0}, {wt.x0, wt.y, wt.z0}, rgba(0.45f, 0.78f, 0.9f, 0.42f),
+                              wt.x0 / 4 + t, wt.z1 / 4, wt.x1 / 4 + t, wt.z0 / 4);
+            flush_dyn(spr_[SPR_WHITE], false, true);
+            for (const GpuChunk* g : visible) // a second, moving layer of caustic glints
+                for (const ChunkMesh::Water& wt : g->water)
+                    push_quad({wt.x0, wt.y + 0.003f, wt.z1}, {wt.x1, wt.y + 0.003f, wt.z1}, {wt.x1, wt.y + 0.003f, wt.z0}, {wt.x0, wt.y + 0.003f, wt.z0},
+                              rgba(0.7f, 0.95f, 1.0f, 0.10f), wt.x0 / 3 - t * 1.3f, wt.z1 / 3 + t, wt.x1 / 3 - t * 1.3f, wt.z0 / 3 + t);
+            flush_dyn(spr_[SPR_NOISE], true, true);
+            glDepthMask(GL_TRUE);
+            glDisable(GL_BLEND);
+        }
+    }
     if (s_.atmosphere) draw_atmosphere(w, visible, time);
     // smilers last: their faces float in the dark
     for (const DrawEntity& e : ents)
@@ -1309,9 +1426,8 @@ void Renderer::grab_screen() {
 #endif
 }
 
-void Renderer::blob_shadow(Vec2 p, float r, float a) {
-    push_quad({p.x - r, 0.015f, p.z + r}, {p.x + r, 0.015f, p.z + r}, {p.x + r, 0.015f, p.z - r}, {p.x - r, 0.015f, p.z - r}, rgba(0, 0, 0, a));
-    flush_dyn(spr_[SPR_GLOW], false, true);
+void Renderer::blob_shadow(Vec2 p, float r, float a, float y) { // (batched: the caller flushes)
+    push_quad({p.x - r, y, p.z + r}, {p.x + r, y, p.z + r}, {p.x + r, y, p.z - r}, {p.x - r, y, p.z - r}, rgba(0, 0, 0, a));
 }
 
 // Light halos, soft shafts under the lamps, flickering tubes and dust in the air.

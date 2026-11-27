@@ -34,6 +34,8 @@ struct Snapshot {
     Difficulty difficulty = Difficulty::Medium;
     float level_time = 0;
     bool escaped = false;
+    float won_t = 0;
+    bool sandbox = false, god = false, auto_spawn = true, freeze = false;
     Objective objective;
     int my_id = 0;
     uint32_t ack = 0;
@@ -74,6 +76,8 @@ public:
     void disconnect();
     void poll(double now);
     void send_input(uint32_t seq, const InputCmd* cmds, const uint32_t* seqs, int count);
+    void send_sandbox(uint8_t action, uint8_t arg, float yaw);
+    void send_hostcmd(uint32_t token, LevelId level, Difficulty d, bool sandbox);
 
     // LAN browser
     std::vector<FoundServer> found;

@@ -24,6 +24,8 @@ namespace iris {
 
 enum PacketType : uint8_t {
     PKT_HELLO = 1, PKT_WELCOME = 2, PKT_REJECT = 3, PKT_INPUT = 4, PKT_SNAPSHOT = 5, PKT_BYE = 6, PKT_CHALLENGE = 7,
+    PKT_SANDBOX = 8,   // 1.2: a sandbox action (only while the host has sandbox on)
+    PKT_HOSTCMD = 9,   // 1.2: the host starts a run from the lobby (carries the host's secret token)
 };
 constexpr int MAX_PACKET = 1400;
 constexpr int QUERY_SIZE = 320;    // "IRIS?" + zero padding

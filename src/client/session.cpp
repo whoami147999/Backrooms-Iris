@@ -6,6 +6,7 @@
 #endif
 
 #include <chrono>
+#include <random>
 #include <cmath>
 #include <deque>
 
@@ -67,6 +68,7 @@ public:
     }
     void clear_escaped() override { sim_.escaped = false; }
     GameSim* sim() override { return &sim_; }
+    void sandbox(uint8_t action, uint8_t arg, float yaw) override { sim_.sandbox_cmd(0, action, arg, yaw); if (action == GameSim::SB_TO_EXIT) resync(); }
     void resync() override { refresh(); v_.me_prev = v_.me; }
 
 private:
@@ -84,6 +86,8 @@ private:
         v_.toast_seq = sim_.players[0].toast_seq;
         v_.level_time = sim_.level_time;
         v_.escaped = sim_.escaped;
+        v_.won_t = sim_.won_t;
+        v_.sandbox = sim_.sandbox; v_.god = sim_.god; v_.auto_spawn = sim_.auto_spawn; v_.freeze = sim_.freeze_ents;
         v_.objective = sim_.objective;
         v_.multiplayer = false;
     }
@@ -119,6 +123,9 @@ private:
 class NetSession : public Session {
 public:
     std::unique_ptr<HostThread> host;
+    uint32_t host_token = 0;
+    void sandbox(uint8_t action, uint8_t arg, float yaw) override { net_.send_sandbox(action, arg, yaw); }
+    void host_start(LevelId level, Difficulty d, bool sandbox_mode) override { if (host) net_.send_hostcmd(host_token, level, d, sandbox_mode); }
 
     bool connect(const std::string& addr, uint16_t port, const std::string& name, const std::string& password, double now,
                  std::string* err) {
@@ -177,6 +184,7 @@ public:
             const PlayerState& pb = b.players[i].st;
             const PlayerState& pa = a.players[i].active ? a.players[i].st : pb;
             Vec3 pos = pa.pos + (pb.pos - pa.pos) * t;
+            pos.y = world_.floor_y(pos.x, pos.z); // (heights aren't sent: the ground is the same everywhere)
             float yaw = pa.yaw + std::remainder(pb.yaw - pa.yaw, 2 * PI) * t;
             v_.others.push_back({i, pos, yaw, pb.crouch, lerpf(pa.bob, pb.bob, t), pb.alive, b.players[i].name, pb.light_on});
         }
@@ -253,6 +261,9 @@ private:
         v_.epoch = s.epoch;
         v_.level_time = s.level_time;
         v_.escaped = s.escaped;
+        v_.won_t = s.won_t;
+        v_.sandbox = s.sandbox; v_.god = s.god; v_.auto_spawn = s.auto_spawn; v_.freeze = s.freeze;
+        v_.host = host != nullptr;
         v_.objective = s.objective;
         v_.respawn_t = s.players[net_.my_id].respawn_t;
         v_.toast = s.toast;
@@ -271,11 +282,15 @@ std::unique_ptr<Session> make_single_player(LevelId level, uint32_t seed, const 
 
 #if IRIS_MULTIPLAYER
 std::unique_ptr<Session> make_multiplayer(const std::string& host, uint16_t port, const std::string& name, const std::string& password,
-                                          bool start_server, LevelId level, Difficulty diff, double now, std::string* error) {
+                                          bool start_server, LevelId level, Difficulty diff, double now, std::string* error, bool lobby) {
     std::unique_ptr<NetSession> s(new NetSession());
     if (start_server) {
         s->host.reset(new HostThread());
         ServerConfig cfg;
+        std::random_device rd; // the token never leaves this machine (it rides the loopback to our own host)
+        s->host_token = (mix32(rd() ^ (uint32_t)std::chrono::steady_clock::now().time_since_epoch().count()) ^ rd()) | 1u;
+        cfg.host_token = s->host_token;
+        cfg.lobby = lobby;
         cfg.name = name + "'S GAME";
         cfg.port = port;
         cfg.password = password;

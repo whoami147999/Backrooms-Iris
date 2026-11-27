@@ -88,6 +88,27 @@ void NetClient::disconnect() {
     state = State::Idle;
 }
 
+void NetClient::send_sandbox(uint8_t action, uint8_t arg, float yaw) {
+    if (state != State::Connected) return;
+    Writer w;
+    w.header(PKT_SANDBOX);
+    w.u8(action);
+    w.u8(arg);
+    w.f32(yaw);
+    sock_.send(server_, w.buf, w.n);
+}
+
+void NetClient::send_hostcmd(uint32_t token, LevelId level, Difficulty d, bool sandbox) {
+    if (state != State::Connected) return;
+    Writer w;
+    w.header(PKT_HOSTCMD);
+    w.u32(token);
+    w.u8((uint8_t)level);
+    w.u8((uint8_t)d);
+    w.u8(sandbox ? 1 : 0);
+    for (int i = 0; i < 2; i++) sock_.send(server_, w.buf, w.n); // (twice: it matters)
+}
+
 void NetClient::send_input(uint32_t seq, const InputCmd* cmds, const uint32_t* seqs, int count) {
     (void)seq;
     if (state != State::Connected) return;
@@ -141,6 +162,12 @@ void NetClient::handle(const uint8_t* data, int len, double now) {
         s.objective.need = r.u8();
         s.objective.done = r.u8() != 0;
         s.objective.reward = (Perk)std::min<int>(r.u8(), PERK_COUNT - 1);
+        s.objective.required = r.u8() != 0;
+        {
+            uint8_t fl = r.u8();
+            s.sandbox = fl & 1; s.god = (fl & 2) != 0; s.auto_spawn = (fl & 4) != 0; s.freeze = (fl & 8) != 0;
+        }
+        s.won_t = finite_or(r.f32());
         s.my_id = r.u8();
         s.ack = r.u32();
         int np = r.u8();
@@ -170,7 +197,7 @@ void NetClient::handle(const uint8_t* data, int len, double now) {
         for (int k = 0; k < npr && !r.bad; k++) {
             PropSnap p;
             p.id = r.u16();
-            p.kind = (PropKind)std::min<int>(r.u8(), (int)PropKind::Mark);
+            p.kind = (PropKind)std::min<int>(r.u8(), (int)PropKind::Key);
             p.item = (ItemType)r.u8();
             p.pos.x = finite_or(r.f32());
             p.pos.z = finite_or(r.f32());

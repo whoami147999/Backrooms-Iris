@@ -21,7 +21,7 @@ namespace {
 
 std::vector<std::string> level_names() {
     std::vector<std::string> v;
-    for (int i = 0; i < (int)LevelId::COUNT; i++) v.push_back(level_label((LevelId)i));
+    for (int i = 0; i < (int)LevelId::Hub; i++) v.push_back(level_label((LevelId)i)); // (the lobby is for multiplayer)
     return v;
 }
 
@@ -43,17 +43,17 @@ uint32_t random_seed() { return (uint32_t)std::time(nullptr) * 2654435761u + 7; 
 // screen-warp effects. The Vita's presets sit lower: its LOW is the 30 fps one.
 App::Quality App::quality_preset(int level, bool vita) {
     static const Quality PC[4] = {
-        // view   tex   mesh msaa particles entity warp
-        {24.0f,  512,  1,   0,   0.0f,     0.7f,  false}, // LOW
-        {30.0f,  512,  1,   2,   0.5f,     1.0f,  true},  // MEDIUM
-        {34.0f,  1024, 2,   4,   1.0f,     1.0f,  true},  // HIGH
-        {46.0f,  1024, 2,   8,   1.6f,     1.4f,  true},  // ULTRA
+        // view   tex   mesh msaa particles entity warp   shadows reflections
+        {24.0f,  512,  1,   0,   0.0f,     0.7f,  false, false, false}, // LOW
+        {30.0f,  512,  1,   2,   0.5f,     1.0f,  true,  true,  false}, // MEDIUM
+        {34.0f,  1024, 2,   4,   1.0f,     1.0f,  true,  true,  true},  // HIGH
+        {46.0f,  1024, 2,   8,   1.6f,     1.4f,  true,  true,  true},  // ULTRA
     };
     static const Quality VITA[4] = {
-        {18.0f,  256,  1,   0,   0.0f,     0.7f,  false},
-        {22.0f,  256,  1,   0,   0.4f,     0.85f, false},
-        {26.0f,  512,  1,   2,   0.8f,     1.0f,  false},
-        {30.0f,  512,  2,   2,   1.0f,     1.1f,  false},
+        {18.0f,  256,  1,   0,   0.0f,     0.7f,  false, false, false}, // NORMAL
+        {22.0f,  512,  1,   0,   0.4f,     1.0f,  false, true,  true},  // ENHANCED
+        {26.0f,  512,  1,   2,   0.8f,     1.0f,  false, true,  true},  // (dev only from here)
+        {30.0f,  512,  2,   2,   1.0f,     1.1f,  false, true,  true},
     };
     level = std::max(0, std::min(3, level));
     return vita ? VITA[level] : PC[level];
@@ -68,7 +68,10 @@ void App::apply_quality() {
     rs_.mesh_detail = q.mesh_detail;
     rs_.particles = q.particles;
     rs_.entity_detail = q.entity_detail;
+    rs_.shadows = q.shadows;
+    rs_.reflections = q.reflections;
     ren_.set_quality(q.view_dist, q.texture_size, q.mesh_detail, q.particles, q.entity_detail);
+    ren_.set_effects(q.shadows, q.reflections);
 }
 
 float App::ui() const { return std::max(1.0f, std::floor(ren_.height / 270.0f)); }
@@ -105,7 +108,8 @@ bool App::init(const DevOptions& dev) {
     const bool safe = (platform_is_vita() && cfg_.safe_mode) || dev.safe;
     const bool vita = platform_is_vita() || dev.vita_like;
     if (dev.quality >= 0) cfg_.quality = std::min(3, dev.quality);
-    if (cfg_.quality < 0) cfg_.quality = vita ? 0 : 2; // Vita: LOW (speed first), PC: HIGH
+    if (cfg_.quality < 0) cfg_.quality = vita ? 0 : 2; // Vita: NORMAL (speed first), PC: HIGH
+    if (platform_is_vita() && dev.quality < 0 && cfg_.quality > 1) cfg_.quality = 1; // (the Vita menu has NORMAL / ENHANCED)
     const Quality q = quality_preset(cfg_.quality, vita);
 
     PlatformConfig pc;
@@ -123,6 +127,8 @@ bool App::init(const DevOptions& dev) {
     rs_.particles = q.particles;
     rs_.entity_detail = q.entity_detail;
     rs_.post_effects = q.post_effects;
+    rs_.shadows = q.shadows;
+    rs_.reflections = q.reflections;
     if (vita) rs_.chunk_builds_per_frame = 1;
     if (safe) { // the bare minimum: no worker thread, no mipmaps, small textures
         rs_.threaded = false;
@@ -394,6 +400,11 @@ void App::build_menu() {
             po.charset = "0123456789"; po.maxlen = 5;
             po.hint = "DEFAULT 27315. FORWARD THIS UDP PORT ON YOUR ROUTER FOR INTERNET PLAY";
             m.items.push_back(po);
+            {
+                Item lb; lb.kind = Item::Toggle; lb.label = "START IN THE LOBBY"; lb.flag = &host_lobby_;
+                lb.hint = "EVERYONE MEETS AT THE M.E.G. BASE FIRST. YOU PICK THE LEVEL FROM THE PAUSE MENU";
+                m.items.push_back(lb);
+            }
             spacer();
             if (tail_.running && !tail_.self_ip.empty()) {
                 label("TAILSCALE: " + tail_.self_ip + "  (" + tail_.self_name + ")");
@@ -447,6 +458,8 @@ void App::build_menu() {
                 Item it; it.kind = Item::Toggle; it.label = l; it.flag = b; it.on = on; m.items.push_back(it);
             };
             slider("VOLUME", &cfg_.volume, 0.0f, 1.0f, 0.1f);
+            slider("MUSIC", &cfg_.music_volume, 0.0f, 1.0f, 0.1f);
+            m.items.back().hint = "THE MENU THEME, THE QUIET PLACES, LEVEL !";
             slider("MOUSE SENSITIVITY", &cfg_.mouse_sens, 0.2f, 3.0f, 0.1f);
             slider("STICK SENSITIVITY", &cfg_.stick_sens, 0.2f, 3.0f, 0.1f);
             toggle("INVERT LOOK", &cfg_.invert_y);
@@ -456,7 +469,14 @@ void App::build_menu() {
                 toggle("FULLSCREEN", &cfg_.fullscreen, [this] { apply_display_settings(); });
                 toggle("VSYNC", &cfg_.vsync, [this] { apply_display_settings(); });
             }
-            {
+            if (platform_is_vita()) { // 1.2: the Vita gets two modes
+                Item gm; gm.kind = Item::Choice; gm.label = "GRAPHICS"; gm.choice = &cfg_.quality;
+                gm.choices = {"NORMAL", "ENHANCED"};
+                gm.hints = {"FASTEST. THE WAY IT ALWAYS RAN", "SHADOWS UNDER EVERYTHING, LAMPS REFLECTED IN THE FLOORS, SHARPER TEXTURES. SLOWER"};
+                gm.on = [this] { apply_quality(); save_settings(); };
+                if (cfg_.quality < 0 || cfg_.quality > 1) cfg_.quality = 0;
+                m.items.push_back(gm);
+            } else {
                 Item gq; gq.kind = Item::Choice; gq.label = "GRAPHICS QUALITY"; gq.choice = &cfg_.quality;
                 gq.choices = {"LOW", "MEDIUM", "HIGH", "ULTRA"};
                 const char* aa = platform_is_vita() ? " (2X AA AFTER A RESTART)" : " (AA AFTER A RESTART)";
@@ -464,6 +484,9 @@ void App::build_menu() {
                             platform_is_vita() ? "A LITTLE FURTHER, SOME DUST" : std::string("BALANCED") + aa,
                             platform_is_vita() ? std::string("SHARPER TEXTURES, FURTHER VIEW") + aa : std::string("SHARP TEXTURES, FINE LIGHTING") + aa,
                             platform_is_vita() ? std::string("EVERYTHING. EXPECT SLOWDOWN") + aa : std::string("FURTHEST VIEW, MOST DUST, SMOOTHEST MODELS") + aa};
+                gq.hints[1] += ". SOFT SHADOWS";
+                gq.hints[2] += ". SHADOWS, REFLECTIONS";
+                gq.hints[3] += ". SHADOWS, REFLECTIONS";
                 gq.on = [this] { apply_quality(); save_settings(); };
                 m.items.push_back(gq);
             }
@@ -498,6 +521,24 @@ void App::build_menu() {
                                         (session_->view().multiplayer ? "  -  THE GAME KEEPS GOING" : "")
                                   : "";
             button("RESUME", [this] { paused_ = false; build_menu(); });
+            if (session_ && session_->view().multiplayer && session_->view().host) { // 1.2: the host runs the lobby
+                label(session_->view().world.id() == LevelId::Hub ? "- LOBBY -" : "- HOST -");
+                level_choice(&lobby_level_);
+                m.items.back().label = "LEVEL";
+                diff_choice();
+                Item sb; sb.kind = Item::Toggle; sb.label = "SANDBOX MODE"; sb.flag = &lobby_sandbox_;
+                sb.hint = "EVERYONE CAN SPAWN THINGS (TAB / SELECT). NOTHING COUNTS";
+                m.items.push_back(sb);
+                button(session_->view().world.id() == LevelId::Hub ? "START THE RUN" : "RESTART THE RUN HERE", [this] {
+                    session_->host_start((LevelId)lobby_level_, (Difficulty)cfg_.difficulty, lobby_sandbox_);
+                    save_settings();
+                    paused_ = false; build_menu();
+                }, "EVERYONE GOES. FRESH START, NOTHING CARRIED OVER");
+                if (session_->view().world.id() != LevelId::Hub)
+                    button("BACK TO THE LOBBY", [this] { session_->host_start(LevelId::Hub, (Difficulty)cfg_.difficulty, false); paused_ = false; build_menu(); },
+                           "EVERYONE RETURNS TO THE M.E.G. BASE");
+                spacer();
+            }
             button("SETTINGS", [this] { go(Screen::Settings); });
             button("CONTROLS", [this] { go(Screen::Controls); });
             button("QUIT TO MENU", [this] { leave_game(); });
@@ -507,6 +548,25 @@ void App::build_menu() {
     m.sel = std::min(menu_.title == m.title ? menu_.sel : 0, (int)m.items.size() - 1);
     while (m.sel < (int)m.items.size() - 1 && (m.items[(size_t)m.sel].kind == Item::Spacer || m.items[(size_t)m.sel].kind == Item::Label)) m.sel++;
     menu_ = m;
+}
+
+// One layout for drawing the menu and for hit-testing the mouse, so they can't disagree. Long
+// menus scroll to keep the selection in view.
+void App::menu_geom(float& y0, float& row, int& first, int& vis) const {
+    float s = ui(), H = (float)ren_.height;
+    row = 13 * s;
+    y0 = H * 0.36f;
+    if (screen() == Screen::Controls) {
+        float ry = row * 0.72f, top = H * 0.27f;
+        y0 = top + (11 + 2.2f) * ry;
+    }
+    int n = (int)menu_.items.size();
+    vis = std::max(3, (int)((H - 22 * s - y0) / row));
+    first = 0;
+    if (n > vis) {
+        first = std::max(0, std::min(menu_.sel - vis / 2, n - vis));
+        if (menu_scroll_ >= 0 && menu_.sel >= menu_scroll_ && menu_.sel < menu_scroll_ + vis) first = std::min(menu_scroll_, n - vis); // don't jump while the mouse moves inside
+    }
 }
 
 void App::menu_input() {
@@ -562,18 +622,30 @@ void App::menu_input() {
     };
     if (in_.up) move(-1);
     if (in_.down) move(1);
+    if (!in_.using_gamepad && (in_.slot_prev || in_.slot_next)) move(in_.slot_prev ? -1 : 1); // mouse wheel
 
-    // mouse hover / click
+    // mouse: hover selects, a click selects AND activates (no need to move first), the wheel scrolls
     float s = ui();
-    float y0 = ren_.height * 0.36f, row = 13 * s;
-    int hover = (int)std::floor((in_.mouse_y - y0 + 3 * s) / row);
-    bool mouse_on = !in_.using_gamepad && hover >= 0 && hover < (int)items.size() && in_.mouse_x > ren_.width * 0.2f &&
+    float y0, row;
+    int first, vis;
+    menu_geom(y0, row, first, vis);
+    menu_scroll_ = first;
+    int hover = first + (int)std::floor((in_.mouse_y - y0 + 3 * s) / row);
+    bool in_rows = in_.mouse_y >= y0 - 3 * s && hover < first + vis;
+    bool mouse_on = !in_.using_gamepad && in_rows && hover >= 0 && hover < (int)items.size() && in_.mouse_x > ren_.width * 0.2f &&
                     in_.mouse_x < ren_.width * 0.8f && items[(size_t)hover].kind != Item::Spacer && items[(size_t)hover].kind != Item::Label;
-    if (mouse_on && in_.mouse_moved) menu_.sel = hover;
+    if (mouse_on && (in_.mouse_moved || in_.click)) menu_.sel = hover;
 
     Item& cur = items[(size_t)menu_.sel];
     int dir = in_.left ? -1 : (in_.right ? 1 : 0);
-    bool activate = in_.accept || (in_.click && mouse_on && hover == menu_.sel);
+    bool clicked = in_.click && mouse_on && hover == menu_.sel;
+    bool activate = in_.accept || clicked;
+    if (clicked && cur.kind == Item::Choice) { // click the left half of "< VALUE >" to go back, the right half to go on
+        std::string val = "< " + cur.choices[(size_t)*cur.choice] + " >";
+        float vx = ren_.width * 0.5f + 10 * s, vw = ren_.text_w(s, val);
+        if (in_.mouse_x >= vx && in_.mouse_x < vx + vw * 0.5f) { dir = -1; activate = false; }
+        else if (in_.mouse_x >= vx) { dir = 1; activate = false; }
+    }
     switch (cur.kind) {
         case Item::Button: if (activate && cur.on) { auto f = cur.on; f(); return; } break;
         case Item::Choice:
@@ -585,10 +657,14 @@ void App::menu_input() {
             break;
         case Item::Slider:
             if (dir) *cur.value = clampf(std::round((*cur.value + dir * cur.vstep) / cur.vstep) * cur.vstep, cur.vmin, cur.vmax);
-            if (in_.click && mouse_on) { // click on the bar to set it
+            { // click on the bar, or hold the button and drag along it
                 float bx = ren_.width * 0.5f + 10 * s, bw = 80 * s;
-                float t = clampf((in_.mouse_x - bx) / bw, 0, 1);
-                *cur.value = clampf(std::round((cur.vmin + t * (cur.vmax - cur.vmin)) / cur.vstep) * cur.vstep, cur.vmin, cur.vmax);
+                if (in_.click && mouse_on && in_.mouse_x >= bx - 4 * s) slider_drag_ = true;
+                if (!in_.fire_held) slider_drag_ = false;
+                if (slider_drag_ && !in_.using_gamepad) {
+                    float t = clampf((in_.mouse_x - bx) / bw, 0, 1);
+                    *cur.value = clampf(std::round((cur.vmin + t * (cur.vmax - cur.vmin)) / cur.vstep) * cur.vstep, cur.vmin, cur.vmax);
+                }
             }
             break;
         case Item::Toggle:
@@ -670,9 +746,17 @@ void App::draw_menu() {
         const char* dots[] = {"", ".", "..", "..."};
         ren_.text(W / 2, y0 - row * 2, s * 2, std::string("PLEASE WAIT") + dots[(int)(now_ * 3) % 4], rgba(0.9f, 0.85f, 0.7f), 1);
     }
-    for (size_t i = 0; i < menu_.items.size(); i++) {
+    int first = 0, vis = (int)menu_.items.size();
+    {
+        float gy0, grow;
+        menu_geom(gy0, grow, first, vis);
+        if (screen() != Screen::Connecting) y0 = gy0;
+    }
+    if (first > 0) ren_.text(W * 0.8f - 4 * s, y0 - row * 0.9f, s, "^ MORE", rgba(1, 0.9f, 0.6f, 0.7f), 2);
+    if (first + vis < (int)menu_.items.size()) ren_.text(W * 0.8f - 4 * s, y0 + vis * row - row * 0.2f, s, "V MORE", rgba(1, 0.9f, 0.6f, 0.7f), 2);
+    for (size_t i = (size_t)first; i < menu_.items.size() && (int)i < first + vis; i++) {
         const Item& it = menu_.items[i];
-        float y = y0 + i * row;
+        float y = y0 + (i - first) * row;
         bool sel = (int)i == menu_.sel;
         if (it.kind == Item::Spacer) continue;
         uint32_t col = sel ? rgba(1, 0.95f, 0.65f) : rgba(0.78f, 0.74f, 0.62f);
@@ -771,7 +855,8 @@ void App::start_host() {
     std::string err;
     cfg_.host_port = std::to_string(host_port()); // tidy up whatever was typed
     save_settings();
-    auto s = make_multiplayer("", host_port(), cfg_.name, cfg_.host_password, true, (LevelId)host_level_, (Difficulty)cfg_.difficulty, now_, &err);
+    auto s = make_multiplayer("", host_port(), cfg_.name, cfg_.host_password, true, (LevelId)host_level_, (Difficulty)cfg_.difficulty, now_, &err, host_lobby_);
+    lobby_level_ = host_level_;
     if (!s) { error_ = err.empty() ? "COULDN'T HOST" : err; return; }
     start_session(std::move(s));
     stack_ = {Screen::Title, Screen::Connecting};
@@ -823,7 +908,8 @@ void App::game_input() {
     const GameView& v = session_->view();
     bool alive = v.me.alive;
     if (in_.pause && !paused_) { paused_ = true; sb_open_ = false; build_menu(); return; }
-    if (in_.sandbox_menu && session_->sim() && session_->sim()->sandbox) { sb_open_ = !sb_open_; sb_sel_ = 0; }
+    if (in_.sandbox_menu && v.sandbox) { sb_open_ = !sb_open_; sb_sel_ = 0; }
+    if (v.escaped && !v.multiplayer && v.won_t > 3.0f && (in_.accept || in_.interact || v.won_t > 30.0f)) { leave_game(); return; } // the end: back to the menu
     if (sb_open_) { sandbox_input(); cmd_.move_x = cmd_.move_z = 0; cmd_.buttons = 0; return; }
 
     // look: mouse is applied every frame (no tick latency), stick is rate-based
@@ -879,8 +965,7 @@ const int SB_TOOLS = 8;
 }
 
 void App::sandbox_input() {
-    GameSim* sim = session_->sim();
-    if (!sim) { sb_open_ = false; return; }
+    if (!session_->view().sandbox) { sb_open_ = false; return; }
     int count = sb_tab_ == 0 ? (int)EntityType::COUNT : sb_tab_ == 1 ? ITEM_COUNT - 1 : SB_TOOLS;
     if (in_.left) { sb_tab_ = (sb_tab_ + 2) % 3; sb_sel_ = 0; }
     if (in_.right) { sb_tab_ = (sb_tab_ + 1) % 3; sb_sel_ = 0; }
@@ -888,49 +973,26 @@ void App::sandbox_input() {
     if (in_.down) sb_sel_ = (sb_sel_ + 1) % count;
     if (in_.back) { sb_open_ = false; return; }
     if (!(in_.accept || in_.interact)) return;
-    PlayerState& me = sim->players[0].st;
-    Vec2 f = yaw_forward(cmd_.yaw);
-    Vec2 here{me.pos.x, me.pos.z};
-    // spawn in front, but never inside a wall: walk the ray until it's blocked
-    auto ahead = [&](float dist) {
-        Vec2 at = here;
-        for (float d = 0.5f; d <= dist; d += 0.25f) {
-            Vec2 c = here + f * d;
-            if (sim->world.segment_blocked(here, c) || sim->world.solid(floor_to_int(c.x / CELL), floor_to_int(c.z / CELL))) break;
-            at = c;
-        }
-        return at;
-    };
+    // (single player runs these right away; in multiplayer they go to the host)
     if (sb_tab_ == 0) {
-        EntityType t = (EntityType)sb_sel_;
-        sim->spawn_entity(t, ahead(4.5f), cmd_.yaw + PI);
-        feed_.push_back({std::string("SPAWNED ") + entity_name(t), now_});
+        session_->sandbox(GameSim::SB_SPAWN_ENTITY, (uint8_t)sb_sel_, cmd_.yaw);
+        if (!session_->view().multiplayer) feed_.push_back({std::string("SPAWNED ") + entity_name((EntityType)sb_sel_), now_});
     } else if (sb_tab_ == 1) {
         ItemType t = (ItemType)(sb_sel_ + 1);
-        sim->spawn_item(t, ahead(1.5f));
+        session_->sandbox(GameSim::SB_SPAWN_ITEM, (uint8_t)t, cmd_.yaw);
         feed_.push_back({std::string("SPAWNED ") + item_info(t).name, now_});
     } else {
-        switch (sb_sel_) {
-            case 0: sim->god = !sim->god; break;
-            case 1: me.noclip = !me.noclip; break;
-            case 2: sim->auto_spawn = !sim->auto_spawn; break;
-            case 3: sim->freeze_ents = !sim->freeze_ents; break;
-            case 4: sim->clear_entities(); feed_.push_back({"ENTITIES CLEARED", now_}); break;
-            case 5: me.health = 100; me.sanity = 100; me.stamina = 1; me.juice = -1; feed_.push_back({"HEALED", now_}); break;
-            case 6: {
-                Vec2 ex;
-                if (sim->nearest_exit(here, ex)) { me.pos.x = ex.x; me.pos.z = ex.z; session_->resync(); }
-                break;
-            }
-            case 7: sim->next_level(); sb_open_ = false; break;
-        }
+        static const uint8_t ACT[SB_TOOLS] = {GameSim::SB_GOD, GameSim::SB_NOCLIP, GameSim::SB_AUTOSPAWN, GameSim::SB_FREEZE,
+                                              GameSim::SB_CLEAR, GameSim::SB_HEAL, GameSim::SB_TO_EXIT, GameSim::SB_NEXT};
+        session_->sandbox(ACT[sb_sel_], 0, cmd_.yaw);
+        if (sb_sel_ == 5) feed_.push_back({"HEALED", now_});
+        if (sb_sel_ == 7) sb_open_ = false;
     }
     if (feed_.size() > 5) feed_.erase(feed_.begin());
 }
 
 void App::draw_sandbox_menu() {
-    GameSim* sim = session_->sim();
-    if (!sim) return;
+    const GameView& gv = session_->view();
     float s = ui(), W = (float)ren_.width, H = (float)ren_.height;
     float pw = 200 * s, ph = 136 * s, px = W - pw - 8 * s, py = 8 * s;
     ren_.rect(px, py, pw, ph, rgba(0, 0, 0, 0.75f));
@@ -957,15 +1019,15 @@ void App::draw_sandbox_menu() {
     if (sb_tab_ == 0) {
         for (int i = 0; i < (int)EntityType::COUNT; i++) row(i, entity_name((EntityType)i), "", SPR_WHITE);
     } else if (sb_tab_ == 1) {
-        for (int i = 1; i < ITEM_COUNT; i++) row(i - 1, item_info((ItemType)i).name, item_info((ItemType)i).sandbox_only ? "GUN" : "", item_sprite((ItemType)i));
+        for (int i = 1; i < ITEM_COUNT; i++) row(i - 1, item_info((ItemType)i).name, is_gun((ItemType)i) ? "GUN" : "", item_sprite((ItemType)i));
         if (first > 0) ren_.text(px + pw - 6 * s, py + 16 * s, s, "^", rgba(1, 0.9f, 0.6f), 2);
         if (first + VIS < count) ren_.text(px + pw - 6 * s, py + ph - 20 * s, s, "V", rgba(1, 0.9f, 0.6f), 2);
     } else {
-        const PlayerState& me = sim->players[0].st;
-        row(0, "GOD MODE", sim->god ? "ON" : "OFF", SPR_WHITE);
+        const PlayerState& me = gv.me;
+        row(0, "GOD MODE", gv.god ? "ON" : "OFF", SPR_WHITE);
         row(1, "NOCLIP", me.noclip ? "ON" : "OFF", SPR_WHITE);
-        row(2, "AUTO SPAWNING", sim->auto_spawn ? "ON" : "OFF", SPR_WHITE);
-        row(3, "FREEZE ENTITIES", sim->freeze_ents ? "ON" : "OFF", SPR_WHITE);
+        row(2, "AUTO SPAWNING", gv.auto_spawn ? "ON" : "OFF", SPR_WHITE);
+        row(3, "FREEZE ENTITIES", gv.freeze ? "ON" : "OFF", SPR_WHITE);
         row(4, "CLEAR ALL ENTITIES", "", SPR_WHITE);
         row(5, "HEAL ME", "", SPR_WHITE);
         row(6, "GO TO NEAREST EXIT", "", SPR_WHITE);
@@ -1148,8 +1210,12 @@ void App::draw_hud(const GameView& v, const ScreenFx& fx) {
         for (const DrawProp& p : v.props) {
             float d = (p.pos - Vec2{me.pos.x, me.pos.z}).len();
             if (p.kind == PropKind::Tape && d < PICKUP_RANGE) obj_prompt = "PICK UP LOST TAPE";
+            if (p.kind == PropKind::Key && d < PICKUP_RANGE) obj_prompt = "PICK UP KEYCARD";
             if (p.kind == PropKind::Breaker && d < 1.7f && p.life < 0.5f) obj_prompt = "SWITCH ON THE BREAKER";
         }
+        for (const DrawEntity& e : v.ents) // a M.E.G. official close by
+            if ((e.type == EntityType::MegMedic || e.type == EntityType::MegScout) && (e.pos - Vec2{me.pos.x, me.pos.z}).len() < 2.2f)
+                obj_prompt = e.type == EntityType::MegMedic ? "TALK TO THE M.E.G. MEDIC" : "TALK TO THE M.E.G. SCOUT";
         if (!obj_prompt.empty()) {
             std::string key = pad ? (platform_is_vita() ? "CROSS" : "A") : "E";
             ren_.rect(W / 2 - s, H / 2 - s, 2 * s, 2 * s, rgba(1, 1, 1, 0.8f));
@@ -1233,13 +1299,28 @@ void App::draw_hud(const GameView& v, const ScreenFx& fx) {
         ren_.text(W / 2, H * 0.38f + 24 * s, s, sub, rgba(0.85f, 0.8f, 0.7f, sa), 1);
         ren_.text(W / 2, H * 0.38f + 34 * s, s, "YOUR THINGS ARE WHERE YOU FELL", rgba(0.6f, 0.55f, 0.5f, sa), 1);
     } else death_t_ = -1;
-    // ----- escaped (single player)
-    double et = now_ - escaped_t_;
-    if (et < 8.0) {
-        float a = (float)std::min(std::min(et / 1.0, 1.0), (8.0 - et) / 1.5);
-        ren_.rect(0, 0, W, H, rgba(0.9f, 0.9f, 0.85f, a * 0.85f));
-        ren_.text(W / 2, H * 0.4f, s * 2, "YOU FOUND A WAY OUT", rgba(0.1f, 0.1f, 0.1f, a), 1);
-        ren_.text(W / 2, H * 0.4f + 22 * s, s, "...THE CARPET IS DAMP AGAIN.", rgba(0.2f, 0.2f, 0.2f, a), 1);
+    // ----- the end: someone walked out through TH3 3ND
+    if (v.escaped) {
+        float t = v.won_t;
+        float a = clampf(t / 2.5f, 0, 1), ta = clampf((t - 1.5f) / 1.5f, 0, 1), sa = clampf((t - 3.5f) / 1.0f, 0, 1);
+        ren_.rect(0, 0, W, H, rgba(0.92f, 0.92f, 0.9f, a));
+        ren_.sprite(SPR_GLOW, W * 0.2f, H * 0.1f, W * 0.6f, H * 0.8f, rgba(1, 1, 1, 0.5f * a), 0, true);
+        ren_.text(W / 2, H * 0.34f, s * 3, "Y O U   M A D E   I T   O U T", rgba(0.12f, 0.12f, 0.12f, ta), 1);
+        ren_.text(W / 2, H * 0.34f + 28 * s, s, "THROUGH EVERY LEVEL, PAST TH3 SH4DY GR3Y, OUT THE OTHER SIDE.", rgba(0.25f, 0.25f, 0.25f, ta), 1);
+        ren_.text(W / 2, H * 0.34f + 40 * s, s, "THE BACKROOMS LET YOU GO. THIS TIME.", rgba(0.3f, 0.3f, 0.3f, ta), 1);
+        char buf[96];
+        std::snprintf(buf, sizeof buf, "OBJECTIVES COMPLETED THIS RUN: %u", (unsigned)session_->view().objective.have);
+        std::string sub = v.multiplayer ? "BACK TO THE M.E.G. BASE IN " + std::to_string(std::max(0, (int)std::ceil(14.0f - t)))
+                                        : key_hint("PRESS ENTER TO RETURN TO THE MENU", "PRESS CROSS TO RETURN TO THE MENU");
+        ren_.text(W / 2, H * 0.34f + 62 * s, s, sub, rgba(0.2f, 0.2f, 0.2f, sa * (0.6f + 0.4f * std::sin((float)now_ * 3.0f))), 1);
+        (void)buf;
+    }
+    // ----- the lobby
+    if (v.world.id() == LevelId::Hub && v.multiplayer && !v.escaped && me.alive) {
+        std::string l = v.host ? key_hint("LOBBY: PRESS ESC TO PICK A LEVEL AND START THE RUN", "LOBBY: PRESS START TO PICK A LEVEL")
+                               : "LOBBY: WAITING FOR THE HOST TO START THE RUN";
+        ren_.rect(W / 2 - ren_.text_w(s, l) / 2 - 6 * s, H * 0.18f - 4 * s, ren_.text_w(s, l) + 12 * s, 13 * s, rgba(0, 0, 0, 0.55f));
+        ren_.text(W / 2, H * 0.18f, s, l, rgba(0.9f, 0.85f, 0.6f, 0.9f), 1);
     }
     if (cfg_.show_fps || debug_) {
         char buf[96];
@@ -1282,7 +1363,6 @@ void App::draw_game(bool overlay_menu) {
         epoch_ = v.epoch;
         ren_.set_world(v.world);
         level_title_t_ = now_;
-        if (v.escaped && !v.multiplayer) { escaped_t_ = now_; session_->clear_escaped(); }
         stage(std::string("level ") + v.world.info().number + " meshes");
         ren_.update_chunks(v.world, v.me.pos + Vec3{0, v.me.eye_height(), 0}, -1);
         std::printf("[iris] level %s loaded\n", v.world.info().number);
@@ -1390,6 +1470,14 @@ void App::draw_game(bool overlay_menu) {
         if (ren_.flicker_dim() > 0) ren_.rect(0, 0, W, H, rgba(0, 0, 0, ren_.flicker_dim()));
     }
     draw_fx_overlays(fx);
+    { // 1.2: under the pool water: everything goes blue and soft
+        float wy = v.world.water_y(cam.eye.x, cam.eye.z);
+        if (wy > -1e8f && cam.eye.y < wy) {
+            float W = (float)ren_.width, H = (float)ren_.height;
+            ren_.rect(0, 0, W, H, rgba(0.12f, 0.42f, 0.55f, 0.45f));
+            ren_.sprite(SPR_VIGNETTE, 0, 0, W, H, rgba(0.0f, 0.1f, 0.2f, 0.8f));
+        }
+    }
     { // a new level fades in from black
         double lf = now_ - level_title_t_;
         if (lf >= 0 && lf < 1.1) ren_.rect(0, 0, (float)ren_.width, (float)ren_.height, rgba(0, 0, 0, (float)std::max(0.0, 1.0 - lf / 1.1)));
@@ -1486,6 +1574,21 @@ void App::run() {
             leave_game();
         }
 
+        { // 1.2: music: the theme in the menus and on the way out, something quiet in the safe places, a pulse for Level !
+            audio_.set_music(cfg_.music_volume);
+            Sfx track = bgm_track_;
+            float mv = 0;
+            if (!session_ || !in_game() || screen() == Screen::Connecting) { track = SFX_MUSIC_MENU; mv = 0.8f; }
+            else {
+                const GameView& gv = session_->view();
+                LevelId lid = gv.world.id();
+                if (gv.escaped) { track = SFX_MUSIC_MENU; mv = 0.9f; }
+                else if (lid == LevelId::LRun) { track = SFX_MUSIC_RUN; mv = 0.65f; }
+                else if (lid == LevelId::Hub || lid == LevelId::L37 || lid == LevelId::L11) { track = SFX_MUSIC_CALM; mv = 0.55f; }
+            }
+            bgm_track_ = track;
+            audio_.loop(LOOP_BGM, track, mv);
+        }
         ren_.begin_frame(in_.width, in_.height);
         if (session_ && in_game()) {
             draw_game(paused_ || screen() != Screen::Playing);
@@ -1693,7 +1796,7 @@ void App::update_audio(const GameView& v, Vec3 eye, float yaw) {
     // ----- things you did (or that happened to you)
     if (me.swing < as_.swing - 0.05f) {
         if (selected_ == ItemType::Pistol) audio_.play(SFX_PISTOL, 0.9f, 0.1f, 0.95f + hash01(3, (int)(now_ * 50), 0, 1) * 0.1f);
-        else if (selected_ == ItemType::Shotgun) audio_.play(SFX_SHOTGUN, 1.0f, 0.1f);
+        else if (selected_ == ItemType::Shotgun) audio_.play(me.swing > 0.3f ? SFX_CLICK : SFX_SHOTGUN, me.swing > 0.3f ? 0.6f : 1.0f, 0.1f); // (no shells: a dry click)
         else if (selected_ == ItemType::Rifle) audio_.play(SFX_RIFLE, 0.8f, 0.1f, 0.95f + hash01(3, (int)(now_ * 50), 0, 1) * 0.1f);
         else if (selected_ == ItemType::Crowbar) audio_.play(SFX_SWING, 0.7f);
     }

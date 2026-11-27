@@ -17,9 +17,15 @@
 namespace iris {
 
 enum class EntityType : uint8_t { Bacteria, Hound, Smiler, SkinStealer, Partygoer,
-                                  Landlord, Faceling, Mangled, Animation, FallenAngel, COUNT };
+                                  Landlord, Faceling, Mangled, Animation, FallenAngel,
+                                  MegMedic, MegScout,  // 1.2: M.E.G. officials (on your side)
+                                  COUNT };
+inline bool friendly(EntityType t) { return t == EntityType::MegMedic || t == EntityType::MegScout || t == EntityType::FallenAngel; }
 // nothing you carry stops these: no stun, no damage, fire doesn't scare them
-inline bool unstoppable(EntityType t) { return t == EntityType::Landlord || t == EntityType::Mangled || t == EntityType::FallenAngel; }
+inline bool unstoppable(EntityType t) { return t == EntityType::Landlord || t == EntityType::Mangled || t == EntityType::FallenAngel ||
+                                               t == EntityType::MegMedic || t == EntityType::MegScout; }
+constexpr float SPAWN_SAFE_R = 14.0f;   // 1.2: nothing hostile comes this close to where you arrive
+constexpr float OUTPOST_SAFE_R = 8.0f;  // ...or to a M.E.G. outpost
 enum class EntState : uint8_t { Wander, Notice, Chase, Search, Stare, Charge, Retreat, Stunned };
 
 const char* entity_name(EntityType t);
@@ -41,13 +47,15 @@ struct Entity {
     float attack_cd = 0;
     float stare_t = 0;     // smilers: how long they've been looked at
     float hp = 100;        // sandbox guns can kill things
+    Vec2 home;             // M.E.G. officials: their outpost
+    float fire_cd = 0;     // M.E.G. scout: rifle cooldown
 };
 float entity_max_hp(EntityType t);
 
 // Things lying or burning in the world that aren't part of the level itself.
 // Item: something to pick up. Flare: burning firesalt. Tape: objective pickup.
 // Breaker: objective switch box on a wall (item = which wall side it hangs on, life 1 = switched on).
-enum class PropKind : uint8_t { Item, Flare, Tape, Breaker, Glow, Lure, Mark };
+enum class PropKind : uint8_t { Item, Flare, Tape, Breaker, Glow, Lure, Mark, Key };
 struct Prop {
     uint16_t id = 0;
     PropKind kind = PropKind::Item;
@@ -57,12 +65,13 @@ struct Prop {
 };
 
 // One objective per level. Finishing it gives everyone a perk for the rest of the run.
-enum class ObjType : uint8_t { None, Tapes, Breakers, Survive, COUNT };
+enum class ObjType : uint8_t { None, Tapes, Breakers, Survive, Keys, COUNT };
 struct Objective {
     ObjType type = ObjType::None;
     uint8_t have = 0, need = 0;   // Survive: seconds
     bool done = false;
     Perk reward = Perk::Stamina;
+    bool required = false;        // 1.2: the exits stay locked until it's done
 };
 std::string objective_text(const Objective& o); // "FIND THE LOST TAPES 1/3"
 constexpr float FLARE_TIME = 40.0f;
@@ -103,7 +112,9 @@ public:
     Objective objective;
     uint32_t objectives_done = 0;         // this run
     uint32_t event_seq = 0;
-    bool escaped = false;                 // someone took the exit out of Level 11
+    bool escaped = false;                 // 1.2: someone walked out through TH3 3ND: you won
+    float won_t = 0;                      // seconds since (multiplayer: back to the lobby after a while)
+    std::unordered_set<int> outposts_up;  // outposts whose officials have been sent out (packed centre cell)
 
     // sandbox / dev switches
     bool sandbox = false;
@@ -124,7 +135,11 @@ public:
     // Everything else: entities, sanity, timers, deaths, exits, spawning.
     void tick(float dt);
 
-    // sandbox tools
+    // sandbox tools (single player calls these directly; multiplayer sends them to the host)
+    enum SandboxAction : uint8_t { SB_SPAWN_ENTITY, SB_SPAWN_ITEM, SB_GOD, SB_NOCLIP, SB_AUTOSPAWN, SB_FREEZE, SB_CLEAR, SB_HEAL, SB_TO_EXIT, SB_NEXT, SB_COUNT };
+    void sandbox_cmd(int player, uint8_t action, uint8_t arg, float yaw);
+    // the host starts a run from the lobby (or sends everyone back to it)
+    void start_run(LevelId level, Difficulty d, bool sandbox_mode, uint32_t seed);
     Entity& spawn_entity(EntityType t, Vec2 pos, float yaw);
     void spawn_item(ItemType t, Vec2 pos);
     void clear_entities() { ents.clear(); }
@@ -142,6 +157,11 @@ private:
     LevelId pending_level_ = LevelId::COUNT;
 
     void setup_objective();
+    void spawn_outposts();
+    bool keep_out(Entity& e);           // hostile things stay away from the spawn and the outposts
+    void meg_talk(int i, Entity& e);
+    void update_meg(Entity& e, float dt);
+    float exit_msg_t_[IRIS_MAX_PLAYERS] = {};
     void complete_objective();
     bool reachable_cells(std::vector<std::pair<int, int>>& out, int min_depth, int max_depth);
     void use_item(int i, ItemType t);

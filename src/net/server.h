@@ -23,6 +23,8 @@ struct ServerConfig {
     Difficulty difficulty = Difficulty::Medium;
     uint32_t seed = 0;       // 0 = random
     int snapshot_rate = 20;  // Hz
+    uint32_t host_token = 0; // 1.2: the host's own game knows this (in memory); lobby commands must carry it
+    bool lobby = false;      // start in the M.E.G. base and let the host pick a level there
 };
 
 class Server {

@@ -40,7 +40,7 @@ bool Server::start(const ServerConfig& cfg, std::string* error) {
     sim = GameSim(seed);
     sim.multiplayer = true;
     sim.difficulty = cfg_.difficulty;
-    sim.start_level(cfg_.level, seed);
+    sim.start_level(cfg_.lobby ? LevelId::Hub : cfg_.level, seed);
     for (auto& c : clients_) c = Client{};
     start_ = clock::now();
     next_tick_ = start_;
@@ -166,6 +166,17 @@ void Server::handle(const NetAddr& from, const uint8_t* data, int len) {
             while (it != cl->queue.end() && it->seq < seq) ++it;
             cl->queue.insert(it, {seq, cmd});
         }
+    } else if (type == PKT_SANDBOX) {
+        uint8_t action = r.u8(), arg = r.u8();
+        float yaw = finite_or(r.f32());
+        if (!r.bad && sim.sandbox) sim.sandbox_cmd(cl->pid, action, arg, yaw);
+    } else if (type == PKT_HOSTCMD) {
+        uint32_t token = r.u32();
+        uint8_t level = r.u8(), diff = r.u8(), sb = r.u8();
+        if (r.bad || cfg_.host_token == 0 || token != cfg_.host_token) return; // only the host's own game knows the token
+        if (level >= (uint8_t)LevelId::COUNT || diff >= (uint8_t)Difficulty::COUNT) return;
+        say("host starts %s", level_label((LevelId)level));
+        sim.start_run((LevelId)level, (Difficulty)diff, sb != 0, mix32(secret_ ^ (uint32_t)tick_) | 1u);
     } else if (type == PKT_BYE) {
         say("%s left", sim.players[cl->pid].name.c_str());
         sim.event(sim.players[cl->pid].name + " LEFT");
@@ -195,6 +206,9 @@ bool Server::send_snapshot_sized(Client& c, int max_ents, int max_props, int max
     w.u8(s.objective.need);
     w.u8(s.objective.done);
     w.u8((uint8_t)s.objective.reward);
+    w.u8(s.objective.required);
+    w.u8((uint8_t)((s.sandbox ? 1 : 0) | (s.god ? 2 : 0) | (s.auto_spawn ? 4 : 0) | (s.freeze_ents ? 8 : 0)));
+    w.f32(s.won_t);
     w.u8((uint8_t)c.pid);
     w.u32(c.last_seq);
     int np = 0;
@@ -303,6 +317,10 @@ void Server::poll() {
             }
         }
         sim.tick(1.0f / TICK_RATE);
+        if (sim.escaped && sim.won_t > 14.0f) { // someone made it out: everyone back to the lobby
+            sim.event("BACK TO THE M.E.G. BASE");
+            sim.start_run(LevelId::Hub, sim.difficulty, false, mix32(secret_ ^ (uint32_t)tick_) | 1u);
+        }
         next_tick_ += dt;
         tick_++;
         steps++;

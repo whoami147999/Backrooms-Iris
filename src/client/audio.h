@@ -19,10 +19,11 @@ enum Sfx : int {
     SFX_PARTY_GIGGLE, SFX_SKIN_GROAN, SFX_STING,
     // loop sources
     SFX_HUM, SFX_DRONE, SFX_WIND, SFX_WATER, SFX_ALARM, SFX_FIRE, SFX_STATIC, SFX_HEART, SFX_MUSICBOX, SFX_WHISPERS,
+    SFX_MUSIC_MENU, SFX_MUSIC_RUN, SFX_MUSIC_CALM, // 1.2: music (its own volume)
     SFX_COUNT
 };
 
-enum Loop : int { LOOP_AMB1, LOOP_AMB2, LOOP_FIRE, LOOP_STATIC, LOOP_HEART, LOOP_MUSIC, LOOP_JUICE, LOOP_COUNT };
+enum Loop : int { LOOP_AMB1, LOOP_AMB2, LOOP_FIRE, LOOP_STATIC, LOOP_HEART, LOOP_MUSIC, LOOP_JUICE, LOOP_BGM, LOOP_COUNT };
 
 class Audio {
 public:
@@ -30,6 +31,7 @@ public:
     void shutdown();
     bool ok() const { return dev_ != 0; }
     void set_master(float v) { master_ = v; }
+    void set_music(float v) { music_ = v; }  // the music channel (LOOP_BGM) on top of the master volume
     // one-shot: volume 0..1, pan -1 (left) .. 1 (right), pitch multiplier, muffle 0..1 (behind walls)
     void play(Sfx s, float vol = 1, float pan = 0, float pitch = 1, float muffle = 0);
     // a looping channel: which sound, how loud (0 = silent), pan; changes are smoothed
@@ -41,7 +43,7 @@ private:
     void mix(int16_t* out, int frames);
     uint32_t dev_ = 0;
     int rate_ = 44100;
-    float master_ = 0.8f;
+    float master_ = 0.8f, music_ = 0.6f;
     std::vector<float> buf_[SFX_COUNT];
     Voice voices_[24];
     Voice loops_[LOOP_COUNT];

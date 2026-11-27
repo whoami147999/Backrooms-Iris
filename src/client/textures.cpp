@@ -936,6 +936,42 @@ Image storefront(int N) {
     im.text(W / 2 - 15 * sc, H * 8 / 100, sc, "OPEN", 0.15f, 0.05f, 0.1f);
     return im;
 }
+// 1.2: Level 33 as an abandoned 1990 downtown mall: cream tiles with teal bands, teal-framed
+// shop fronts behind grey roll-down gates, faded sign bands.
+Image hcc_tiles(int N) {
+    return paint(N, N, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
+        int T = N / 4;
+        float seam = (x % T < 2 || y % T < 2) ? -0.10f : 0.0f;
+        bool band = (y / T) == 3 && (y % T) > T / 3 && (y % T) < T * 2 / 3;
+        float dirt = (fbm(u, v, 3, 3, 3, 3341) - 0.5f) * 0.10f;
+        float shine = std::pow(fbm(u, v, 2, 2, 3, 3342), 3.0f) * 0.18f;
+        if (band) { r = 0.20f + dirt; g = 0.52f + dirt; b = 0.52f + dirt; return; }
+        float l = 0.80f + seam + dirt + shine + grain(x, y, 3343) * 0.02f;
+        r = l; g = l * 0.97f; b = l * 0.88f;
+    });
+}
+Image hcc_storefront(int N) {
+    const int W = N / 2, H = N;
+    Image im = paint(W, H, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
+        float dirt = (fbm(u, v, 3, 6, 3, 3351) - 0.5f) * 0.06f;
+        if (v < 0.18f) { float l = 0.78f + dirt; r = l; g = l * 0.97f; b = l * 0.9f; return; }        // the sign band (empty now)
+        if (v > 0.95f) { float l = 0.55f + dirt; r = l; g = l; b = l; return; }                        // the bulkhead
+        if (u < 0.05f || u > 0.95f || (v > 0.18f && v < 0.22f)) { r = 0.22f + dirt; g = 0.55f + dirt; b = 0.55f + dirt; return; } // teal frame
+        bool gate = hash01(3352, x / std::max(1, W), y / std::max(1, H), 1) < 0.9f;
+        if (gate) { // a roll-down gate, slats of grey
+            float slat = ((int)(v * H) % 8 < 2) ? -0.10f : 0.0f;
+            float l = 0.46f + slat + dirt + grain(x, y, 3353) * 0.03f;
+            r = l; g = l; b = l * 1.03f;
+            return;
+        }
+        float refl = (u + v * 0.5f > 0.55f && u + v * 0.5f < 0.62f) ? 0.15f : 0.0f;
+        float l = 0.07f + refl + dirt;
+        r = l * 0.9f; g = l; b = l * 1.1f;
+    });
+    int sc = std::max(1, W / 110);
+    im.text(W / 2 - 24 * sc, H * 7 / 100, sc, "FOR LEASE", 0.35f, 0.35f, 0.35f, 0.6f);
+    return im;
+}
 Image planter_top(int N) {
     Image im = paint(N, N, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
         float l = 0.18f + grain(x, y, 3321) * 0.05f; r = l * 1.1f; g = l * 0.8f; b = l * 0.5f; (void)u; (void)v;
@@ -1392,12 +1428,15 @@ void make_level_textures(LevelId level, int N, Image out[MAT_COUNT]) {
         case LevelId::L188:
             out[MAT_FLOOR] = concrete(N, N, 0.72f, 18801, false);
             out[MAT_FLOOR2] = planks(N, 0.5f, 0.85f, 0.65f, 0.45f, 18802);
+            out[MAT_FLOOR3] = guest_carpet(N);
             out[MAT_BLOCK] = court_wall(N);
             out[MAT_ROOF] = concrete(N / 2, N / 2, 0.8f, 18803, false);
-            out[MAT_CEIL] = concrete(N / 2, N / 2, 0.85f, 18804, false);
-            out[MAT_LIGHT] = light_panel(N / 4, N / 4, 0.1f);
-            out[MAT_PROP] = concrete(N / 4, N / 4, 0.7f, 18805, false);
-            out[MAT_WALL] = out[MAT_BLOCK];
+            out[MAT_CEIL] = plaster(N / 2);
+            out[MAT_LIGHT] = light_panel(N / 8, N / 8, 1.0f);
+            out[MAT_PROP] = parquet(N / 4);
+            out[MAT_WALL] = hotel_wall(N, false);
+            desaturate(out[MAT_WALL], 0.55f, 1.1f);
+            out[MAT_FURN] = furniture_atlas(N);
             break;
         case LevelId::TSG0: case LevelId::TSG2:
             out[MAT_FLOOR] = level == LevelId::TSG0 ? leaf_litter(N) : snow(N);
@@ -1563,14 +1602,28 @@ void make_level_textures(LevelId level, int N, Image out[MAT_COUNT]) {
             out[MAT_WALL] = out[MAT_BLOCK];
             break;
         case LevelId::L33:
-            out[MAT_FLOOR] = mall_tiles(N);
+            out[MAT_FLOOR] = hcc_tiles(N);
             out[MAT_FLOOR2] = carpet(N);
-            out[MAT_BLOCK] = storefront(N);
+            out[MAT_BLOCK] = hcc_storefront(N);
             out[MAT_ROOF] = planter_top(N / 2);
             out[MAT_CEIL] = ceiling_tiles(N);
-            out[MAT_LIGHT] = light_panel(N / 4, N / 4, 0.3f);
-            out[MAT_PROP] = metal(N / 4, 0.7f);
-            out[MAT_WALL] = out[MAT_PROP];
+            out[MAT_LIGHT] = light_panel(N / 4, N / 4, 0.0f);
+            out[MAT_PROP] = metal(N / 4, 0.62f);
+            for (size_t i = 0; i + 3 < out[MAT_PROP].rgba.size(); i += 4) { // teal steel
+                out[MAT_PROP].rgba[i] = (uint8_t)(out[MAT_PROP].rgba[i] * 0.38f);
+                out[MAT_PROP].rgba[i + 1] = (uint8_t)std::min(255.0f, out[MAT_PROP].rgba[i + 1] * 0.95f);
+                out[MAT_PROP].rgba[i + 2] = (uint8_t)std::min(255.0f, out[MAT_PROP].rgba[i + 2] * 0.92f);
+            }
+            out[MAT_WALL] = plaster(N / 2);
+            break;
+        case LevelId::Hub:
+            out[MAT_WALL] = concrete(N / 2, N, 0.58f, 3701, true);
+            out[MAT_FLOOR] = concrete(N, N, 0.50f, 3702, false);
+            out[MAT_CEIL] = concrete(N / 2, N / 2, 0.36f, 3703, false);
+            out[MAT_LIGHT] = light_panel(N / 4, N / 16, 0);
+            out[MAT_BLOCK] = crate(N / 2);
+            out[MAT_ROOF] = out[MAT_BLOCK];
+            out[MAT_PROP] = metal(N / 4, 0.45f);
             break;
         case LevelId::L36:
             out[MAT_FLOOR] = office_carpet(N);
@@ -1671,6 +1724,7 @@ Sprite item_sprite(ItemType t) {
         case ItemType::NightVision: return SPR_NV;
         case ItemType::Chalk: return SPR_CHALK;
         case ItemType::Painkillers: return SPR_PILLS;
+        case ItemType::Shells: return SPR_SHELLS;
         default: return SPR_WHITE;
     }
 }
@@ -2039,6 +2093,17 @@ Image make_sprite(Sprite s) {
             im.line(16, 46, 48, 18, 7, 0.95f, 0.95f, 0.92f);
             im.line(16, 46, 22, 41, 7, 0.75f, 0.75f, 0.72f);
             im.line(6, 56, 20, 56, 2, 0.9f, 0.9f, 0.9f, 0.7f);
+            return im;
+        }
+        case SPR_SHELLS: { // two red shotgun shells with brass heads
+            Image im(64, 64, 0);
+            for (int k = 0; k < 2; k++) {
+                int x0 = 16 + k * 18;
+                im.rect(x0, 14, x0 + 13, 44, 0.75f, 0.1f, 0.08f, 1);
+                im.rect(x0, 44, x0 + 13, 54, 0.85f, 0.68f, 0.25f, 1);
+                im.rect(x0 + 2, 16, x0 + 4, 42, 1, 1, 1, 0.25f);
+                im.rect(x0, 46, x0 + 13, 48, 0.6f, 0.45f, 0.15f, 1);
+            }
             return im;
         }
         case SPR_PILLS: { // a pill bottle and two pills

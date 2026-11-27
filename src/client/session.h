@@ -25,6 +25,9 @@ struct GameView {
     const std::unordered_set<uint32_t>* picked = nullptr;
     float level_time = 0;
     bool escaped = false;
+    float won_t = 0;
+    bool sandbox = false, god = false, auto_spawn = true, freeze = false; // 1.2 (multiplayer sandbox)
+    bool host = false;           // this machine is hosting (it picks levels in the lobby)
     Objective objective;
     float respawn_t = 0;
     bool multiplayer = false;
@@ -47,6 +50,9 @@ public:
     virtual void request_respawn() {}                  // single player: retry after death
     virtual void clear_escaped() {}
     virtual GameSim* sim() { return nullptr; }  // single player / sandbox only (sandbox tools, dev hooks)
+    // 1.2: sandbox actions and the lobby work the same in single player and multiplayer
+    virtual void sandbox(uint8_t action, uint8_t arg, float yaw) { (void)action; (void)arg; (void)yaw; }
+    virtual void host_start(LevelId level, Difficulty d, bool sandbox_mode) { (void)level; (void)d; (void)sandbox_mode; }
     virtual void resync() {}                    // after poking the sim directly
 };
 
@@ -56,7 +62,7 @@ std::unique_ptr<Session> make_single_player(LevelId level, uint32_t seed, const 
 // start_server = true hosts the game on this machine (own thread) and joins it; friends connect
 // straight to you (LAN, Tailscale or a forwarded UDP port). No dedicated server involved.
 std::unique_ptr<Session> make_multiplayer(const std::string& host, uint16_t port, const std::string& name, const std::string& password,
-                                          bool start_server, LevelId level, Difficulty diff, double now, std::string* error);
+                                          bool start_server, LevelId level, Difficulty diff, double now, std::string* error, bool lobby = false);
 #endif
 
 } // namespace iris

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 
 #include "../core/config.h"
 #include "../core/hash.h"
@@ -30,13 +31,32 @@ struct Builder {
     std::vector<uint16_t> i[MAT_COUNT];
     float tint[3] = {1, 1, 1};
 
-    explicit Builder(const World& w) : W(w), li(w.info()) {}
+    explicit Builder(const World& w) : W(w), li(w.info()) {
+        buildings = w.houses() || w.city() || w.court();
+    }
+    bool buildings = false;   // an outdoor level with buildings you can walk into: indoors is darker
+    bool terr = false;        // floors follow the terrain: work out their normals
+
+    Vec3 ground_normal(float x, float z) const {
+        const float e = 0.35f;
+        float dx = W.floor_y(x + e, z) - W.floor_y(x - e, z), dz = W.floor_y(x, z + e) - W.floor_y(x, z - e);
+        Vec3 n{-dx, 2 * e, -dz};
+        return n * (1.0f / n.len());
+    }
 
     // Baked lighting: ambient + light sources in range, attenuated, Lambert, dimmed hard
     // when something is in the way (so dead-light rooms are actually dark).
     void shade(Vec3 p, Vec3 n, float out[3]) const {
         out[0] = li.ambient[0]; out[1] = li.ambient[1]; out[2] = li.ambient[2];
-        if (li.outdoor && !li.dark && li.ambient[0] > 0.5f) {
+        bool inside = false;
+        if (buildings && li.outdoor) { // under a roof the daylight is a lot dimmer
+            int scx = floor_to_int((p.x + n.x * 0.06f) / CELL), scz = floor_to_int((p.z + n.z * 0.06f) / CELL);
+            if (W.indoors(scx, scz) && p.y < W.indoor_h(scx, scz) + 0.05f) {
+                inside = true;
+                for (int k = 0; k < 3; k++) out[k] *= 0.42f;
+            }
+        }
+        if (li.outdoor && !li.dark && li.ambient[0] > 0.5f && !inside) {
             // daylight: fake sun + sky so buildings read as 3D
             float sky = n.y > 0.5f ? 1.08f : 0.80f + 0.20f * (n.x * 0.6f + n.z * 0.8f);
             for (int k = 0; k < 3; k++) out[k] *= sky;
@@ -80,7 +100,7 @@ struct Builder {
                 Vec3 p = pos(o + a * ((float)x / su) + b * ((float)y / sv));
                 float uu, tt, c[3];
                 uv(p, uu, tt);
-                shade(p, n, c);
+                shade(p, (terr && n.y > 0.9f) ? ground_normal(p.x, p.z) : n, c);
                 vs.push_back(vert(p, uu, tt, c, ao(p)));
             }
         for (int y = 0; y < sv; y++)
@@ -517,7 +537,7 @@ struct Builder {
                 sphere(M, {mx, 0.85f, mz}, {rad * 0.95f, 0.45f, rad * 0.95f}, (hsh % 4u == 0) ? BARK : LEAVES, 1.0f);
                 sphere(M, {mx + rad * 0.3f, 1.15f, mz - rad * 0.2f}, {rad * 0.6f, 0.3f, rad * 0.6f}, (hsh % 4u == 0) ? BARK : LEAVES, 0.75f);
                 break;
-            case FurnKind::Shelf: {
+            case FurnKind::Shelf: case FurnKind::Rack: {
                 for (int a = -1; a <= 1; a += 2)
                     for (int b = -1; b <= 1; b += 2)
                         fbox(M, mx + a * (hx - 0.03f) - 0.02f, mz + b * (hz - 0.03f) - 0.02f, mx + a * (hx - 0.03f) + 0.02f, mz + b * (hz - 0.03f) + 0.02f, 0, f.y1, METAL, METAL, METAL, fd);
@@ -723,6 +743,277 @@ struct Builder {
                     for (int b = -1; b <= 1; b += 2) cyl(M, mx + a * (hx - 0.08f), mz + b * (hz - 0.08f), 0.04f, 0.03f, 0, f.y1 - 0.06f, WOOD, false, false, 0.6f);
                 break;
             case FurnKind::Igloo: break; // (igloos are solid cells, drawn as domes)
+            // ----- 1.2
+            case FurnKind::Lounger: { // a pool lounger: a tube frame, slats, the back raised away from the water
+                Vec2 back{-fd.x, -fd.z};
+                bool along_x = std::fabs(fd.x) > 0.5f;
+                float L = along_x ? hx : hz;
+                set_tint(0xf0f0ec);
+                for (int k = 0; k < 6; k++) { // the flat part, slats across
+                    float t0 = -L + 0.05f + k * (L * 1.25f / 6.0f), t1 = t0 + L * 1.25f / 6.0f - 0.03f;
+                    float sx0 = along_x ? mx + fd.x * t0 : f.x0 + 0.03f, sx1 = along_x ? mx + fd.x * t1 : f.x1 - 0.03f;
+                    float sz0 = along_x ? f.z0 + 0.03f : mz + fd.z * t0, sz1 = along_x ? f.z1 - 0.03f : mz + fd.z * t1;
+                    fbox(M, std::min(sx0, sx1), std::min(sz0, sz1), std::max(sx0, sx1), std::max(sz0, sz1), 0.30f, 0.34f, SHEET, SHEET, SHEET, fd);
+                }
+                // the raised back: a tilted panel at the far end
+                Vec2 c0{mx + back.x * L * 0.35f, mz + back.z * L * 0.35f}, c1{mx + back.x * (L - 0.02f), mz + back.z * (L - 0.02f)};
+                Vec2 side{std::fabs(fd.z), std::fabs(fd.x)};
+                float wdt = along_x ? hz - 0.03f : hx - 0.03f;
+                Vec3 a{c0.x - side.x * wdt, 0.34f, c0.z - side.z * wdt}, b2{c0.x + side.x * wdt, 0.34f, c0.z + side.z * wdt};
+                Vec3 c{c1.x + side.x * wdt, 0.95f, c1.z + side.z * wdt}, d{c1.x - side.x * wdt, 0.95f, c1.z - side.z * wdt};
+                Vec3 nn{fd.x * 0.6f, 0.8f, fd.z * 0.6f};
+                emit_quad(M, lit(a, nn, PLASTIC.u0, PLASTIC.v1), lit(b2, nn, PLASTIC.u1, PLASTIC.v1), lit(c, nn, PLASTIC.u1, PLASTIC.v0), lit(d, nn, PLASTIC.u0, PLASTIC.v0));
+                emit_quad(M, lit(b2, nn * -1.0f, PLASTIC.u1, PLASTIC.v1), lit(a, nn * -1.0f, PLASTIC.u0, PLASTIC.v1), lit(d, nn * -1.0f, PLASTIC.u0, PLASTIC.v0), lit(c, nn * -1.0f, PLASTIC.u1, PLASTIC.v0));
+                clear_tint();
+                legs(0.06f, 0.30f, 0.02f);
+                break;
+            }
+            case FurnKind::Float: { // an inflatable ring, red and white, bobbing on the water
+                float r = rad * 0.75f;
+                for (int k = 0; k < 10; k++) {
+                    float a = k * 2 * PI / 10;
+                    set_tint((k & 1) ? 0xf2f2f2 : 0xd83a2e);
+                    sphere(M, {mx + std::cos(a) * r, (f.y0 + f.y1) * 0.5f, mz + std::sin(a) * r}, {0.2f, 0.09f, 0.2f}, SHEET, 0.6f);
+                }
+                clear_tint();
+                break;
+            }
+            case FurnKind::Ladder: { // pool steps: two rails bending over the edge, three rungs
+                Vec2 side{std::fabs(fd.z), std::fabs(fd.x)};
+                for (int s2 = -1; s2 <= 1; s2 += 2) {
+                    Vec3 b0{mx + side.x * 0.25f * s2, f.y0, mz + side.z * 0.25f * s2};
+                    Vec3 t0{b0.x, 0.85f, b0.z}, t1{b0.x - fd.x * 0.35f, 0.95f, b0.z - fd.z * 0.35f}, t2{b0.x - fd.x * 0.45f, 0.0f, b0.z - fd.z * 0.45f};
+                    tube(M, b0, t0, 0.025f, METAL, 0.5f);
+                    tube(M, t0, t1, 0.025f, METAL, 0.5f);
+                    tube(M, t1, t2, 0.025f, METAL, 0.5f);
+                }
+                for (int k = 0; k < 3; k++) {
+                    float y = f.y0 + 0.3f + k * 0.35f;
+                    if (y > -0.05f) break;
+                    tube(M, {mx - side.x * 0.25f, y, mz - side.z * 0.25f}, {mx + side.x * 0.25f, y, mz + side.z * 0.25f}, 0.02f, METAL, 0.5f);
+                }
+                break;
+            }
+            case FurnKind::Slide: { // a water slide: a ladder tower, then a curving tube down into the deep end
+                Vec2 side{std::fabs(fd.z), std::fabs(fd.x)};
+                float top = 2.5f;
+                Vec2 base{mx - fd.x * 0.5f, mz - fd.z * 0.5f};
+                for (int a = -1; a <= 1; a += 2)
+                    for (int b = -1; b <= 1; b += 2)
+                        cyl(M, base.x + side.x * a * 0.45f + fd.x * b * 0.45f, base.z + side.z * a * 0.45f + fd.z * b * 0.45f, 0.04f, 0.04f, 0, top, METAL, false, false, 0.5f);
+                fbox(M, base.x - 0.55f, base.z - 0.55f, base.x + 0.55f, base.z + 0.55f, top - 0.06f, top, METAL, METAL, METAL, fd, true);
+                for (int k = 0; k < 8; k++) { // rungs at the back
+                    float y = 0.3f + k * 0.3f;
+                    Vec2 r0 = base - Vec2{fd.x, fd.z} * 0.48f;
+                    tube(M, {r0.x - side.x * 0.3f, y, r0.z - side.z * 0.3f}, {r0.x + side.x * 0.3f, y, r0.z + side.z * 0.3f}, 0.02f, METAL, 0.5f);
+                }
+                set_tint(0x2f8fe0);
+                Vec3 prev{base.x + fd.x * 0.4f, top + 0.15f, base.z + fd.z * 0.4f};
+                const int SEG = 9;
+                for (int k = 1; k <= SEG; k++) { // out over the water and down, swinging to one side
+                    float t = (float)k / SEG;
+                    float along = 0.4f + t * 3.6f, swing = std::sin(t * PI) * 0.9f, y = (top + 0.15f) * (1.0f - t) * (1.0f - t * 0.25f) - 0.05f;
+                    Vec3 p{base.x + fd.x * along + side.x * swing, y, base.z + fd.z * along + side.z * swing};
+                    tube(M, prev, p, 0.36f, SHEET, 0.9f);
+                    prev = p;
+                }
+                clear_tint();
+                break;
+            }
+            case FurnKind::LifeguardChair: { // tall white chair, a ladder up the front
+                set_tint(0xf4f4f0);
+                for (int a = -1; a <= 1; a += 2)
+                    for (int b = -1; b <= 1; b += 2)
+                        tube(M, {mx + a * hx, 0, mz + b * hz}, {mx + a * hx * 0.5f, 1.55f, mz + b * hz * 0.5f}, 0.035f, WOOD, 0.5f);
+                fbox(M, mx - hx * 0.55f, mz - hz * 0.55f, mx + hx * 0.55f, mz + hz * 0.55f, 1.55f, 1.62f, WOOD, WOOD, WOOD, fd, true);
+                float bx0 = mx - hx * 0.55f, bx1 = mx + hx * 0.55f, bz0 = mz - hz * 0.55f, bz1 = mz + hz * 0.55f;
+                if (fd.x > 0.5f) bx1 = bx0 + 0.05f; else if (fd.x < -0.5f) bx0 = bx1 - 0.05f; else if (fd.z > 0.5f) bz1 = bz0 + 0.05f; else bz0 = bz1 - 0.05f;
+                fbox(M, bx0, bz0, bx1, bz1, 1.62f, f.y1, WOOD, WOOD, WOOD, fd);
+                clear_tint();
+                for (int k = 0; k < 4; k++) {
+                    float y = 0.35f + k * 0.35f;
+                    Vec2 side{std::fabs(fd.z), std::fabs(fd.x)};
+                    Vec2 c{mx + fd.x * hx * (1.0f - y / 1.55f * 0.5f), mz + fd.z * hz * (1.0f - y / 1.55f * 0.5f)};
+                    tube(M, {c.x - side.x * hx * 0.6f, y, c.z - side.z * hz * 0.6f}, {c.x + side.x * hx * 0.6f, y, c.z + side.z * hz * 0.6f}, 0.02f, WOOD, 0.5f);
+                }
+                break;
+            }
+            case FurnKind::Palm: { // a potted palm: a leaning trunk, fronds drooping all round
+                cyl(M, mx, mz, rad * 0.9f, rad, 0, 0.45f, STONE, true, false, 1.0f);
+                Vec3 top{mx + 0.25f, f.y1 - 0.2f, mz + 0.1f};
+                tube(M, {mx, 0.4f, mz}, top, 0.07f, BARK, 0.6f);
+                for (int k = 0; k < 7; k++) {
+                    float a = k * 2 * PI / 7 + 0.3f;
+                    Vec3 tip{top.x + std::cos(a) * 1.0f, top.y - 0.45f, top.z + std::sin(a) * 1.0f};
+                    Vec3 mid{(top.x + tip.x) * 0.5f, top.y + 0.12f, (top.z + tip.z) * 0.5f};
+                    sphere(M, mid, {0.28f + std::fabs(std::cos(a)) * 0.22f, 0.05f, 0.28f + std::fabs(std::sin(a)) * 0.22f}, LEAVES, 0.6f);
+                    sphere(M, {(mid.x + tip.x) * 0.5f, (mid.y + tip.y) * 0.5f, (mid.z + tip.z) * 0.5f}, {0.22f, 0.04f, 0.22f}, LEAVES, 0.5f);
+                }
+                break;
+            }
+            case FurnKind::Tent: { // a M.E.G. field tent: four poles, an olive canvas roof, the flaps tied back
+                set_tint(0x6a7048);
+                float ry = f.y1, ey = 1.55f;
+                for (int a = -1; a <= 1; a += 2)
+                    for (int b = -1; b <= 1; b += 2) cyl(M, mx + a * (hx - 0.05f), mz + b * (hz - 0.05f), 0.03f, 0.03f, 0, ey, METAL, false, false, 0.5f);
+                cyl(M, mx, mz, 0.035f, 0.035f, 0, ry, METAL, false, false, 0.5f);
+                Vec3 apex{mx, ry, mz};
+                Vec3 cs[4] = {{mx - hx, ey, mz - hz}, {mx + hx, ey, mz - hz}, {mx + hx, ey, mz + hz}, {mx - hx, ey, mz + hz}};
+                for (int k = 0; k < 4; k++) {
+                    Vec3 a = cs[k], b2 = cs[(k + 1) % 4];
+                    Vec3 e1 = b2 - a, e2 = apex - a;
+                    Vec3 nn{e1.y * e2.z - e1.z * e2.y, e1.z * e2.x - e1.x * e2.z, e1.x * e2.y - e1.y * e2.x};
+                    nn = nn * (1.0f / nn.len());
+                    if (nn.y < 0) nn = nn * -1.0f;
+                    emit_quad(M, lit(a, nn, FABRIC.u0, FABRIC.v1), lit(b2, nn, FABRIC.u1, FABRIC.v1), lit(apex, nn, FABRIC.u1, FABRIC.v0), lit(apex, nn, FABRIC.u0, FABRIC.v0));
+                    emit_quad(M, lit(b2, nn * -1.0f, FABRIC.u1, FABRIC.v1), lit(a, nn * -1.0f, FABRIC.u0, FABRIC.v1), lit(apex, nn * -1.0f, FABRIC.u0, FABRIC.v0), lit(apex, nn * -1.0f, FABRIC.u1, FABRIC.v0));
+                }
+                // the back wall: canvas down to the ground on the far side
+                fbox(M, mx - hx, mz - hz, mx + hx, mz - hz + 0.02f, 0, ey, FABRIC, FABRIC, FABRIC, fd);
+                clear_tint();
+                break;
+            }
+            case FurnKind::Cot:
+                legs(0.05f, 0.38f, 0.02f);
+                set_tint(0x7a7a5a);
+                fbox(M, f.x0, f.z0, f.x1, f.z1, 0.36f, f.y1, FABRIC, FABRIC, FABRIC, fd);
+                clear_tint();
+                break;
+            case FurnKind::Sandbags: { // three courses of sacks, slumped
+                bool along_x = (f.x1 - f.x0) > (f.z1 - f.z0);
+                float L = along_x ? (f.x1 - f.x0) : (f.z1 - f.z0);
+                int nb = std::max(2, (int)(L / 0.55f));
+                set_tint(0xb8a678);
+                for (int row = 0; row < 3; row++)
+                    for (int k = 0; k < nb - (row & 1); k++) {
+                        float t = (k + 0.5f + (row & 1) * 0.5f) / nb;
+                        float px = along_x ? f.x0 + t * L : mx, pz = along_x ? mz : f.z0 + t * L;
+                        sphere(M, {px, 0.13f + row * 0.24f, pz}, {along_x ? 0.3f : hx, 0.13f, along_x ? hz : 0.3f}, CARD, 0.5f);
+                    }
+                clear_tint();
+                break;
+            }
+            case FurnKind::Crate: // a supply crate: planks, a darker frame, steel straps
+                fbox(M, f.x0, f.z0, f.x1, f.z1, 0, f.y1, WOOD, WOOD, WOOD, fd);
+                set_tint(0x6a5a40);
+                for (int a = -1; a <= 1; a += 2)
+                    for (int b = -1; b <= 1; b += 2)
+                        fbox(M, mx + a * hx - (a > 0 ? 0.06f : 0.0f) - 0.005f, mz + b * hz - (b > 0 ? 0.06f : 0.0f) - 0.005f, mx + a * hx + (a < 0 ? 0.06f : 0.0f) + 0.005f, mz + b * hz + (b < 0 ? 0.06f : 0.0f) + 0.005f, 0, f.y1 + 0.005f, WOOD, WOOD, WOOD, fd);
+                clear_tint();
+                fbox(M, f.x0 - 0.01f, f.z0 - 0.01f, f.x1 + 0.01f, f.z1 + 0.01f, f.y1 * 0.45f, f.y1 * 0.45f + 0.05f, METAL, METAL, METAL, fd);
+                break;
+            case FurnKind::Banner: { // the M.E.G. flag: a pole, a dark blue banner with a white band
+                cyl(M, mx, mz, 0.03f, 0.03f, 0, f.y1, METAL, true, false, 0.5f);
+                Vec2 side{std::fabs(fd.z), std::fabs(fd.x)};
+                float fx = mx + side.x * 0.45f, fz = mz + side.z * 0.45f;
+                set_tint(0x1c2c58);
+                fbox(M, fx - side.x * 0.42f - fd.x * 0.01f, fz - side.z * 0.42f - fd.z * 0.01f, fx + side.x * 0.42f + fd.x * 0.01f + std::fabs(fd.x) * 0.02f, fz + side.z * 0.42f + fd.z * 0.01f + std::fabs(fd.z) * 0.02f, f.y1 - 1.2f, f.y1 - 0.05f, FABRIC, FABRIC, FABRIC, fd);
+                set_tint(0xe8e8e0);
+                fbox(M, fx - side.x * 0.43f - std::fabs(fd.x) * 0.015f, fz - side.z * 0.43f - std::fabs(fd.z) * 0.015f, fx + side.x * 0.43f + std::fabs(fd.x) * 0.035f, fz + side.z * 0.43f + std::fabs(fd.z) * 0.035f, f.y1 - 0.72f, f.y1 - 0.56f, SHEET, SHEET, SHEET, fd);
+                clear_tint();
+                break;
+            }
+            case FurnKind::Radio2: // a field radio on a box, its little light on
+                fbox(M, f.x0, f.z0, f.x1, f.z1, 0, f.y1 - 0.25f, WOOD, WOOD, WOOD, fd);
+                set_tint(0x4a5038);
+                fbox(M, mx - 0.18f, mz - 0.12f, mx + 0.18f, mz + 0.12f, f.y1 - 0.25f, f.y1, METAL, METAL, DRAWER, fd);
+                clear_tint();
+                cyl(M, mx + 0.12f, mz, 0.006f, 0.004f, f.y1, f.y1 + 0.6f, METAL, false, false, 0.5f);
+                glow = true; glow_g = 0.3f; glow_b = 0.2f;
+                sphere(M, {mx - 0.1f + fd.x * 0.13f, f.y1 - 0.07f, mz + fd.z * 0.13f}, {0.015f, 0.015f, 0.015f}, GLOWC, 0.5f);
+                glow = false; glow_g = glow_b = 1;
+                break;
+            case FurnKind::Floodlight: { // a work light on a tripod, pointed at the tent
+                for (int k = 0; k < 3; k++) {
+                    float a = k * 2 * PI / 3;
+                    tube(M, {mx + std::cos(a) * rad, 0, mz + std::sin(a) * rad}, {mx, f.y1 - 0.4f, mz}, 0.018f, METAL, 0.5f);
+                }
+                cyl(M, mx, mz, 0.02f, 0.02f, f.y1 - 0.45f, f.y1 - 0.1f, METAL, false, false, 0.5f);
+                set_tint(0x303030);
+                fbox(M, mx - 0.2f, mz - 0.2f, mx + 0.2f, mz + 0.2f, f.y1 - 0.15f, f.y1 + 0.15f, METAL, METAL, METAL, fd);
+                clear_tint();
+                glow = true;
+                Vec3 lc{mx + fd.x * 0.205f, f.y1, mz + fd.z * 0.205f};
+                float qx = std::fabs(fd.z) * 0.16f + 0.004f, qz = std::fabs(fd.x) * 0.16f + 0.004f;
+                fbox(M, lc.x - qx, lc.z - qz, lc.x + qx, lc.z + qz, f.y1 - 0.12f, f.y1 + 0.12f, GLOWC, GLOWC, GLOWC, fd);
+                glow = false;
+                break;
+            }
+            case FurnKind::Desk: { // a desk: a top, a drawer pedestal, a dead monitor and a keyboard
+                fbox(M, f.x0, f.z0, f.x1, f.z1, f.y1 - 0.04f, f.y1, WOOD, WOOD, WOOD, fd, true);
+                bool along_x = (f.x1 - f.x0) > (f.z1 - f.z0);
+                float px0 = along_x ? f.x1 - 0.45f : f.x0 + 0.03f, px1 = along_x ? f.x1 - 0.03f : f.x1 - 0.03f;
+                float pz0 = along_x ? f.z0 + 0.03f : f.z1 - 0.45f, pz1 = along_x ? f.z1 - 0.03f : f.z1 - 0.03f;
+                fbox(M, px0, pz0, px1, pz1, 0, f.y1 - 0.04f, WOOD, WOOD, DRAWER, fd);
+                for (int a = -1; a <= 1; a += 2) { // legs on the other end
+                    float lx = along_x ? f.x0 + 0.05f : mx + a * (hx - 0.05f), lz = along_x ? mz + a * (hz - 0.05f) : f.z0 + 0.05f;
+                    cyl(M, lx, lz, 0.025f, 0.025f, 0, f.y1 - 0.04f, METAL, false, false, 0.5f);
+                }
+                Vec2 back{-fd.x, -fd.z};
+                Vec2 mc{mx + back.x * (std::fabs(back.x) * hx - 0.18f), mz + back.z * (std::fabs(back.z) * hz - 0.18f)};
+                float sx = std::fabs(fd.z) * 0.24f + std::fabs(fd.x) * 0.03f, sz = std::fabs(fd.x) * 0.24f + std::fabs(fd.z) * 0.03f;
+                fbox(M, mc.x - sx, mc.z - sz, mc.x + sx, mc.z + sz, f.y1 + 0.12f, f.y1 + 0.46f, RUBBER, RUBBER, RUBBER, fd);
+                cyl(M, mc.x, mc.z, 0.02f, 0.02f, f.y1, f.y1 + 0.12f, RUBBER, false, false, 0.5f);
+                float kx = std::fabs(fd.z) * 0.22f + std::fabs(fd.x) * 0.08f, kz = std::fabs(fd.x) * 0.22f + std::fabs(fd.z) * 0.08f;
+                fbox(M, mx + fd.x * 0.1f - kx, mz + fd.z * 0.1f - kz, mx + fd.x * 0.1f + kx, mz + fd.z * 0.1f + kz, f.y1, f.y1 + 0.02f, PLASTIC, PLASTIC, PLASTIC, fd);
+                break;
+            }
+            case FurnKind::Escalator: { // a dead escalator up to the gallery: steps, glass sides, black handrails
+                bool along_x = std::fabs(fd.x) > 0.5f;
+                float L = along_x ? f.x1 - f.x0 : f.z1 - f.z0, Wd = along_x ? f.z1 - f.z0 : f.x1 - f.x0;
+                Vec2 start{along_x ? (fd.x > 0 ? f.x0 : f.x1) : mx, along_x ? mz : (fd.z > 0 ? f.z0 : f.z1)};
+                Vec2 dir{fd.x, fd.z}, side{std::fabs(fd.z), std::fabs(fd.x)};
+                auto step_y = [&](float t) { return clampf((t - 0.15f) / 0.7f, 0, 1) * f.y1; };
+                const int NS = 14;
+                for (int k = 0; k < NS; k++) {
+                    float t0 = (float)k / NS, t1 = (float)(k + 1) / NS;
+                    float y = std::max(0.08f, step_y(t1));
+                    Vec2 a = start + dir * (t0 * L), b2 = start + dir * (t1 * L);
+                    float ix = side.x * (Wd * 0.5f - 0.12f), iz = side.z * (Wd * 0.5f - 0.12f);
+                    fbox(M, std::min(a.x, b2.x) - ix, std::min(a.z, b2.z) - iz, std::max(a.x, b2.x) + ix, std::max(a.z, b2.z) + iz, 0, y, METAL, METAL, METAL, fd);
+                }
+                for (int s2 = -1; s2 <= 1; s2 += 2) { // balustrades
+                    Vec2 off = side * (s2 * (Wd * 0.5f - 0.06f));
+                    const int SEG = 6;
+                    for (int k = 0; k < SEG; k++) {
+                        float t0 = (float)k / SEG, t1 = (float)(k + 1) / SEG;
+                        Vec2 a = start + dir * (t0 * L) + off, b2 = start + dir * (t1 * L) + off;
+                        float y0a = step_y(t0), y0b = step_y(t1);
+                        Vec3 nn{side.x * s2, 0, side.z * s2};
+                        set_tint(0xa8d8d8);
+                        Vertex q0 = lit({a.x, y0a, a.z}, nn, PLASTIC.u0, PLASTIC.v1), q1 = lit({b2.x, y0b, b2.z}, nn, PLASTIC.u1, PLASTIC.v1);
+                        Vertex q2 = lit({b2.x, y0b + 0.95f, b2.z}, nn, PLASTIC.u1, PLASTIC.v0), q3 = lit({a.x, y0a + 0.95f, a.z}, nn, PLASTIC.u0, PLASTIC.v0);
+                        emit_quad(M, q0, q1, q2, q3);
+                        emit_quad(M, q1, q0, q3, q2);
+                        clear_tint();
+                        tube(M, {a.x, y0a + 0.98f, a.z}, {b2.x, y0b + 0.98f, b2.z}, 0.04f, RUBBER, 0.5f);
+                    }
+                }
+                break;
+            }
+            case FurnKind::Shutter: // a mall kiosk with its roll-down shutter pulled to the counter
+                fbox(M, f.x0, f.z0, f.x1, f.z1, 0, f.y1, METAL, METAL, LOCKER, fd);
+                set_tint(0x3aa0a0);
+                fbox(M, f.x0 - 0.03f, f.z0 - 0.03f, f.x1 + 0.03f, f.z1 + 0.03f, f.y1, f.y1 + 0.06f, METAL, METAL, METAL, fd);
+                clear_tint();
+                break;
+            case FurnKind::Planter: { // a big round planter, a shrub and some dead leaves
+                cyl(M, mx, mz, rad, rad, 0, f.y1, STONE, false, false, 1.5f);
+                cyl(M, mx, mz, rad + 0.04f, rad + 0.04f, f.y1 - 0.05f, f.y1, STONE, true, false, 1.5f);
+                sphere(M, {mx, f.y1 + 0.35f, mz}, {rad * 0.75f, 0.45f, rad * 0.75f}, (hsh % 3u == 0) ? BARK : LEAVES, 1.0f);
+                sphere(M, {mx + rad * 0.3f, f.y1 + 0.6f, mz - rad * 0.2f}, {rad * 0.45f, 0.4f, rad * 0.45f}, (hsh % 3u == 0) ? BARK : LEAVES, 0.75f);
+                break;
+            }
+            case FurnKind::KioskSign: { // a sign board, faintly lit
+                set_tint((hsh & 1) ? 0x40b0b0 : 0xe0d0a0);
+                glow = true; glow_g = 0.95f; glow_b = 0.85f;
+                fbox(M, f.x0, f.z0, f.x1, f.z1, f.y0, f.y1, SHEET, SHEET, SHEET, fd);
+                glow = false; glow_g = glow_b = 1;
+                clear_tint();
+                break;
+            }
+            case FurnKind::Window: break; // (windows are cut into the walls themselves)
+
         }
     }
 
@@ -852,6 +1143,16 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
     out.items.clear();
     out.balloons.clear();
     out.lights.clear();
+    out.water.clear();
+    out.shadows.clear();
+    B.terr = W.terrain();
+    // how tall a building's outside walls are (the city, the hotel ring, houses)
+    auto facade_h = [&](int fcx, int fcz) {
+        if (W.city()) return W.block_h(fcx, fcz);
+        if (W.court()) return li.ceil_h;
+        if (id == LevelId::L33) return li.ceil_h;
+        return W.house_h();
+    };
 
     // light sources around the chunk
     int m = (int)(li.light_radius / CELL) + 1;
@@ -859,7 +1160,7 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
         for (int cx = c0x - m; cx < c0x + CHUNK_CELLS + m; cx++) {
             LightState s = W.light(cx, cz);
             if (s == LightState::On || s == LightState::Flicker)
-                B.lights.push_back({{(cx + 0.5f) * CELL, W.houses() && W.house(cx, cz) ? W.house_h() - 0.2f : li.light_y, (cz + 0.5f) * CELL},
+                B.lights.push_back({{(cx + 0.5f) * CELL, W.indoors(cx, cz) ? W.indoor_h(cx, cz) - 0.2f : li.light_y, (cz + 0.5f) * CELL},
                                     li.light_power * (s == LightState::On ? 1.0f : 0.75f)});
             { // bedside lamps, camp lanterns and fire barrels light their surroundings a little
                 Furn fs[MAX_FURN];
@@ -870,6 +1171,8 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
                     if (f.kind == FurnKind::Lamp || f.kind == FurnKind::Lantern || f.kind == FurnKind::FireBarrel)
                         B.lights.push_back({{(f.x0 + f.x1) * 0.5f, f.kind == FurnKind::Lamp ? 0.95f : f.y1 + 0.2f, (f.z0 + f.z1) * 0.5f},
                                             f.kind == FurnKind::Lamp ? 0.55f : 0.75f});
+                    if (f.kind == FurnKind::Floodlight) // the outpost's work light: bright
+                        B.lights.push_back({{(f.x0 + f.x1) * 0.5f, f.y1, (f.z0 + f.z1) * 0.5f}, 1.4f});
                 }
             }
         }
@@ -914,25 +1217,122 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
                 int fm = W.floor_mat(cx, cz);
                 Material fmat = fm == 1 ? MAT_FLOOR2 : (fm == 2 ? MAT_FLOOR3 : MAT_FLOOR);
                 int sub = (li.outdoor && id == LevelId::L11 ? 1 : 2) * D;
-                const bool indoors = W.houses() && fm == 3;           // a house on an outdoor level
+                const bool indoors = W.indoors(cx, cz) && li.outdoor;  // a house, a shop, the hotel ring on an outdoor level
+                const bool shop33 = id == LevelId::L33 && W.indoors(cx, cz); // inside a mall shop: a low ceiling
+                const float IH = W.indoors(cx, cz) ? W.indoor_h(cx, cz) : H;
                 const bool shack = (id == LevelId::TSG0 || id == LevelId::TSG2) && cx >= -1 && cx <= 1 && cz >= -1 && cz <= 1;
-                if (indoors) {
-                    B.atlas_grid(FT_WOOD, {x0, 0.002f, z1}, {CELL, 0, 0}, {0, 0, -CELL}, {0, 1, 0}, sub, 1.25f, 0.85f);
+                if (W.terrain()) { // pools and hills: the floor follows the ground, finely
+                    int ts = (id == LevelId::L94 ? 3 : (W.pool(cx, cz) ? 4 : 1)) * D;
+                    B.grid(fmat, {x0, 0, z1}, {CELL, 0, 0}, {0, 0, -CELL}, ts, ts, {0, 1, 0}, floor_uv,
+                           [&](Vec3 p) { return (id == LevelId::L37 ? B.corner_ao(p) : 1.0f) * damp(p); },
+                           [&](Vec3 p) { p.y = W.floor_y(p.x, p.z); return p; });
+                    if (W.pool(cx, cz)) out.water.push_back({x0, z0, x1, z1, -0.14f});
+                } else if (indoors && !W.court()) {
+                    int ck = 0, qa, qb, dd;
+                    if (W.city()) W.city_room(cx, cz, qa, qb, ck, dd);
+                    static const int CITY_FLOOR[4] = {FT_STONE, FT_WOOD, FT_FABRIC, FT_STONE};
+                    B.atlas_grid(W.city() ? CITY_FLOOR[ck & 3] : FT_WOOD, {x0, 0.002f, z1}, {CELL, 0, 0}, {0, 0, -CELL}, {0, 1, 0}, sub, 1.25f, 0.85f);
                     B.set_tint(0xf2ece0);
-                    B.atlas_grid(FT_SHEET, {x0, W.house_h() - 0.02f, z0}, {CELL, 0, 0}, {0, 0, CELL}, {0, -1, 0}, sub, CELL, 0.75f);
+                    B.atlas_grid(FT_SHEET, {x0, IH - 0.02f, z0}, {CELL, 0, 0}, {0, 0, CELL}, {0, -1, 0}, sub, CELL, 0.75f);
                     B.clear_tint();
                 } else {
                     B.grid(fmat, {x0, 0, z1}, {CELL, 0, 0}, {0, 0, -CELL}, sub, sub, {0, 1, 0}, floor_uv,
                            [&](Vec3 p) { return B.corner_ao(p) * damp(p); });
+                    if (W.court() && indoors) // the hotel ring's plaster ceiling
+                        B.grid(MAT_CEIL, {x0, IH, z0}, {CELL, 0, 0}, {0, 0, CELL}, sub, sub, {0, -1, 0}, floor_uv, ao);
                 }
+                if (indoors && (W.city() || W.court())) // the building's flat roof, up where the facade ends
+                    B.grid(MAT_ROOF, {x0, facade_h(cx, cz), z1}, {CELL, 0, 0}, {0, 0, -CELL}, 1, 1, {0, 1, 0}, floor_uv, [](Vec3) { return 1.0f; });
                 if (shack) { // the shack's roof (rotten boards, open sky through the gaps)
                     B.atlas_grid(FT_WOOD, {x0, 2.58f, z0}, {CELL, 0, 0}, {0, 0, CELL}, {0, -1, 0}, 1, CELL, 0.6f);
                     B.atlas_grid(FT_WOOD, {x0, 2.62f, z1}, {CELL, 0, 0}, {0, 0, -CELL}, {0, 1, 0}, 1, CELL, 0.7f);
                 }
-                if (!li.outdoor) {
+                const bool gallery = id == LevelId::L33 && !shop33; // the mall's glass-roofed galleries
+                if (!li.outdoor && !gallery) {
                     int csub = (cave ? 3 : 2) * D;
-                    B.grid(MAT_CEIL, {x0, H, z0}, {CELL, 0, 0}, {0, 0, CELL}, csub, csub, {0, -1, 0}, floor_uv, ao,
+                    B.grid(MAT_CEIL, {x0, shop33 ? IH : H, z0}, {CELL, 0, 0}, {0, 0, CELL}, csub, csub, {0, -1, 0}, floor_uv, ao,
                            [&](Vec3 p) { if (cave) p.y = ceiling_y(W, p.x, p.z); return p; });
+                }
+                if (gallery) { // Hamilton-style: a glass barrel vault on teal ribs, an upper gallery round the edges
+                    int mx = ((cx % 8) + 8) % 8, mz = ((cz % 8) + 8) % 8;
+                    bool cross = mx < 3 && mz < 3;
+                    const float VB = H, VR = 2.4f; // vault springs at the ceiling height, rises 2.4 m
+                    Builder::UV glass{0, 0, 1, 1};
+                    if (!cross) {
+                        bool along_x = mz < 3; // the gallery runs along x (its width is across z)
+                        int k = along_x ? mz : mx;
+                        float a0 = along_x ? z0 : x0, hall0 = along_x ? (cz - mz) * CELL : (cx - mx) * CELL;
+                        const int SEG = 3 * D;
+                        for (int s2 = 0; s2 < SEG; s2++) {
+                            float t0 = (a0 - hall0 + CELL * s2 / SEG) / (3 * CELL), t1 = (a0 - hall0 + CELL * (s2 + 1) / SEG) / (3 * CELL);
+                            float y0 = VB + std::sin(t0 * PI) * VR, y1 = VB + std::sin(t1 * PI) * VR;
+                            float c0 = hall0 + t0 * 3 * CELL, c1 = hall0 + t1 * 3 * CELL;
+                            Vec3 n{0, -1, 0};
+                            if (along_x) B.quad(MAT_LIGHT, {x0, y0, c0}, {x1, y0, c0}, {x1, y1, c1}, {x0, y1, c1}, 210, 0.86f, 0.95f, 1.0f);
+                            else B.quad(MAT_LIGHT, {c0, y0, z1}, {c0, y0, z0}, {c1, y1, z0}, {c1, y1, z1}, 210, 0.86f, 0.95f, 1.0f);
+                            (void)n;
+                        }
+                        (void)k;
+                        // a teal rib across the vault at every cell line
+                        B.set_tint(0x3a9c9a);
+                        for (int s2 = 0; s2 < 4; s2++) {
+                            float t0 = s2 / 4.0f, t1 = (s2 + 1) / 4.0f;
+                            if (t1 * 3 * CELL + hall0 < a0 - 0.01f || t0 * 3 * CELL + hall0 > a0 + CELL + 0.01f) continue;
+                            float y0 = VB + std::sin(t0 * PI) * VR, y1 = VB + std::sin(t1 * PI) * VR;
+                            float c0 = hall0 + t0 * 3 * CELL, c1 = hall0 + t1 * 3 * CELL;
+                            Vec3 pa = along_x ? Vec3{x0, y0, c0} : Vec3{c0, y0, z0}, pb = along_x ? Vec3{x0, y1, c1} : Vec3{c1, y1, z0};
+                            B.tube(MAT_PROP, pa, pb, 0.08f, glass, 0.5f);
+                        }
+                        B.clear_tint();
+                    } else if (mx == 1 && mz == 1) { // the crossing: a glass dome over the rotunda
+                        float dcx = x0 + CELL * 0.5f, dcz = z0 + CELL * 0.5f;
+                        B.glow = true; B.glow_g = 0.95f; B.glow_b = 1.0f;
+                        { // a hemisphere seen from inside
+                            const int SEG = 12 * D / 2 + 6, RING = 4;
+                            for (int j = 0; j < RING; j++) {
+                                float p0 = PI / 2 * j / RING, p1 = PI / 2 * (j + 1) / RING;
+                                for (int k = 0; k < SEG; k++) {
+                                    float a0 = 2 * PI * k / SEG, a1 = 2 * PI * (k + 1) / SEG;
+                                    auto P3 = [&](float ph, float a) { return Vec3{dcx + std::cos(ph) * std::cos(a) * 3.6f, VB + std::sin(ph) * 3.0f, dcz + std::cos(ph) * std::sin(a) * 3.6f}; };
+                                    Vec3 dn{0, -1, 0};
+                                    B.emit_quad(MAT_PROP, B.lit(P3(p0, a0), dn, 0, 0), B.lit(P3(p0, a1), dn, 1, 0), B.lit(P3(p1, a1), dn, 1, 1), B.lit(P3(p1, a0), dn, 0, 1));
+                                }
+                            }
+                        }
+                        B.glow = false; B.glow_g = B.glow_b = 1;
+                        B.set_tint(0x3a9c9a);
+                        B.cyl(MAT_PROP, dcx, dcz, 3.75f, 3.75f, VB - 0.3f, VB, glass, false, true, 2.0f);
+                        B.clear_tint();
+                    }
+                    if (cross && !(mx == 1 && mz == 1)) // a flat skylight round the dome
+                        B.quad(MAT_LIGHT, {x0, VB, z0}, {x1, VB, z0}, {x1, VB, z1}, {x0, VB, z1}, 190, 0.86f, 0.95f, 1.0f);
+                    // the upper gallery: a slab along any side that meets a shop block, a glass railing with a teal handrail
+                    static const int GX[4] = {-1, 1, 0, 0}, GZ[4] = {0, 0, -1, 1};
+                    for (int sd = 0; sd < 4; sd++) {
+                        int nx = cx + GX[sd], nz = cz + GZ[sd];
+                        int nmx = ((nx % 8) + 8) % 8, nmz = ((nz % 8) + 8) % 8;
+                        if (nmx < 3 || nmz < 3) continue; // the neighbour is gallery too
+                        const float GY = 4.6f, GD = 1.2f;
+                        float ax0 = sd == 0 ? x0 : (sd == 1 ? x1 - GD : x0), ax1 = sd == 0 ? x0 + GD : (sd == 1 ? x1 : x1);
+                        float az0 = sd == 2 ? z0 : (sd == 3 ? z1 - GD : z0), az1 = sd == 2 ? z0 + GD : (sd == 3 ? z1 : z1);
+                        B.set_tint(0xd8d4c8);
+                        B.fbox(MAT_FURN, ax0, az0, ax1, az1, GY - 0.25f, GY, Builder::cell(FT_STONE), Builder::cell(FT_STONE), Builder::cell(FT_STONE), {0, 1}, true);
+                        B.clear_tint();
+                        // railing along the open edge
+                        float ex0 = sd == 0 ? x0 + GD : (sd == 1 ? x1 - GD : x0), ex1 = sd == 0 ? x0 + GD : (sd == 1 ? x1 - GD : x1);
+                        float ez0 = sd == 2 ? z0 + GD : (sd == 3 ? z1 - GD : z0), ez1 = sd == 2 ? z0 + GD : (sd == 3 ? z1 - GD : z1);
+                        if (sd < 2) { ez0 = z0; ez1 = z1; } else { ex0 = x0; ex1 = x1; }
+                        Builder::UV pl = Builder::cell(FT_PLASTIC);
+                        B.set_tint(0x9cc8c8);
+                        Vec3 nn = sd < 2 ? Vec3{1, 0, 0} : Vec3{0, 0, 1};
+                        Vertex q0 = B.lit({ex0, GY, ez0}, nn, pl.u0, pl.v1), q1 = B.lit({ex1, GY, ez1}, nn, pl.u1, pl.v1);
+                        Vertex q2 = B.lit({ex1, GY + 1.0f, ez1}, nn, pl.u1, pl.v0), q3 = B.lit({ex0, GY + 1.0f, ez0}, nn, pl.u0, pl.v0);
+                        B.emit_quad(MAT_FURN, q0, q1, q2, q3);
+                        B.emit_quad(MAT_FURN, q1, q0, q3, q2);
+                        B.set_tint(0x3a9c9a);
+                        B.tube(MAT_PROP, {ex0, GY + 1.02f, ez0}, {ex1, GY + 1.02f, ez1}, 0.045f, glass, 0.5f);
+                        B.clear_tint();
+                    }
                 }
 
                 float lift;
@@ -943,7 +1343,7 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
                     B.grid(MAT_ROOF, {x0, lift, z0}, {CELL, 0, 0}, {0, 0, CELL}, 1, 1, {0, -1, 0}, floor_uv, [](Vec3) { return 0.45f; });
                     B.clear_tint();
                 }
-                if (indoors) { // the house's gable roof: the ridge runs along x through the middle
+                if (indoors && W.houses()) { // the house's gable roof: the ridge runs along x through the middle
                     int lx, lz, hbx, hbz;
                     W.house_lot(cx, cz, lx, lz, hbx, hbz);
                     const float eave = W.house_h(), ridge = eave + 1.7f, ov = 0.25f;
@@ -1001,8 +1401,14 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
                         float sx = 0.6f, sz = 0.3f;
                         if (W.hotel()) { sx = sz = (W.floor_mat(cx, cz) == 1 ? 0.7f : 0.22f); } // chandelier vs sconce
                         if (id == LevelId::L1) { sx = 0.75f; sz = 0.12f; }                                // long tube
-                        float y = (id == LevelId::L1 ? li.light_y : (cave ? ceiling_y(W, cxm, czm) : (indoors ? W.house_h() : H))) - 0.03f;
+                        float y = (id == LevelId::L1 ? li.light_y : (cave ? ceiling_y(W, cxm, czm) : ((indoors || shop33) ? IH : H))) - 0.03f;
                         if (indoors) { sx = 0.22f; sz = 0.22f; } // a ceiling lamp, not a street light
+                        if (gallery) { // a pendant hanging from the vault on a long cable
+                            y = li.light_y;
+                            sx = sz = 0.35f;
+                            B.box(MAT_PROP, cxm, czm, 0.012f, 0.012f, y, H + 1.5f, 0.1f, 1, 1);
+                            B.cyl(MAT_PROP, cxm, czm, 0.42f, 0.12f, y - 0.02f, y + 0.3f, {0, 0, 1, 1}, true, false, 1.0f);
+                        }
                         out.lights.push_back({{cxm, y, czm}, sx, sz, ls});
                         B.quad(MAT_LIGHT, {cxm - sx, y, czm - sz}, {cxm + sx, y, czm - sz}, {cxm + sx, y, czm + sz}, {cxm - sx, y, czm + sz}, lum);
                         if (id == LevelId::L1) { // hanging cables
@@ -1133,6 +1539,7 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
                 }
             } else {
                 // ----- solid block: sides facing open (or lower) neighbours, top if visible
+                if (id == LevelId::L4 && W.item(cx, cz) != ItemType::None) out.items.push_back(World::item_id(cx, cz)); // left on a desk
                 float h = W.block_h(cx, cz);
                 B.set_tint(W.tint(cx, cz));
                 const float cxm0 = x0 + CELL * 0.5f, czm0 = z0 + CELL * 0.5f;
@@ -1192,7 +1599,19 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
                 int su = (id == LevelId::L11 ? 1 : 2) * D;
                 auto side = [&](int nx, int nz, Vec3 o, Vec3 a, Vec3 n) {
                     float nh = W.solid(nx, nz) ? W.block_h(nx, nz) : 0.0f;
+                    if (id == LevelId::TSG4 && nh > 0) { // 4Four: leaning buildings pull away from their neighbours: never hide those faces
+                        float l1, t1, l2, t2;
+                        bool g1 = W.glitch(cx, cz, l1, t1), g2 = W.glitch(nx, nz, l2, t2);
+                        bool other = World::city_quarter(cx) != World::city_quarter(nx) || World::city_quarter(cz) != World::city_quarter(nz);
+                        if ((g1 || g2) && other) nh = 0;
+                    }
                     if (nh >= h - 0.01f) return;
+                    if (!low && W.indoors(nx, nz) && h > W.indoor_h(nx, nz)) { // the inside wall of a room / shop / corridor
+                        float ih = W.indoor_h(nx, nz);
+                        if (li.outdoor && !W.court()) { B.set_tint(0xe8dcc0); B.atlas_grid(FT_SHEET, Vec3{o.x, 0, o.z}, a, Vec3{0, ih, 0}, n, D, 1.25f, 0.8f); B.set_tint(W.tint(cx, cz)); }
+                        else B.vface(MAT_WALL, o, a, n, 0, ih, TEX_WALL, ih, su, sv, false);
+                        return;
+                    }
                     B.vface(bmat, o, a, n, nh, h, tw, th, su, sv, cave && !low);
                     if (!low && nh <= 0.0f) wall_decal(o, a, n, std::min(h, H), cx * 7 + nx, cz * 7 + nz);
                     // the doors painted on these walls get a real frame and a knob, so they stand out of the wall
@@ -1321,7 +1740,80 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
                 static const uint32_t DT[4] = {0xffffff, 0xeef5e2, 0xe2d6c0, 0xfff2d6};
                 B.set_tint(DT[(int)W.district(cx, cz) & 3]);
             }
-            if (W.wall_x(cx, cz)) {
+            const bool bldg = W.city() || W.court(); // 1.2: walls with a tall outside, an inside, windows and door headers
+            auto bface = [&](Vec3 o, Vec3 a, Vec3 n, int fcx, int fcz, int ocx, int ocz, bool win) {
+                // which surface faces into cell F (with cell O behind it), how tall, what it's made of
+                float h;
+                int kind; // 0 paper (city inside), 1 hotel wallpaper (court inside), 2 facade, 3 plain wall
+                if (W.indoors(fcx, fcz)) { h = W.indoor_h(fcx, fcz); kind = W.court() ? 1 : 0; }
+                else if (W.indoors(ocx, ocz)) { h = facade_h(ocx, ocz); kind = 2; }
+                else { h = WH; kind = 3; }
+                auto part = [&](Vec3 po, Vec3 pa, float y0, float y1) {
+                    if (y1 - y0 < 0.01f || pa.len() < 0.01f) return;
+                    if (kind == 0) { B.set_tint(0xe8dcc0); B.atlas_grid(FT_SHEET, Vec3{po.x, y0, po.z}, pa, Vec3{0, y1 - y0, 0}, n, D, 1.25f, 0.8f); B.clear_tint(); }
+                    else if (kind == 2) { B.vface(MAT_BLOCK, po, pa, n, y0, y1, btw, bth, std::max(1, D), std::max(1, (int)((y1 - y0) / 4.0f)) * D, false); }
+                    else B.vface(MAT_WALL, po, pa, n, y0, y1, TEX_WALL, kind == 1 ? h : y1 - y0, 2 * D, 2 * D, false);
+                };
+                if (!win) { part(o, a, 0, h); return; }
+                float L = a.len();
+                Vec3 ad = a * (1.0f / L);
+                const float S = 0.95f, T = 2.15f, J = 0.6f; // sill, head, jamb width
+                part(o, a, 0, S);
+                part(o, a, T, h);
+                part(o, ad * J, S, T);
+                part(o + ad * (L - J), ad * J, S, T);
+            };
+            auto window_trim = [&](Vec3 c, Vec3 along, Vec3 n) { // the reveal, a sill and a cross of glazing bars in an empty frame
+                const float S = 0.95f, T = 2.15f, Wd = CELL - 1.2f;
+                Builder::UV uv{0, 0, 1, 1};
+                Vec3 l = c - along * (Wd * 0.5f), r = c + along * (Wd * 0.5f);
+                for (int s2 = -1; s2 <= 1; s2 += 2) {
+                    Vec3 e = s2 < 0 ? l : r;
+                    B.box(MAT_PROP, e.x, e.z, std::fabs(along.x) * 0.04f + std::fabs(n.x) * (hw + 0.03f), std::fabs(along.z) * 0.04f + std::fabs(n.z) * (hw + 0.03f), S, T, 0.2f, 1.2f, 1);
+                }
+                B.box(MAT_PROP, c.x, c.z, std::fabs(along.x) * (Wd * 0.5f + 0.06f) + std::fabs(n.x) * (hw + 0.06f), std::fabs(along.z) * (Wd * 0.5f + 0.06f) + std::fabs(n.z) * (hw + 0.06f), S - 0.06f, S, 1.0f, 0.1f, 1);
+                B.box(MAT_PROP, c.x, c.z, std::fabs(along.x) * (Wd * 0.5f + 0.04f) + std::fabs(n.x) * (hw + 0.03f), std::fabs(along.z) * (Wd * 0.5f + 0.04f) + std::fabs(n.z) * (hw + 0.03f), T, T + 0.06f, 1.0f, 0.1f, 1);
+                B.box(MAT_PROP, c.x, c.z, std::fabs(along.x) * 0.02f + std::fabs(n.x) * 0.02f, std::fabs(along.z) * 0.02f + std::fabs(n.z) * 0.02f, S, T, 0.1f, 1.0f, 1);
+                B.tube(MAT_PROP, {l.x, (S + T) * 0.5f, l.z}, {r.x, (S + T) * 0.5f, r.z}, 0.02f, uv, 0.5f);
+            };
+            auto header = [&](Vec3 o, Vec3 a, Vec3 n, int fcx, int fcz, int ocx, int ocz) { // over a doorway: the facade continues above it
+                const float DT = 2.45f;
+                bool fin = W.indoors(fcx, fcz);
+                float h = fin ? W.indoor_h(fcx, fcz) : facade_h(ocx, ocz);
+                if (h <= DT) return;
+                if (fin && !W.court()) { B.set_tint(0xe8dcc0); B.atlas_grid(FT_SHEET, Vec3{o.x, DT, o.z}, a, Vec3{0, h - DT, 0}, n, D, 1.25f, 0.8f); B.clear_tint(); }
+                else B.vface(fin ? MAT_WALL : MAT_BLOCK, o, a, n, DT, h, fin ? TEX_WALL : btw, fin ? h : bth, D, D, false);
+            };
+            if (bldg) {
+                if (W.wall_x(cx, cz)) {
+                    bool win = W.window_edge(cx, cz, true);
+                    bface({x0 + hw, 0, z1}, {0, 0, -CELL}, {1, 0, 0}, cx, cz, cx - 1, cz, win);
+                    bface({x0 - hw, 0, z0}, {0, 0, CELL}, {-1, 0, 0}, cx - 1, cz, cx, cz, win);
+                    if (win) window_trim({x0, 0, z0 + CELL * 0.5f}, {0, 0, 1}, {1, 0, 0});
+                } else if (!W.solid(cx, cz) && !W.solid(cx - 1, cz) && W.indoors(cx, cz) != W.indoors(cx - 1, cz)) {
+                    header({x0 + hw, 0, z1}, {0, 0, -CELL}, {1, 0, 0}, cx, cz, cx - 1, cz);
+                    header({x0 - hw, 0, z0}, {0, 0, CELL}, {-1, 0, 0}, cx - 1, cz, cx, cz);
+                    B.grid(MAT_WALL, {x0 - hw, 2.45f, z0}, {WALL_T, 0, 0}, {0, 0, CELL}, 1, 1, {0, -1, 0}, floor_uv, [](Vec3) { return 0.8f; });
+                }
+                if (W.wall_z(cx, cz)) {
+                    bool win = W.window_edge(cz, cx, false);
+                    bface({x0, 0, z0 + hw}, {CELL, 0, 0}, {0, 0, 1}, cx, cz, cx, cz - 1, win);
+                    bface({x1, 0, z0 - hw}, {-CELL, 0, 0}, {0, 0, -1}, cx, cz - 1, cx, cz, win);
+                    if (win) window_trim({x0 + CELL * 0.5f, 0, z0}, {1, 0, 0}, {0, 0, 1});
+                } else if (!W.solid(cx, cz) && !W.solid(cx, cz - 1) && W.indoors(cx, cz) != W.indoors(cx, cz - 1)) {
+                    header({x0, 0, z0 + hw}, {CELL, 0, 0}, {0, 0, 1}, cx, cz, cx, cz - 1);
+                    header({x1, 0, z0 - hw}, {-CELL, 0, 0}, {0, 0, -1}, cx, cz - 1, cx, cz);
+                    B.grid(MAT_WALL, {x0, 2.45f, z0 + hw}, {CELL, 0, 0}, {0, 0, -WALL_T}, 1, 1, {0, -1, 0}, floor_uv, [](Vec3) { return 0.8f; });
+                }
+                if (W.post(cx, cz)) {
+                    float ph = WH;
+                    for (int a2 = -1; a2 <= 0; a2++)
+                        for (int b2 = -1; b2 <= 0; b2++)
+                            if (W.indoors(cx + a2, cz + b2)) ph = std::max(ph, facade_h(cx + a2, cz + b2));
+                    B.box(MAT_BLOCK, x0, z0, hp, hp, 0, ph, btw, bth, 1);
+                }
+            }
+            if (!bldg && W.wall_x(cx, cz)) {
                 bool tall = low && !li.outdoor && W.exit_on_edge(cx, cz, true); // office: the exit's wall section is full height
                 float h = tall ? H : WH;
                 if (inside_face(cx, cz)) paper({x0 + hw, 0, z1}, {0, 0, -CELL}, {1, 0, 0}, h);
@@ -1334,7 +1826,7 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
                     B.vface(MAT_WALL, {x0 + hw, 0, z0}, {-WALL_T, 0, 0}, {0, 0, -1}, WH, H, TEX_WALL, H, 1, 1, false);
                 } else if (low) cap(x0 - hw, z0, x0 + hw, z1);
             }
-            if (W.wall_z(cx, cz)) {
+            if (!bldg && W.wall_z(cx, cz)) {
                 bool tall = low && !li.outdoor && W.exit_on_edge(cx, cz, false);
                 float h = tall ? H : WH;
                 if (inside_face(cx, cz)) paper({x0, 0, z0 + hw}, {CELL, 0, 0}, {0, 0, 1}, h);
@@ -1347,8 +1839,31 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
                     B.vface(MAT_WALL, {x1, 0, z0 + hw}, {0, 0, -WALL_T}, {1, 0, 0}, WH, H, TEX_WALL, H, 1, 1, false);
                 } else if (low) cap(x0, z0 - hw, x1, z0 + hw);
             }
-            if (W.post(cx, cz)) {
-                B.box(MAT_WALL, x0, z0, hp, hp, 0, WH, TEX_WALL, WH, 1);
+            if (id == LevelId::L37) { // the poolrooms: every wall meets the floor and the ceiling in a soft tiled curve
+                Builder::UV uv{0, 0, 1, 1};
+                const float R = 0.17f;
+                if (W.wall_x(cx, cz))
+                    for (int s2 = -1; s2 <= 1; s2 += 2) {
+                        float x = x0 + s2 * hw;
+                        B.tube(MAT_WALL, {x, 0, z0}, {x, 0, z1}, R, uv, 1.0f);
+                        B.tube(MAT_WALL, {x, H, z0}, {x, H, z1}, R, uv, 1.0f);
+                    }
+                if (W.wall_z(cx, cz))
+                    for (int s2 = -1; s2 <= 1; s2 += 2) {
+                        float z = z0 + s2 * hw;
+                        B.tube(MAT_WALL, {x0, 0, z}, {x1, 0, z}, R, uv, 1.0f);
+                        B.tube(MAT_WALL, {x0, H, z}, {x1, H, z}, R, uv, 1.0f);
+                    }
+            }
+            if (bldg) {
+                // (walls, windows, headers and posts were drawn above)
+            } else if (W.post(cx, cz)) {
+                if (id == LevelId::L37) { // round posts, so the wall ends are round too
+                    Builder::UV uv{0, 0, 1, 1};
+                    B.cyl(MAT_WALL, x0, z0, hp + 0.03f, hp + 0.03f, 0, WH, uv, false, false, 1.0f);
+                } else {
+                    B.box(MAT_WALL, x0, z0, hp, hp, 0, WH, TEX_WALL, WH, 1);
+                }
                 if (low) cap(x0 - hp, z0 - hp, x0 + hp, z0 + hp);
             } else if (W.pillar(cx, cz)) {
                 bool square = id == LevelId::L0 || id == LevelId::L6 || id == LevelId::LFun || id == LevelId::TSGFar || id == LevelId::L1;
@@ -1399,10 +1914,20 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
                 bool owner = false;
                 int nf = W.furniture(cx, cz, fs, &owner);
                 for (int k = 0; owner && k < nf; k++) {
-                    B.furniture(fs[k], W.houses() && W.house(cx, cz) ? W.house_h() : (li.outdoor ? 2.6f : H));
                     const Furn& f = fs[k];
+                    size_t vb[MAT_COUNT];
+                    for (int mm = 0; mm < MAT_COUNT; mm++) vb[mm] = B.v[mm].size();
+                    B.furniture(fs[k], W.indoors(cx, cz) ? W.indoor_h(cx, cz) : (li.outdoor ? 2.6f : H));
+                    float gy = id == LevelId::L94 ? W.floor_y((f.x0 + f.x1) * 0.5f, (f.z0 + f.z1) * 0.5f) : 0.0f;
+                    if (gy != 0.0f) // Motion's hills: stand it on the slope
+                        for (int mm = 0; mm < MAT_COUNT; mm++)
+                            for (size_t q = vb[mm]; q < B.v[mm].size(); q++) B.v[mm][q].y += gy;
+                    if (f.solid && f.y1 > 0.3f && f.kind != FurnKind::WallPiece && f.kind != FurnKind::DoorLeaf && f.kind != FurnKind::Headboard)
+                        out.shadows.push_back({(f.x0 + f.x1) * 0.5f, (f.z0 + f.z1) * 0.5f, (f.x1 - f.x0) * 0.5f + 0.12f, (f.z1 - f.z0) * 0.5f + 0.12f, gy + 0.012f});
                     if (f.kind == FurnKind::Lantern || f.kind == FurnKind::FireBarrel) // their glow gets a halo too
                         out.lights.push_back({{(f.x0 + f.x1) * 0.5f, f.y1 + 0.1f, (f.z0 + f.z1) * 0.5f}, -1.0f, 0.6f, LightState::Flicker});
+                    if (f.kind == FurnKind::Floodlight)
+                        out.lights.push_back({{(f.x0 + f.x1) * 0.5f + f.face.x * 0.25f, f.y1, (f.z0 + f.z1) * 0.5f + f.face.z * 0.25f}, -1.0f, 0.9f, LightState::On});
                 }
             }
             if (W.balloon(cx, cz)) {

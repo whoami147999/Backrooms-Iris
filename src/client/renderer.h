@@ -33,6 +33,8 @@ struct RenderSettings {
     bool threaded = true;         // build chunk meshes on a worker thread
     bool mipmaps = true;          // mipmapped world textures
     bool retro = true;            // PS1 look: crisp texels, wobbly vertices + affine textures (PC), pixels + dither (PC)
+    bool shadows = false;         // 1.2: soft shadows under furniture (Vita: enhanced graphics)
+    bool reflections = false;     // 1.2: lamps reflected in shiny floors and pools
 };
 
 // Parameters for the film post-process (PC).
@@ -131,6 +133,7 @@ public:
     void set_style(bool film, bool camcorder, bool atmosphere, bool retro);
     // graphics preset changes: view distance and detail now; textures / lighting grids rebuild
     void set_quality(float view_dist, int texture_size, int mesh_detail, float particles, float entity_detail);
+    void set_effects(bool shadows, bool reflections) { s_.shadows = shadows; s_.reflections = reflections; }
     void set_darkness(float d) { darkness_ = d; }  // night on the levels with a day/night cycle (0..1)
     void night_dim(float amount);                  // after the world: darken the whole picture
     // How much a nearby flickering light is darkening the view right now (0..1), set by draw_world.
@@ -156,6 +159,8 @@ private:
         std::vector<uint32_t> items;
         std::vector<Vec3> balloons;
         std::vector<ChunkMesh::LightMark> lights;
+        std::vector<ChunkMesh::Water> water;
+        std::vector<ChunkMesh::Shadow> shadows;
     };
     // background chunk building: the worker thread turns (world, chunk) into a ChunkMesh,
     // the main thread uploads it to the GPU
@@ -209,7 +214,7 @@ private:
     int film_loc_[16] = {};
     void grab_screen();
     void draw_atmosphere(const World& w, const std::vector<const GpuChunk*>& visible, float time);
-    void blob_shadow(Vec2 p, float r, float a);
+    void blob_shadow(Vec2 p, float r, float a, float y = 0.015f);
 
     static uint64_t key(int kx, int kz) { return ((uint64_t)(uint32_t)kx << 32) | (uint32_t)kz; }
     static float text_width_px_f(const std::string& s) { return s.empty() ? 0.0f : (float)s.size() * 6 - 1; }

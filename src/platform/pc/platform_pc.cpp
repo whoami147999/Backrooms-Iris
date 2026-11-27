@@ -102,6 +102,7 @@ void platform_poll(InputState& in) {
                 break;
             case SDL_MOUSEBUTTONDOWN:
                 if (e.button.button == SDL_BUTTON_LEFT) { in.click = true; if (g_captured) in.use_item = true; }
+                if (e.button.button == SDL_BUTTON_RIGHT && !g_captured) in.back = true; // menus: right click goes back
                 in.using_gamepad = false;
                 break;
             case SDL_MOUSEWHEEL:

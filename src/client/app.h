@@ -165,6 +165,9 @@ private:
     std::string single_seed_;
     int sandbox_level_ = 0;
     int host_level_ = 0;
+    int lobby_level_ = 0;        // 1.2: what the host picks in the lobby
+    bool lobby_sandbox_ = false;
+    bool host_lobby_ = true;     // hosting starts in the lobby
     std::string join_ip_;
     World menu_world_{LevelId::L0, 7777};
 
@@ -178,6 +181,10 @@ private:
     void back();
     void build_menu();
     void menu_input();
+    void menu_geom(float& y0, float& row, int& first, int& vis) const;
+    int menu_scroll_ = -1;
+    Sfx bgm_track_ = SFX_MUSIC_MENU;
+    bool slider_drag_ = false;
     void draw_menu();
     void draw_menu_background();
     void start_session(std::unique_ptr<Session> s);
@@ -185,7 +192,7 @@ private:
     void start_host();
     void start_join(const std::string& addr);
     uint16_t host_port() const;
-    struct Quality { float view_dist; int texture_size; int mesh_detail; int msaa; float particles; float entity_detail; bool post_effects; };
+    struct Quality { float view_dist; int texture_size; int mesh_detail; int msaa; float particles; float entity_detail; bool post_effects; bool shadows, reflections; };
     static Quality quality_preset(int level, bool vita);
     void apply_quality();
     void leave_game();

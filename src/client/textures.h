@@ -79,6 +79,7 @@ enum Sprite : int {
     SPR_BATTERY, SPR_NV, SPR_CHALK, SPR_PILLS,
     SPR_STAR,          // a tiny bright point
     SPR_GRIT,          // near-white noise: surface grain for models
+    SPR_SHELLS,        // 1.2: shotgun shells
     SPR_COUNT
 };
 Image make_sprite(Sprite s);

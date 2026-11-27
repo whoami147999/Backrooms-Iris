@@ -27,6 +27,10 @@ struct ChunkMesh {
     std::vector<Vec3> balloons;       // Level Fun decorations
     struct LightMark { Vec3 pos; float sx, sz; LightState state; };
     std::vector<LightMark> lights;    // light fixtures (halos, light shafts, flicker)
+    struct Water { float x0, z0, x1, z1, y; };
+    std::vector<Water> water;         // 1.2: pool surfaces (drawn see-through by the renderer)
+    struct Shadow { float x, z, hx, hz, y; };
+    std::vector<Shadow> shadows;      // 1.2: soft shadows under furniture (enhanced graphics)
 };
 
 // Builds chunk (kx, kz): cells [kx*CHUNK_CELLS, (kx+1)*CHUNK_CELLS) on each axis.

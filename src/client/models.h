@@ -17,7 +17,7 @@ class ModelBuilder {
 public:
     ModelBuilder(std::vector<Vertex>& out, int seg) : out_(out), seg_(seg) {}
     // where the model stands (world): position on the floor and facing; or camera space for view models
-    void place(Vec2 pos, float yaw) { pos_ = pos; yaw_ = yaw; camera_ = false; }
+    void place(Vec2 pos, float yaw, float ground = 0) { pos_ = pos; yaw_ = yaw; ground_ = ground; camera_ = false; }
     void place_camera() { camera_ = true; }
     void set_light(float level, Vec3 key_dir) { light_ = level; key_ = key_dir * (1.0f / key_dir.len()); }
     // an extra rotation applied to everything that follows (local, before placement): pitch about x, then roll about z, then yaw about y
@@ -35,7 +35,7 @@ private:
     std::vector<Vertex>& out_;
     int seg_;
     Vec2 pos_;
-    float yaw_ = 0;
+    float yaw_ = 0, ground_ = 0;
     bool camera_ = false;
     float light_ = 1;
     Vec3 key_{0.3f, 0.85f, 0.4f};

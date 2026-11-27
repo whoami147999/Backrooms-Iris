@@ -157,9 +157,10 @@ static void test_all_levels() {
         double reach = 100.0 * q.size() / open;
         CHECK(reach > 80.0, "%s: only %.1f%% of open cells reachable", nm, reach);
         bool run = (LevelId)li == LevelId::LRun; // one corridor, one door at the end
-        CHECK(exits >= (run ? 1 : 2), "%s: only %d reachable exits in a 350 m square", nm, exits);
+        bool hub = (LevelId)li == LevelId::Hub;  // the lobby: no exits, just the outpost's supplies
+        CHECK(hub || exits >= (run ? 1 : 2), "%s: only %d reachable exits in a 350 m square", nm, exits);
         bool end = (LevelId)li == LevelId::TSGEnd; // TH3 3ND: nothing left to find
-        CHECK(end ? items == 0 : items >= (run ? 4 : 20), "%s: %d items", nm, items);
+        CHECK(end ? items == 0 : (hub ? items <= 4 : items >= (run ? 2 : 20)), "%s: %d items", nm, items);
         std::printf("  %-9s reachable %5.1f%%  exits %3d  items %4d\n", nm, reach, exits, items);
     }
 }
@@ -266,10 +267,14 @@ static void test_sim_soak() {
             sim.apply_input(a, ca);
             sim.apply_input(b, cb);
             sim.tick(1.0f / 60);
-            if (sim.world.id() == (LevelId)li) max_ents = std::max(max_ents, (int)sim.ents.size()); // (random walks find exits)
+            if (sim.world.id() == (LevelId)li) { // (random walks find exits)
+                int hostile = 0;
+                for (const Entity& e : sim.ents) hostile += !friendly(e.type);
+                max_ents = std::max(max_ents, hostile);
+            }
             for (int i : {a, b}) deaths += !sim.players[i].st.alive && sim.players[i].respawn_t > 9.98f;
         }
-        bool expect = (LevelId)li != LevelId::L11 && (LevelId)li != LevelId::L37 && (LevelId)li != LevelId::TSGEnd; // the safe levels
+        bool expect = (LevelId)li != LevelId::L37 && (LevelId)li != LevelId::TSGEnd && (LevelId)li != LevelId::Hub && (LevelId)li != LevelId::TSG2; // the safe levels (the angels are friendly)
         CHECK(!expect || max_ents > 0, "%s: no entities ever spawned", level_info((LevelId)li).code);
         CHECK(expect || max_ents == 0, "%s should be safe", level_info((LevelId)li).code);
         std::printf("  %-9s max entities %d, deaths in 3 min of random walking: %d\n", level_info((LevelId)li).code, max_ents, deaths);
@@ -462,7 +467,7 @@ static void test_difficulty_exits() {
                         CHECK(door.side == -1 && std::fabs(door.pos.x - (x + 0.5f) * CELL) < 0.01f, "%s: free-standing exit misplaced", level_info((LevelId)li).code);
                     CHECK(!L.solid(x, z), "exit opens into a solid cell");
                 }
-            CHECK(n >= ((LevelId)li == LevelId::LRun ? 1 : 3), "%s %s: only %d exits in a 400 m square", level_info((LevelId)li).code, diff_info((Difficulty)d).name, n);
+            CHECK(n >= ((LevelId)li == LevelId::LRun ? 1 : 3) || (LevelId)li == LevelId::Hub, "%s %s: only %d exits in a 400 m square", level_info((LevelId)li).code, diff_info((Difficulty)d).name, n);
             CHECK(n <= prev + 2 || (LevelId)li == LevelId::TSGEnd, "%s: %s has more exits (%d) than an easier difficulty (%d)", level_info((LevelId)li).code,
                   diff_info((Difficulty)d).name, n, prev);
             prev = n;
@@ -525,18 +530,18 @@ static void test_hotel_rooms() {
 // Objectives: tapes/breakers are placed and reachable, finishing gives everyone a perk that
 // survives death and level changes, and perks actually change things.
 static void test_objectives() {
-    int types[4] = {0, 0, 0, 0};
+    int types[(int)ObjType::COUNT] = {};
     for (uint32_t seed = 1; seed < 40; seed++) {
         GameSim sim(seed);
         sim.start_level((LevelId)(seed % (uint32_t)LevelId::COUNT), seed);
         sim.add_player("A");
         const Objective& o = sim.objective;
         types[(int)o.type]++;
-        if (sim.world.id() == LevelId::LRun || sim.world.id() == LevelId::TSGEnd) continue; // no objective on Level ! or at the end
+        if (sim.world.id() == LevelId::LRun || sim.world.id() == LevelId::TSGEnd || sim.world.id() == LevelId::Hub) continue; // no objective on Level !, at the end or in the lobby
         CHECK(o.type != ObjType::None && o.need > 0, "seed %u: no objective", seed);
         int things = 0;
-        for (const Prop& p : sim.props) things += p.kind == PropKind::Tape || p.kind == PropKind::Breaker;
-        if (o.type == ObjType::Tapes || o.type == ObjType::Breakers) CHECK(things == o.need, "seed %u: %d props for %d needed", seed, things, o.need);
+        for (const Prop& p : sim.props) things += p.kind == PropKind::Tape || p.kind == PropKind::Breaker || p.kind == PropKind::Key;
+        if (o.type == ObjType::Tapes || o.type == ObjType::Breakers || o.type == ObjType::Keys) CHECK(things == o.need, "seed %u: %d props for %d needed", seed, things, o.need);
         if (o.type == ObjType::Tapes || o.type == ObjType::Breakers) {
             // collect them all by standing next to each one
             InputCmd cmd;

@@ -33,6 +33,8 @@ const char* entity_name(EntityType t) {
         case EntityType::Mangled: return "THE MANGLED";
         case EntityType::Animation: return "ANIMATION";
         case EntityType::FallenAngel: return "FALLEN ANGEL";
+        case EntityType::MegMedic: return "M.E.G. MEDIC";
+        case EntityType::MegScout: return "M.E.G. SCOUT";
         default: return "?";
     }
 }
@@ -52,30 +54,32 @@ std::vector<Population> population(LevelId id, bool night) {
         case LevelId::TSGEnd: return {};
         case LevelId::L70: if (night) return {{EntityType::Hound, 3}, {EntityType::SkinStealer, 1}}; return {{EntityType::Hound, 1}, {EntityType::SkinStealer, 1}};
         case LevelId::L94: if (night) return {{EntityType::Animation, 4}, {EntityType::Smiler, 1}, {EntityType::Hound, 1}}; return {}; // the town is safe by day
-        case LevelId::L188: return {{EntityType::Bacteria, 1}};
-        case LevelId::L0: return {{EntityType::Bacteria, 1}, {EntityType::Smiler, 1}};
-        case LevelId::L1: return {{EntityType::Hound, 3}, {EntityType::Bacteria, 1}};
-        case LevelId::L2: return {{EntityType::Hound, 2}, {EntityType::Bacteria, 1}, {EntityType::Smiler, 1}};
-        case LevelId::L4: return {{EntityType::Bacteria, 1}};                       // mostly quiet
-        case LevelId::L5: return {{EntityType::Partygoer, 3}, {EntityType::Smiler, 1}};
-        case LevelId::L6: return {{EntityType::Smiler, 4}, {EntityType::Bacteria, 1}};
-        case LevelId::L8: return {{EntityType::Smiler, 4}, {EntityType::Hound, 1}};
-        case LevelId::L9: return {{EntityType::SkinStealer, 2}, {EntityType::Hound, 2}};
-        case LevelId::LFun: return {{EntityType::Partygoer, 5}};
-        case LevelId::L7: return {{EntityType::Smiler, 1}};                          // the sea is nearly empty
-        case LevelId::L19: return {{EntityType::Smiler, 2}, {EntityType::Hound, 1}};
-        case LevelId::L21: return {{EntityType::Bacteria, 1}};
-        case LevelId::L22: return {{EntityType::Hound, 2}, {EntityType::SkinStealer, 1}};
-        case LevelId::L24: return {{EntityType::Hound, 1}};
-        case LevelId::L33: return {{EntityType::SkinStealer, 1}, {EntityType::Smiler, 1}, {EntityType::Partygoer, 1}};
-        case LevelId::L36: return {{EntityType::Bacteria, 1}, {EntityType::Smiler, 1}};
-        case LevelId::L51: return {{EntityType::Hound, 2}, {EntityType::Smiler, 2}};
-        case LevelId::LRun: return {{EntityType::Partygoer, 5}, {EntityType::Hound, 1}}; // the chase (spawned behind you)
-        case LevelId::L3: return {{EntityType::Hound, 2}, {EntityType::Smiler, 1}};
-        case LevelId::L10: return {{EntityType::Hound, 2}, {EntityType::SkinStealer, 1}};
-        case LevelId::L13: return {{EntityType::SkinStealer, 1}, {EntityType::Partygoer, 1}, {EntityType::Smiler, 1}};
-        case LevelId::TSGFar: return {{EntityType::Bacteria, 2}, {EntityType::Hound, 2}};
-        case LevelId::TSGHope: return {{EntityType::Smiler, 3}, {EntityType::Bacteria, 1}};
+        case LevelId::L188: return {{EntityType::Bacteria, 1}, {EntityType::SkinStealer, 1}, {EntityType::Smiler, 1}};
+        case LevelId::L0: return {{EntityType::Bacteria, 1}, {EntityType::Smiler, 2}, {EntityType::Hound, 1}};
+        case LevelId::L1: return {{EntityType::Hound, 4}, {EntityType::Bacteria, 1}};
+        case LevelId::L2: return {{EntityType::Hound, 3}, {EntityType::Bacteria, 1}, {EntityType::Smiler, 2}};
+        case LevelId::L4: return {{EntityType::Bacteria, 1}, {EntityType::Smiler, 1}};
+        case LevelId::L5: return {{EntityType::Partygoer, 4}, {EntityType::Smiler, 2}};
+        case LevelId::L6: return {{EntityType::Smiler, 5}, {EntityType::Bacteria, 1}};
+        case LevelId::L8: return {{EntityType::Smiler, 5}, {EntityType::Hound, 2}};
+        case LevelId::L9: return {{EntityType::SkinStealer, 3}, {EntityType::Hound, 2}};
+        case LevelId::LFun: return {{EntityType::Partygoer, 7}};
+        case LevelId::L7: return {{EntityType::Smiler, 2}};                          // the sea is nearly empty
+        case LevelId::L19: return {{EntityType::Smiler, 3}, {EntityType::Hound, 1}};
+        case LevelId::L21: return {{EntityType::Bacteria, 1}, {EntityType::SkinStealer, 1}};
+        case LevelId::L22: return {{EntityType::Hound, 3}, {EntityType::SkinStealer, 1}};
+        case LevelId::L24: return {{EntityType::Hound, 2}};
+        case LevelId::L33: return {{EntityType::SkinStealer, 2}, {EntityType::Smiler, 1}, {EntityType::Partygoer, 2}};
+        case LevelId::L36: return {{EntityType::Bacteria, 1}, {EntityType::Smiler, 2}, {EntityType::Hound, 1}};
+        case LevelId::L51: return {{EntityType::Hound, 3}, {EntityType::Smiler, 2}};
+        case LevelId::LRun: return {{EntityType::Partygoer, 10}, {EntityType::Hound, 3}, {EntityType::Bacteria, 1}, {EntityType::Smiler, 3}}; // the chase
+        case LevelId::L3: return {{EntityType::Hound, 3}, {EntityType::Smiler, 2}};
+        case LevelId::L10: return {{EntityType::Hound, 3}, {EntityType::SkinStealer, 1}};
+        case LevelId::L13: return {{EntityType::SkinStealer, 2}, {EntityType::Partygoer, 1}, {EntityType::Smiler, 1}};
+        case LevelId::TSGFar: return {{EntityType::Bacteria, 2}, {EntityType::Hound, 3}};
+        case LevelId::TSGHope: return {{EntityType::Smiler, 4}, {EntityType::Bacteria, 1}};
+        case LevelId::L11: return {{EntityType::SkinStealer, 1}};                   // (the city isn't as safe as it was)
+        case LevelId::Hub: return {};
         default: return {}; // Level 11 and Level 37 are safe
     }
 }
@@ -103,6 +107,7 @@ std::string objective_text(const Objective& o) {
     switch (o.type) {
         case ObjType::Tapes: std::snprintf(buf, sizeof buf, "FIND THE LOST TAPES %d/%d", o.have, o.need); break;
         case ObjType::Breakers: std::snprintf(buf, sizeof buf, "TURN ON THE BREAKERS %d/%d", o.have, o.need); break;
+        case ObjType::Keys: std::snprintf(buf, sizeof buf, "FIND THE KEYCARDS %d/%d", o.have, o.need); break;
         case ObjType::Survive: {
             int left = std::max(0, (int)o.need - (int)o.have);
             std::snprintf(buf, sizeof buf, "SURVIVE %d:%02d", left / 60, left % 60);
@@ -110,7 +115,9 @@ std::string objective_text(const Objective& o) {
         }
         default: return "";
     }
-    return buf;
+    std::string s = buf;
+    if (o.required && !o.done) s += " TO UNLOCK THE EXITS";
+    return s;
 }
 
 // =================================================================== lifecycle
@@ -124,6 +131,8 @@ void GameSim::start_level(LevelId id, uint32_t seed) {
     picked_order.clear();
     spawn_t_ = 0;
     pending_level_ = LevelId::COUNT;
+    outposts_up.clear();
+    if (id != LevelId::TSGEnd) { escaped = false; won_t = 0; }
     int n = 0;
     for (int i = 0; i < IRIS_MAX_PLAYERS; i++) {
         SimPlayer& p = players[i];
@@ -171,11 +180,22 @@ void GameSim::setup_objective() {
     objective = Objective{};
     LevelId id = world.id();
     uint32_t h = hash3(world.seed(), (int)id, 0, 9001);
-    if (id == LevelId::LRun || id == LevelId::TSGEnd) return; // the only objective here is the door
+    if (id == LevelId::LRun || id == LevelId::TSGEnd || id == LevelId::Hub) return; // the only objective here is the door
+    if (sandbox) return;
     bool safe = id == LevelId::L11 || id == LevelId::L37;
     int pick = safe ? 0 : (int)(h % 3u);
     objective.reward = (Perk)((h / 3u + objectives_done) % (uint32_t)PERK_COUNT);
     bool hard = difficulty >= Difficulty::Hard;
+    // 1.2: on these levels the exits won't open until the job's done
+    switch (id) {
+        case LevelId::L5: case LevelId::L13: case LevelId::TSG1: case LevelId::L188: case LevelId::L21:
+            objective.required = true; pick = 3; break;   // the rooms' keycards
+        case LevelId::L2: case LevelId::L3: case LevelId::L22: case LevelId::L36:
+            objective.required = true; pick = 1; break;   // get the power back on
+        case LevelId::L33: case LevelId::L51: case LevelId::L4:
+            objective.required = true; pick = 0; break;   // the lost tapes
+        default: break;
+    }
     if (pick == 2) {
         static const uint8_t SECS[4] = {75, 100, 130, 160};
         objective.type = ObjType::Survive;
@@ -184,7 +204,7 @@ void GameSim::setup_objective() {
     }
     // tapes lie on the floor; breaker boxes hang on walls
     bool few_walls = id == LevelId::TSG3 || id == LevelId::L94 || id == LevelId::TSG2 || id == LevelId::TSG0; // nothing to hang a breaker box on
-    objective.type = (pick == 0 || few_walls) ? ObjType::Tapes : ObjType::Breakers;
+    objective.type = pick == 3 ? ObjType::Keys : ((pick == 0 || few_walls) ? ObjType::Tapes : ObjType::Breakers);
     objective.need = (uint8_t)(hard ? 4 : 3);
     std::vector<std::pair<int, int>> cells;
     reachable_cells(cells, 7, 34);
@@ -201,8 +221,9 @@ void GameSim::setup_objective() {
         Prop pr;
         pr.id = next_prop_id_++;
         if (next_prop_id_ == 0) next_prop_id_ = 1;
-        if (objective.type == ObjType::Tapes) {
-            pr.kind = PropKind::Tape;
+        if (objective.type == ObjType::Tapes || objective.type == ObjType::Keys) {
+            if (objective.type == ObjType::Keys && !world.guest_room(cx, cz) && tries < 450) continue; // keycards are left in the rooms
+            pr.kind = objective.type == ObjType::Keys ? PropKind::Key : PropKind::Tape;
             pr.pos = at + Vec2{r.range(-0.6f, 0.6f), r.range(-0.6f, 0.6f)};
             pr.item = (ItemType)(int)(r.f01() * 255); // just a random tilt for the renderer
         } else {
@@ -223,13 +244,14 @@ void GameSim::setup_objective() {
         placed.push_back(at);
     }
     objective.need = (uint8_t)std::max<size_t>(1, placed.size());
-    if (placed.empty()) { objective.type = ObjType::Survive; objective.need = 90; }
+    if (placed.empty()) { objective.type = ObjType::Survive; objective.need = 90; objective.required = false; }
 }
 
 void GameSim::complete_objective() {
     if (objective.done || objective.type == ObjType::None) return;
     objective.done = true;
     objectives_done++;
+    if (objective.required) event("THE EXITS ARE UNLOCKED");
     const PerkInfo& pk = perk_info(objective.reward);
     for (int i = 0; i < IRIS_MAX_PLAYERS; i++) {
         SimPlayer& sp = players[i];
@@ -371,18 +393,25 @@ void GameSim::try_pickup(int i) {
             float d = (world.item_pos(cx, cz) - me).len();
             if (d < best) { best = d; best_cell_id = (int)World::item_id(cx, cz); best_prop = -1; t = it; }
         }
+    // a M.E.G. official within reach: talk to them
+    for (Entity& e : ents) {
+        if ((e.type != EntityType::MegMedic && e.type != EntityType::MegScout) || (e.pos - me).len() > 2.2f) continue;
+        meg_talk(i, e);
+        return;
+    }
     // objective things first: a tape at your feet or a breaker box within reach
     for (size_t k = 0; k < props.size(); k++) {
         Prop& pr = props[k];
-        if (pr.kind != PropKind::Tape && pr.kind != PropKind::Breaker) continue;
+        if (pr.kind != PropKind::Tape && pr.kind != PropKind::Breaker && pr.kind != PropKind::Key) continue;
         float d = (pr.pos - me).len();
         if (d > (pr.kind == PropKind::Breaker ? 1.7f : PICKUP_RANGE)) continue;
         if (pr.kind == PropKind::Breaker && pr.life > 0.5f) continue; // already on
         char buf[64];
-        if (pr.kind == PropKind::Tape) {
+        if (pr.kind == PropKind::Tape || pr.kind == PropKind::Key) {
+            bool key = pr.kind == PropKind::Key;
             props.erase(props.begin() + (long)k);
-            if (objective.type == ObjType::Tapes) objective.have++;
-            std::snprintf(buf, sizeof buf, "LOST TAPE %d/%d", objective.have, objective.need);
+            if (objective.type == (key ? ObjType::Keys : ObjType::Tapes)) objective.have++;
+            std::snprintf(buf, sizeof buf, key ? "KEYCARD %d/%d" : "LOST TAPE %d/%d", objective.have, objective.need);
         } else {
             pr.life = 1;
             if (objective.type == ObjType::Breakers) objective.have++;
@@ -401,8 +430,9 @@ void GameSim::try_pickup(int i) {
     if (t == ItemType::None) return;
     const ItemInfo& info = item_info(t);
     uint8_t& have = p.inv[(int)t];
-    if (have >= (info.tool ? 1 : MAX_ITEM_STACK)) { toast(i, std::string("CAN'T CARRY MORE ") + info.name); return; }
-    have++;
+    const int cap = t == ItemType::Shells ? 12 : (info.tool ? 1 : MAX_ITEM_STACK);
+    if (have >= cap) { toast(i, std::string("CAN'T CARRY MORE ") + info.name); return; }
+    have = (uint8_t)std::min(cap, have + (t == ItemType::Shells ? 2 : 1));
     if (best_prop >= 0) props.erase(props.begin() + best_prop);
     else { picked.insert((uint32_t)best_cell_id); picked_order.push_back((uint32_t)best_cell_id); }
     toast(i, std::string("PICKED UP ") + info.name);
@@ -415,6 +445,7 @@ void GameSim::use_item(int i, ItemType t) {
         return;
     }
     if ((int)t <= 0 || (int)t >= ITEM_COUNT || !p.alive || !p.has(t) || item_info(t).tool) return;
+    if (t == ItemType::Shells) { toast(i, "LOAD THEM: SELECT THE SHOTGUN"); return; } // ammo isn't used up by hand
     p.inv[(int)t]--;
     switch (t) {
         case ItemType::AlmondWater: // calms you down and puts the wind back in your lungs
@@ -550,6 +581,10 @@ void GameSim::shoot(int i, ItemType gun) {
     if (!p.alive || !p.has(gun)) return;
     float cd = gun == ItemType::Pistol ? 0.3f : gun == ItemType::Shotgun ? 0.85f : 0.1f;
     if (p.swing < cd) return;
+    if (gun == ItemType::Shotgun && !sandbox) { // outside the sandbox it needs shells
+        if (!p.has(ItemType::Shells)) { p.swing = cd - 0.4f; toast(i, "CLICK. NO SHELLS"); return; }
+        p.inv[(int)ItemType::Shells]--;
+    }
     p.swing = 0;
     int pellets = gun == ItemType::Shotgun ? 8 : 1;
     float dmg = gun == ItemType::Pistol ? 34.0f : gun == ItemType::Shotgun ? 14.0f : 21.0f;
@@ -724,7 +759,7 @@ void GameSim::update_player_stats(int i, float dt) {
         if ((players[j].st.pos - p.pos).len() < 10.0f) { drain -= 0.25f; break; }
     }
     for (const Entity& e : ents) {
-        if (e.state == EntState::Stunned) continue;
+        if (e.state == EntState::Stunned || friendly(e.type)) continue;
         if (!looking_at(p, e.pos, 18.0f, 0.55f)) continue;
         drain += e.type == EntityType::Smiler ? 2.5f : 1.2f;
     }
@@ -764,7 +799,14 @@ void GameSim::update_player_stats(int i, float dt) {
             ExitDoor door;
             if (!world.exit_door(cx + dx, cz + dz, &door)) continue;
             if ((door.pos - Vec2{p.pos.x, p.pos.z}).len() < 0.72f) { // walk into the door
-                if (world.id() == LevelId::TSGEnd) { escaped = true; event(sp.name + " FADED INTO TH3 SH4DY GR3Y..."); }
+                if (objective.required && !objective.done && !sandbox) { // locked until the job's done
+                    if (level_time - exit_msg_t_[i] > 3.0f) { toast(i, "IT'S LOCKED. " + objective_text(objective)); exit_msg_t_[i] = level_time; }
+                    continue;
+                }
+                if (world.id() == LevelId::TSGEnd) { // the end. for real this time.
+                    if (!escaped) { escaped = true; won_t = 0; event(sp.name + " FADED INTO TH3 SH4DY GR3Y. YOU MADE IT OUT."); }
+                    continue;
+                }
                 pending_level_ = world.info().next;
             }
         }
@@ -852,6 +894,7 @@ void GameSim::move_entity(Entity& e, Vec2 goal, float speed, float dt) {
     if (step > len) step = len;
     if (len > 1e-4f) e.pos += d * (step / len);
     if (e.type != EntityType::Smiler) collide_circle(world, e.pos, ent_radius(e.type));
+    keep_out(e);
     e.speed = (e.pos - before).len() / std::max(dt, 1e-4f);
     e.anim += e.speed * dt * 2.2f;
 }
@@ -886,6 +929,7 @@ bool GameSim::flee_flares(Entity& e, float dt) {
 void GameSim::update_entity(Entity& e, float dt) {
     e.state_t += dt;
     e.attack_cd = std::max(0.0f, e.attack_cd - dt);
+    if (e.type == EntityType::MegMedic || e.type == EntityType::MegScout) { update_meg(e, dt); return; }
     if (e.state == EntState::Stunned) { // knocked down by a crowbar
         e.speed = 0;
         if (e.state_t > 4.0f) { e.state = EntState::Wander; e.state_t = 0; }
@@ -911,6 +955,10 @@ void GameSim::update_entity(Entity& e, float dt) {
     auto wander = [&](float speed) {
         if (e.state_t > 6.0f || (e.goal - e.pos).len() < 0.8f || e.goal.x == 0) {
             int cx = floor_to_int(e.pos.x / CELL), cz = floor_to_int(e.pos.z / CELL);
+            if (tp && pd < 45.0f && !friendly(e.type) && rng_.f01() < 0.4f) { // 1.2: they drift your way. they're hunting.
+                cx = floor_to_int((e.pos.x + (ppos.x - e.pos.x) * 0.6f) / CELL);
+                cz = floor_to_int((e.pos.z + (ppos.z - e.pos.z) * 0.6f) / CELL);
+            }
             for (int tries = 0; tries < 8; tries++) {
                 int nx = cx + (int)rng_.range(-6, 7), nz = cz + (int)rng_.range(-6, 7);
                 if (world.open(nx, nz)) { e.goal = cell_center(nx, nz); break; }
@@ -982,9 +1030,9 @@ void GameSim::update_entity(Entity& e, float dt) {
                 if (e.state_t > 9.0f) { e.target = -1; set_state(EntState::Wander); }
             } else {
                 set_state(EntState::Chase);
-                move_entity(e, d < 14.0f && !world.segment_blocked(e.pos, tpos) ? tpos : e.last_seen, 3.9f, dt);
+                move_entity(e, d < 14.0f && !world.segment_blocked(e.pos, tpos) ? tpos : e.last_seen, 4.1f, dt);
                 if (d < 1.1f && e.attack_cd <= 0) {
-                    damage(e.target, 34.0f, DeathCause::Hound);
+                    damage(e.target, 40.0f, DeathCause::Hound);
                     e.attack_cd = 1.4f;
                 }
                 if (heard < 0 && (e.last_seen - e.pos).len() < 1.0f) { e.target = -1; set_state(EntState::Wander); }
@@ -1005,7 +1053,7 @@ void GameSim::update_entity(Entity& e, float dt) {
                 break;
             }
             if (e.state == EntState::Charge) {
-                move_entity(e, e.last_seen, 6.4f, dt);
+                move_entity(e, e.last_seen, 6.8f, dt);
                 if (contact(0.9f)) lethal_touch(pi, e, DeathCause::Smiler);
                 if (e.state_t > 2.6f || (e.last_seen - e.pos).len() < 0.5f) { e.stare_t = 0; set_state(EntState::Wander); }
                 break;
@@ -1014,7 +1062,7 @@ void GameSim::update_entity(Entity& e, float dt) {
             bool watched = looking_at(*tp, e.pos, 20.0f, 0.9f);
             if (watched) e.stare_t += dt;
             else e.stare_t = std::max(0.0f, e.stare_t - dt * 0.5f);
-            bool provoked = e.stare_t > 2.6f || (pd < 9.0f * sense && tp->speed > WALK_SPEED * 1.2f) || pd < 2.0f;
+            bool provoked = e.stare_t > 2.1f || (pd < 10.0f * sense && tp->speed > WALK_SPEED * 1.2f) || pd < 2.2f;
             if (provoked) {
                 e.last_seen = ppos;
                 set_state(EntState::Charge);
@@ -1035,21 +1083,21 @@ void GameSim::update_entity(Entity& e, float dt) {
                     damage(pi, 50.0f, DeathCause::SkinStealer);
                     e.attack_cd = 1.2f;
                 }
-                if (e.state_t > 5.0f) set_state(EntState::Wander);
+                if (e.state_t > 8.0f) set_state(EntState::Wander);
             } else {
                 set_state(EntState::Wander);
-                wander(1.5f);
-                if (los && pd < 26.0f * sense) set_state(EntState::Chase);
+                wander(1.6f);
+                if (los && pd < 30.0f * sense) set_state(EntState::Chase);
             }
             break;
         }
         // ----------------------------------------------------------- Partygoers
         // =) They want you at the party. Slower than you, but they never, ever stop.
         case EntityType::Partygoer: {
-            if (tp && pd < 16.0f * sense) { set_state(EntState::Chase); e.last_seen = ppos; }
+            if (tp && pd < 20.0f * sense) { set_state(EntState::Chase); e.last_seen = ppos; }
             if (e.state == EntState::Chase) {
-                if (!tp || pd > 45.0f) { set_state(EntState::Wander); break; }
-                move_entity(e, ppos, 2.05f, dt);
+                if (!tp || pd > 50.0f) { set_state(EntState::Wander); break; }
+                move_entity(e, ppos, world.id() == LevelId::LRun ? 3.3f : 2.35f, dt);
                 if (contact(0.85f)) lethal_touch(pi, e, DeathCause::Partygoer);
             } else {
                 set_state(EntState::Wander);
@@ -1154,6 +1202,213 @@ void GameSim::update_entity(Entity& e, float dt) {
     }
 }
 
+
+// 1.2: hostile things never come within SPAWN_SAFE_R of where you arrive on a level, or into
+// a M.E.G. outpost. They walk up to the edge and stop there.
+bool GameSim::keep_out(Entity& e) {
+    if (friendly(e.type) || world.id() == LevelId::LRun || sandbox) return false; // (sandbox: spawn things wherever you like)
+    bool moved = false;
+    auto push = [&](Vec2 c, float r) {
+        Vec2 d = e.pos - c;
+        float l = d.len();
+        if (l >= r) return;
+        if (l < 1e-3f) d = {1, 0}, l = 1;
+        e.pos = c + d * (r / l);
+        moved = true;
+    };
+    Vec3 s = world.spawn_point();
+    push({s.x, s.z}, SPAWN_SAFE_R);
+    if (world.has_outposts()) {
+        int cx = floor_to_int(e.pos.x / CELL), cz = floor_to_int(e.pos.z / CELL);
+        int rx = floor_div(cx + 12, 24), rz = floor_div(cz + 12, 24);
+        for (int b = -1; b <= 1; b++)
+            for (int a = -1; a <= 1; a++) {
+                int ocx, ocz;
+                if (world.outpost_region(rx + a, rz + b, ocx, ocz)) push(cell_center(ocx, ocz), OUTPOST_SAFE_R);
+            }
+    }
+    if (moved && e.state == EntState::Chase && e.type != EntityType::Partygoer) { e.state = EntState::Search; e.state_t = 0; e.path.clear(); }
+    return moved;
+}
+
+// Talking to a M.E.G. official. The medic patches you up and hands out supplies; the scout
+// tells you where the nearest exit is and walks with you for a while, rifle up.
+void GameSim::meg_talk(int i, Entity& e) {
+    SimPlayer& sp = players[i];
+    PlayerState& p = sp.st;
+    if (e.attack_cd > 0) { toast(i, e.type == EntityType::MegMedic ? "M.E.G. MEDIC: GIVE ME A MINUTE, WANDERER." : "M.E.G. SCOUT: ALREADY ON IT. STAY CLOSE."); return; }
+    e.yaw = angle_to(e.pos, {p.pos.x, p.pos.z});
+    if (e.type == EntityType::MegMedic) {
+        static const char* LINES[] = {"M.E.G. MEDIC: HOLD STILL. THIS WILL STING.", "M.E.G. MEDIC: YOU LOOK TERRIBLE. HERE.",
+                                      "M.E.G. MEDIC: DRINK THIS. SLOWLY.", "M.E.G. MEDIC: KEEP YOUR LIGHTS ON OUT THERE."};
+        p.health = 100;
+        p.sanity = std::min(100.0f, p.sanity + 45.0f);
+        p.stamina = 1;
+        p.exhausted = false;
+        p.battery = 1;
+        if (p.juice >= 0 && p.juice < JUICE_TIME - 6.0f) p.juice = -1; // they have cashew water on hand
+        auto give = [&](ItemType t, int n) {
+            int cap = t == ItemType::Shells ? 12 : MAX_ITEM_STACK;
+            p.inv[(int)t] = (uint8_t)std::min(cap, p.inv[(int)t] + n);
+        };
+        give(ItemType::AlmondWater, 1);
+        if (rng_.f01() < 0.5f) give(ItemType::Batteries, 1);
+        if (p.has(ItemType::Shotgun) && rng_.f01() < 0.6f) give(ItemType::Shells, 2);
+        toast(i, LINES[(int)(rng_.f01() * 4) % 4]);
+        e.attack_cd = 75.0f;
+    } else {
+        Vec2 ex;
+        ExitDoor door;
+        bool found = nearest_exit({p.pos.x, p.pos.z}, ex, &door);
+        if (found) {
+            Vec2 d = ex - Vec2{p.pos.x, p.pos.z};
+            const char* dir[8] = {"NORTH", "NORTH-EAST", "EAST", "SOUTH-EAST", "SOUTH", "SOUTH-WEST", "WEST", "NORTH-WEST"};
+            float ang = std::atan2(d.x, -d.z); // 0 = north (-z)
+            int k = ((int)std::lround(ang / (PI / 4)) + 8) % 8;
+            char buf[96];
+            std::snprintf(buf, sizeof buf, "M.E.G. SCOUT: EXIT ABOUT %d M %s. I'LL WALK YOU PART OF THE WAY.", (int)d.len(), dir[k]);
+            toast(i, buf);
+        } else {
+            toast(i, "M.E.G. SCOUT: NO EXIT ON OUR MAPS AROUND HERE. I'LL COVER YOU FOR A BIT.");
+        }
+        e.target = i;
+        e.state = EntState::Chase; // (escorting)
+        e.state_t = 0;
+        e.stare_t = 100.0f;        // seconds of escort left
+        e.attack_cd = 140.0f;
+    }
+}
+
+void GameSim::update_meg(Entity& e, float dt) {
+    e.fire_cd = std::max(0.0f, e.fire_cd - dt);
+    // shoot anything hostile that gets close (to it, or to whoever it's escorting)
+    if (e.fire_cd <= 0) {
+        float best = e.type == EntityType::MegScout ? 16.0f : 9.0f;
+        Entity* tgt = nullptr;
+        for (Entity& o : ents) {
+            if (friendly(o.type) || unstoppable(o.type) || o.type == EntityType::Smiler || o.pos.x > 1e5f) continue;
+            float d = (o.pos - e.pos).len();
+            if (d < best && !world.segment_blocked(e.pos, o.pos)) { best = d; tgt = &o; }
+        }
+        if (tgt) {
+            e.yaw = angle_to(e.pos, tgt->pos);
+            e.fire_cd = e.type == EntityType::MegScout ? 0.9f : 1.6f;
+            e.anim = 0; // (the renderer uses speed 0 + fire_cd for the aim pose)
+            tgt->hp -= e.type == EntityType::MegScout ? 22.0f : 12.0f;
+            if (tgt->hp <= 0) { event(std::string(entity_name(e.type)) + " TOOK DOWN A " + entity_name(tgt->type)); tgt->pos = {1e6f, 1e6f}; tgt->state = EntState::Retreat; }
+            else { tgt->state = EntState::Stunned; tgt->state_t = 2.5f; tgt->path.clear(); }
+            e.speed = 0;
+            return;
+        }
+    }
+    if (e.type == EntityType::MegScout && e.state == EntState::Chase && e.target >= 0) { // escorting
+        e.stare_t -= dt;
+        const SimPlayer& sp = players[e.target];
+        if (!sp.active || !sp.st.alive || e.stare_t <= 0) {
+            if (sp.active) toast(e.target, "M.E.G. SCOUT: THIS IS AS FAR AS I GO. GOOD LUCK, WANDERER.");
+            e.state = EntState::Retreat; e.state_t = 0; e.target = -1;
+            return;
+        }
+        Vec2 pp{sp.st.pos.x, sp.st.pos.z};
+        if ((pp - e.pos).len() > 2.2f) move_entity(e, pp, std::max(2.4f, sp.st.speed * 1.05f), dt);
+        else e.speed = 0;
+        if ((pp - e.pos).len() > 40.0f) { e.pos = pp - yaw_forward(sp.st.yaw) * 1.5f; collide_circle(world, e.pos, 0.3f); } // (catches up)
+        return;
+    }
+    // at the outpost: mill about near home
+    if ((e.home - e.pos).len() > 3.5f) { move_entity(e, e.home, 1.6f, dt); return; }
+    if (e.state == EntState::Retreat) e.state = EntState::Wander;
+    if (e.state_t > 7.0f || (e.goal - e.pos).len() < 0.5f || e.goal.x == 0) {
+        e.goal = e.home + Vec2{rng_.range(-2.0f, 2.0f), rng_.range(-2.0f, 2.0f)};
+        e.state_t = 0;
+    }
+    if (std::fmod(e.state_t, 7.0f) < 3.5f) move_entity(e, e.goal, 0.8f, dt);
+    else e.speed = 0;
+    float pd;
+    int pi = closest_player(e.pos, &pd);
+    if (pi >= 0 && pd < 5.0f) { e.speed = 0; e.yaw = turn_toward(e.yaw, angle_to(e.pos, {players[pi].st.pos.x, players[pi].st.pos.z}), 3 * dt); }
+}
+
+// The officials walk out to meet you when you come near an outpost.
+void GameSim::spawn_outposts() {
+    if (!world.has_outposts() || !auto_spawn) return;
+    for (int i = 0; i < IRIS_MAX_PLAYERS; i++) {
+        const SimPlayer& sp = players[i];
+        if (!sp.active || !sp.st.alive) continue;
+        int cx = floor_to_int(sp.st.pos.x / CELL), cz = floor_to_int(sp.st.pos.z / CELL);
+        int rx = floor_div(cx + 12, 24), rz = floor_div(cz + 12, 24);
+        for (int b = -1; b <= 1; b++)
+            for (int a = -1; a <= 1; a++) {
+                int ocx, ocz;
+                if (!world.outpost_region(rx + a, rz + b, ocx, ocz)) continue;
+                Vec2 c = cell_center(ocx, ocz);
+                if ((c - Vec2{sp.st.pos.x, sp.st.pos.z}).len() > 45.0f) continue;
+                int key = pack(ocx, ocz);
+                if (outposts_up.count(key)) continue;
+                outposts_up.insert(key);
+                Entity& m = spawn_entity(EntityType::MegMedic, c + Vec2{0.0f, CELL * 0.75f}, 0);
+                m.home = m.pos;
+                Entity& s = spawn_entity(EntityType::MegScout, c + Vec2{-CELL * 0.6f, -CELL * 0.6f}, 0);
+                s.home = s.pos;
+            }
+    }
+}
+
+// Sandbox actions. Single player calls this directly; in multiplayer it arrives from a player.
+void GameSim::sandbox_cmd(int i, uint8_t action, uint8_t arg, float yaw) {
+    if (!sandbox || i < 0 || i >= IRIS_MAX_PLAYERS || !players[i].active) return;
+    PlayerState& me = players[i].st;
+    Vec2 here{me.pos.x, me.pos.z}, f = yaw_forward(yaw);
+    auto ahead = [&](float dist) { // in front, never inside a wall
+        Vec2 at = here;
+        for (float d = 0.5f; d <= dist; d += 0.25f) {
+            Vec2 c = here + f * d;
+            if (world.segment_blocked(here, c) || world.solid(floor_to_int(c.x / CELL), floor_to_int(c.z / CELL))) break;
+            at = c;
+        }
+        return at;
+    };
+    switch (action) {
+        case SB_SPAWN_ENTITY:
+            if (arg < (uint8_t)EntityType::COUNT && ents.size() < 48) {
+                Entity& e = spawn_entity((EntityType)arg, ahead(4.5f), yaw + PI);
+                e.home = e.pos;
+                event(players[i].name + " SPAWNED " + entity_name((EntityType)arg));
+            }
+            break;
+        case SB_SPAWN_ITEM:
+            if (arg > 0 && arg < ITEM_COUNT && props.size() < 120) spawn_item((ItemType)arg, ahead(1.5f));
+            break;
+        case SB_GOD: god = !god; event(std::string("GOD MODE ") + (god ? "ON" : "OFF")); break;
+        case SB_NOCLIP: me.noclip = !me.noclip; break;
+        case SB_AUTOSPAWN: auto_spawn = !auto_spawn; event(std::string("ENTITIES SPAWN: ") + (auto_spawn ? "ON" : "OFF")); break;
+        case SB_FREEZE: freeze_ents = !freeze_ents; break;
+        case SB_CLEAR: ents.clear(); outposts_up.clear(); event("ENTITIES CLEARED"); break;
+        case SB_HEAL: me.health = 100; me.sanity = 100; me.stamina = 1; me.juice = -1; break;
+        case SB_TO_EXIT: { Vec2 ex; if (nearest_exit(here, ex)) { me.pos.x = ex.x; me.pos.z = ex.z; } break; }
+        case SB_NEXT: next_level(); break;
+        default: break;
+    }
+}
+
+// The host picks a level in the lobby (or the game sends everyone back there).
+void GameSim::start_run(LevelId level, Difficulty d, bool sandbox_mode, uint32_t seed) {
+    if ((int)level >= (int)LevelId::COUNT) level = LevelId::L0;
+    difficulty = d;
+    sandbox = sandbox_mode;
+    god = false; auto_spawn = true; freeze_ents = false;
+    escaped = false; won_t = 0;
+    objectives_done = 0;
+    for (int i = 0; i < IRIS_MAX_PLAYERS; i++) {
+        if (!players[i].active) continue;
+        std::fill(players[i].perks, players[i].perks + PERK_COUNT, (uint8_t)0);
+        respawn(i);
+        players[i].st.inv[(int)ItemType::AlmondWater] = 1;
+        if (sandbox_mode) for (int t = 1; t < ITEM_COUNT; t++) players[i].st.inv[t] = item_info((ItemType)t).tool ? 1 : 3;
+    }
+    start_level(level, seed ? seed : 1);
+}
+
 bool GameSim::find_spawn_cell(Vec2& out, float min_d, float max_d, bool need_dark) {
     int anchor = -1;
     for (int i = 0; i < IRIS_MAX_PLAYERS; i++)
@@ -1175,6 +1430,14 @@ bool GameSim::find_spawn_cell(Vec2& out, float min_d, float max_d, bool need_dar
             if (dist < min_d || (dist < 34.0f && !world.segment_blocked(pp, c))) { ok = false; break; }
         }
         if (!ok) continue;
+        { // never in the safe zones
+            Vec3 s = world.spawn_point();
+            if ((Vec2{s.x, s.z} - c).len() < SPAWN_SAFE_R + 6.0f) continue;
+            Entity probe;
+            probe.type = EntityType::Bacteria;
+            probe.pos = c;
+            if (keep_out(probe)) continue;
+        }
         if (need_dark && light_at({c.x, 1.5f, c.z}) > 0.3f) continue;
         out = c;
         return true;
@@ -1189,8 +1452,14 @@ void GameSim::spawn_entities() {
         float d;
         closest_player(e.pos, &d);
         if (day && auto_spawn && (world.id() == LevelId::TSG0 || e.type == EntityType::Animation)) return true; // gone when the sun comes up
+        if ((e.type == EntityType::MegMedic || e.type == EntityType::MegScout) && d > 75.0f) { // back at their post next time you pass
+            int ocx, ocz;
+            if (world.outpost(floor_to_int(e.home.x / CELL), floor_to_int(e.home.z / CELL), ocx, ocz)) outposts_up.erase(pack(ocx, ocz));
+            return true;
+        }
         return d > (e.type == EntityType::Mangled ? 110.0f : 75.0f);
     }), ents.end());
+    spawn_outposts();
     if (auto_spawn && world.id() == LevelId::LRun) { // Level !: they come up the corridor behind you, already running
         if (level_time < 3.0f) return;
         for (const Population& pop : population(world.id(), world.night(level_time))) {
@@ -1203,6 +1472,18 @@ void GameSim::spawn_entities() {
             for (int i = 0; i < IRIS_MAX_PLAYERS; i++)
                 if (players[i].active && players[i].st.alive && players[i].st.pos.z > back) { back = players[i].st.pos.z; who = i; }
             if (who < 0) return;
+            if (pop.type == EntityType::Smiler) { // waiting up ahead, in the dark
+                float front = 1e9f;
+                for (int i = 0; i < IRIS_MAX_PLAYERS; i++)
+                    if (players[i].active && players[i].st.alive) front = std::min(front, players[i].st.pos.z);
+                int ahead_z = floor_to_int(front / CELL) - 12 - (int)rng_.range(0, 6);
+                for (int cx = -1; cx <= 1; cx++) {
+                    if (ahead_z < -66 || !world.open(cx, ahead_z)) continue;
+                    spawn_entity(pop.type, cell_center(cx, ahead_z), 0);
+                    return;
+                }
+                continue;
+            }
             int cz = std::min(2, floor_to_int(back / CELL) + 9 + (int)rng_.range(0, 4));
             for (int cx = -1; cx <= 1; cx++) {
                 if (!world.open(cx, cz)) continue;
@@ -1216,14 +1497,14 @@ void GameSim::spawn_entities() {
         return;
     }
     if (!auto_spawn || level_time < world.diff().grace) return; // a moment to get your bearings
-    if (ents.size() >= 12) return;
+    if (ents.size() >= 16) return;
     for (const Population& pop : population(world.id(), world.night(level_time))) {
         int have = 0;
         for (const Entity& e : ents) have += e.type == pop.type;
         int want = std::max(1, (int)std::lround(pop.count * world.diff().ent_count));
         if (have >= want) continue;
         Vec2 at;
-        if (!find_spawn_cell(at, 26.0f, 44.0f, pop.type == EntityType::Smiler)) continue;
+        if (!find_spawn_cell(at, 22.0f, 42.0f, pop.type == EntityType::Smiler)) continue;
         spawn_entity(pop.type, at, rng_.range(-PI, PI));
         return; // one per spawn pass
     }
@@ -1231,6 +1512,7 @@ void GameSim::spawn_entities() {
 
 void GameSim::tick(float dt) {
     level_time += dt;
+    if (escaped) won_t += dt;
     if (objective.type == ObjType::Survive && !objective.done) {
         bool anyone = false;
         for (const SimPlayer& sp : players) anyone |= sp.active && sp.st.alive;
