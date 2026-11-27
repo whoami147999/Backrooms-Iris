@@ -29,6 +29,7 @@ void unpack(uint32_t c, uint8_t& r, uint8_t& g, uint8_t& b, uint8_t& a) {
     r = (uint8_t)(c >> 24); g = (uint8_t)(c >> 16); b = (uint8_t)(c >> 8); a = (uint8_t)c;
 }
 
+#if !defined(IRIS_GL_VITA) // (PC builds mip levels itself; vitaGL does glGenerateMipmap)
 Image half(const Image& src) {
     Image d(std::max(1, src.w / 2), std::max(1, src.h / 2));
     for (int y = 0; y < d.h; y++)
@@ -42,6 +43,7 @@ Image half(const Image& src) {
             }
     return d;
 }
+#endif
 
 uint32_t upload_texture(const Image& img, bool mips, bool nearest, bool repeat) {
     GLuint t = 0;
@@ -93,7 +95,9 @@ bool Renderer::init(const RenderSettings& s) {
     glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
     glShadeModel(GL_SMOOTH);
     glFogi(GL_FOG_MODE, GL_EXP2);
-    glHint(GL_FOG_HINT, GL_NICEST);
+#ifdef GL_FOG_HINT
+    glHint(GL_FOG_HINT, GL_NICEST); // (vitaGL doesn't have it)
+#endif
     glAlphaFunc(GL_GREATER, 0.02f);
     if (!s_.threaded) threaded_ = false;
     else try {

@@ -315,7 +315,7 @@ std::string platform_data_dir() {
 void platform_shutdown() {
     gamepad_shutdown();
     SDL_Quit();
-    vglEnd();
+    // (current vitaGL has no vglEnd: exiting the process releases the GPU and its memory)
     sceKernelExitProcess(0);
 }
 
