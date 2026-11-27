@@ -216,6 +216,7 @@ void App::dev_setup() {
     if (!session_) return;
     if (GameSim* sim = session_->sim()) { // poke the sim directly (screenshots / testing)
         PlayerState& p = sim->players[0].st;
+        if (dev_.time >= 0) sim->level_time = dev_.time;
         if (dev_.has_pos) { p.pos.x = dev_.pos_x; p.pos.z = dev_.pos_z; }
         if (dev_.nv) { p.inv[(int)ItemType::NightVision] = 1; p.nv_on = true; }
         if (dev_.at_camp) {
@@ -601,6 +602,7 @@ void App::menu_input() {
 }
 
 void App::draw_menu_background() {
+    ren_.set_darkness(0);
     // a slow look around the Level 0 spawn room (it's open in every direction, so the
     // camera never ends up inside a wall)
     ren_.set_world(menu_world_);
@@ -1273,7 +1275,14 @@ void App::draw_game(bool overlay_menu) {
 
     ren_.update_chunks(v.world, cam.eye, rs_.chunk_builds_per_frame);
     static const std::unordered_set<uint32_t> none;
+    const float nightk = v.world.darkness(v.level_time);
+    ren_.set_darkness(nightk);
+    if ((nightk > 0.5f) != night_shown_ && v.world.darkness(0) == 0) { // tell everyone when the light changes
+        night_shown_ = nightk > 0.5f;
+        if (v.level_time > 2) feed_.push_back({night_shown_ ? (v.world.id() == LevelId::TSG0 ? "IT'S NIGHT. HIDE." : "NIGHT FALLS") : "THE SUN IS UP", now_});
+    }
     ren_.draw_world(v.world, cam, (float)now_, fog, v.picked ? *v.picked : none, v.ents, v.others, v.props, fx.phantoms);
+    ren_.night_dim(nightk * (v.world.id() == LevelId::TSG0 ? 0.8f : 0.55f));
     ren_.post_warp(fx.wobble, fx.ghost, (float)now_);
     // what's in your hands, in 3D
     if (v.me.alive && dev_.hud) {
@@ -1507,10 +1516,14 @@ void App::update_audio(const GameView& v, Vec3 eye, float yaw) {
     Sfx amb = SFX_HUM;
     float av = 0.22f;
     switch (id) {
-        case LevelId::L6: case LevelId::L8: case LevelId::L19: case LevelId::L51: case LevelId::L2: case LevelId::TSGBlack: case LevelId::TSGHope:
+        case LevelId::L6: case LevelId::L8: case LevelId::L19: case LevelId::L51: case LevelId::L2: case LevelId::TSGHope:
             amb = SFX_DRONE; av = 0.4f; break;
-        case LevelId::L9: case LevelId::L11: case LevelId::L24: case LevelId::L10: amb = SFX_WIND; av = 0.35f; break;
-        case LevelId::L7: case LevelId::L37: amb = SFX_WATER; av = 0.4f; break;
+        case LevelId::L9: case LevelId::L11: case LevelId::L24: case LevelId::L10: case LevelId::L70: case LevelId::TSG2:
+        case LevelId::TSG0: case LevelId::TSG4: amb = SFX_WIND; av = 0.35f; break;
+        case LevelId::L94: amb = v.world.night(v.level_time) ? SFX_WIND : SFX_MUSICBOX; av = v.world.night(v.level_time) ? 0.3f : 0.18f; break; // the sirens play music by day
+        case LevelId::L7: case LevelId::L37: case LevelId::TSG3: amb = SFX_WATER; av = 0.4f; break;
+        case LevelId::TSGFar: case LevelId::TSGEnd: amb = SFX_WHISPERS; av = 0.22f; break;
+        case LevelId::L188: amb = SFX_HUM; av = 0.12f; break; // nothing but the air conditioning
         case LevelId::LRun: amb = SFX_ALARM; av = 0.3f; break;
         default: break;
     }
@@ -1571,9 +1584,9 @@ void App::update_audio(const GameView& v, Vec3 eye, float yaw) {
         int fm = w.floor_mat(cx, cz);
         Sfx s = SFX_STEP_HARD;
         switch (id) {
-            case LevelId::L0: case LevelId::L4: case LevelId::L6: case LevelId::L21: case LevelId::LFun: case LevelId::TSG: case LevelId::TSGBlack:
+            case LevelId::L0: case LevelId::L4: case LevelId::L6: case LevelId::L21: case LevelId::LFun: case LevelId::TSGFar:
                 s = SFX_STEP_CARPET; break;
-            case LevelId::L5: case LevelId::TSGMansion: s = fm == 1 ? SFX_STEP_WOOD : SFX_STEP_CARPET; break;
+            case LevelId::L5: case LevelId::TSG1: s = fm == 1 ? SFX_STEP_WOOD : SFX_STEP_CARPET; break;
             case LevelId::L2: s = fm == 1 ? SFX_STEP_METAL : SFX_STEP_HARD; break;
             case LevelId::L19: s = SFX_STEP_WOOD; break;
             case LevelId::L7: s = w.water(cx, cz) ? SFX_STEP_WATER : SFX_STEP_WOOD; break;
@@ -1581,6 +1594,10 @@ void App::update_audio(const GameView& v, Vec3 eye, float yaw) {
             case LevelId::L1: s = fm == 1 ? SFX_STEP_WATER : SFX_STEP_HARD; break;
             case LevelId::L33: s = fm == 1 ? SFX_STEP_CARPET : SFX_STEP_HARD; break;
             case LevelId::L36: s = fm == 0 ? SFX_STEP_CARPET : SFX_STEP_HARD; break;
+            case LevelId::L9: case LevelId::L70: case LevelId::L94: s = fm == 3 ? SFX_STEP_WOOD : (fm == 1 ? SFX_STEP_HARD : SFX_STEP_CARPET); break; // (grass, snow: soft)
+            case LevelId::TSG0: case LevelId::TSG2: s = fm == 2 ? SFX_STEP_WOOD : (w.water(cx, cz) ? SFX_STEP_WATER : SFX_STEP_CARPET); break;
+            case LevelId::TSG3: case LevelId::TSG4: s = w.water(cx, cz) ? SFX_STEP_WATER : SFX_STEP_HARD; break;
+            case LevelId::L188: s = fm == 1 ? SFX_STEP_WOOD : SFX_STEP_HARD; break;
             default: break;
         }
         float vol = me.crouch > 0.5f ? 0.12f : (me.speed > WALK_SPEED * 1.2f ? 0.55f : 0.32f);

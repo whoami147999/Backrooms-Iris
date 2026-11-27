@@ -15,9 +15,10 @@
 namespace iris {
 
 enum class LevelId : uint8_t {
-    L0, L1, L2, L3, L4, L5, L6, L7, L8, L9, L10, L11, L13, L19, L21, L22, L24, L33, L36, L37, L51, LFun,
+    L0, L1, L2, L3, L4, L5, L6, L7, L8, L9, L10, L11, L13, L19, L21, L22, L24, L33, L36, L37, L51, L70, L94, L188, LFun,
     LRun,                                     // Level ! - Run For Your Life
-    TSG, TSGBlack, TSGMansion, TSGHope,       // TH3 SH4DY GR3Y and its sub-levels
+    // TH3 SH4DY GR3Y: the wiki's layers 0Zero .. 4Four, then L0ST H0P3, 2 F4R and TH3 3ND
+    TSG0, TSG1, TSG2, TSG3, TSG4, TSGHope, TSGFar, TSGEnd,
     COUNT
 };
 enum class LightState : uint8_t { None, On, Dead, Flicker };
@@ -88,6 +89,10 @@ struct LevelInfo {
     LevelId next;          // where the exit door takes you
 };
 
+// How a level's exits look. Doors are set into walls; the others stand free in a cell
+// (ExitDoor::side is -1 and pos is the middle of the cell): walk onto them.
+enum class ExitStyle : uint8_t { Door, Hole, Clock, Angel, LoneDoor };
+
 // An exit door, set into a wall (or the face of a solid block) on one side of a cell.
 struct ExitDoor {
     int cx = 0, cz = 0;
@@ -104,6 +109,7 @@ enum class FurnKind : uint8_t {
     Chair, Table, RoundTable, Cabinet, Boxes, Barrel, Cone, Bench, Plant, Shelf, Bin, Locker, Pallet, Rubble,
     Tree, Mattress, Lantern, Counter, Car, Mailbox, FireBarrel,
     Couch, Tv, Fridge, Scarecrow,
+    Clock, Fountain, Boat, Siren, Igloo, Stove, Sink, Radio, Bookcase, Snowman, Bush, Table2,
 };
 struct Furn {
     FurnKind kind;
@@ -141,12 +147,28 @@ public:
     // Furniture of the room this cell belongs to (every cell of a room returns the whole room).
     // `owner` is true for the one cell that should draw it.
     int furniture(int cx, int cz, Furn* out, bool* owner = nullptr) const;
-    bool guest_room(int cx, int cz) const;   // Level 5: this cell is inside an enterable room
-    bool hotel() const { return id_ == LevelId::L5 || id_ == LevelId::TSGMansion || id_ == LevelId::L13; } // levels with rooms off the corridors
+    bool guest_room(int cx, int cz) const;   // inside an enterable room (hotel, apartment, mansion or house)
+    bool hotel() const { return id_ == LevelId::L5 || id_ == LevelId::TSG1 || id_ == LevelId::L13; } // levels with rooms off the corridors
+    bool houses() const { return id_ == LevelId::L9 || id_ == LevelId::L70 || id_ == LevelId::L94; } // enterable, furnished houses
+    bool house(int cx, int cz) const;        // inside a house: indoors on an outdoor level (ceiling, warm)
+    float house_h() const { return 2.9f; }   // house walls; the roof sits on top
+    int house_lot(int cx, int cz, int& lx, int& lz, int& bx, int& bz) const; // 0 none, 1 house, 2 locked house (lx, lz: which of its 2x2 cells)
+    bool town(int cx, int cz) const;         // Level 94: inside a town (not the hills)
+    bool city4_building(int cx, int cz) const; // 4Four: a building stands on (or floats over) this cell
     bool crop(int cx, int cz) const;         // Level 10: wheat stands in this cell
     bool camp(int cx, int cz, int& ccx, int& ccz) const; // a wanderers' camp around (ccx, ccz) covers this cell
-    bool water(int cx, int cz) const { return id_ == LevelId::L7 && floor_mat(cx, cz) == 1; } // wading: slow
-    bool greyscale() const { return id_ == LevelId::TSG || id_ == LevelId::TSGBlack || id_ == LevelId::TSGMansion || id_ == LevelId::TSGHope; }
+    bool water(int cx, int cz) const;        // wading: slow (the sea, the river, the clock ocean)
+    bool toxic(int cx, int cz) const { return id_ == LevelId::TSG3 && water(cx, cz); } // 3Three: mercury and gasoline
+    bool ice(int cx, int cz) const;          // Level 70: the frozen river
+    bool greyscale() const { return id_ >= LevelId::TSG0 && id_ <= LevelId::TSGEnd; }
+    // day and night: 0Zero switches instantly (only the shack's clock warns you), Froidetown and
+    // Motion fade. darkness() is 0 at noon .. 1 at night; night() is the sim's view of it.
+    float darkness(float level_time) const;
+    bool night(float level_time) const { return darkness(level_time) > 0.5f; }
+    ExitStyle exit_style() const;
+    bool hill(int cx, int cz) const;         // Level 94: this solid cell is a grassy hill (drawn round)
+    bool glitch(int cx, int cz, float& lift, float& tilt) const; // 4Four: a floating / leaning building
+    bool floating_block(int cx, int cz, float& lift) const;     // 4Four: an open cell with a building hanging over it
 
     bool exit_door(int cx, int cz, ExitDoor* out = nullptr) const; // an exit door opens into this cell
     bool exit_cell(int cx, int cz) const { return exit_door(cx, cz); }
@@ -178,8 +200,11 @@ private:
     bool edge_wall_l37(int line, int along, bool vertical) const;
     bool office_wall(int line, int along, bool vertical) const;
     bool exit_for_region(int rx, int rz, ExitDoor& out) const;
+    float exit_chance() const;
     struct Room { int bx, bz, qx, qz; float x0, z0, x1, z1; int door_side; int dcx, dcz; };
     bool hotel_room(int cx, int cz, Room& r) const;
+    bool house_room(int cx, int cz, Room& r) const; // Levels 9, 70, 94: 2x2 houses with a front door
+    bool room_at(int cx, int cz, Room& r) const { return hotel_room(cx, cz, r) || house_room(cx, cz, r); }
     int hotel_block(int bx, int bz) const;   // 0 solid, 1 ballroom, 2 guest rooms
     bool hotel_wall(int line, int along, bool vertical) const;
     int cell_props(int cx, int cz, Furn* out) const;

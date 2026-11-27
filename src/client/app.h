@@ -55,6 +55,7 @@ struct DevOptions {          // command-line switches used for testing / screens
     bool safe = false;       // dev: run with the Vita safe-mode settings
     bool vita_like = false;  // dev: PC with the Vita's render settings (profiling)
     int quality = -1;        // dev: graphics preset 0-3
+    float time = -1;         // dev: seconds into the level (day / night)
 };
 
 class App {
@@ -149,6 +150,7 @@ private:
     int frames_ = 0;
     int frames_total_ = 0;   // boot log: first frames only
     std::string crash_note_; // Vita: the stage the last run died in (shown on the title screen)
+    bool night_shown_ = false;  // the level's day/night as last announced
     bool stage_pending_ = false;
     double stage_t_ = 0;
     void stage(const std::string& s) { platform_boot_stage(s.c_str()); stage_pending_ = true; stage_t_ = platform_time(); }

@@ -14,6 +14,13 @@ const char* death_text(DeathCause c) {
         case DeathCause::Partygoer: return "YOU JOINED THE PARTY =)";
         case DeathCause::Sanity: return "YOU LOST YOUR MIND";
         case DeathCause::MemoryJuice: return "YOU NEVER WOKE UP";
+        case DeathCause::Landlord: return "THE LANDLORD DOESN'T TAKE TRESPASSERS";
+        case DeathCause::Faceling: return "THEY TOOK EVERYTHING. THEN YOU";
+        case DeathCause::Mangled: return "SOMETHING VERY BIG STEPPED ON YOU";
+        case DeathCause::Animation: return "YOU BECAME PART OF THE CARTOON";
+        case DeathCause::Heat: return "HEATSTROKE, IN THE SNOW";
+        case DeathCause::Cold: return "YOU FROZE IN FROIDETOWN";
+        case DeathCause::Toxic: return "THE SEA ATE THROUGH YOU";
         default: return "YOU DIED";
     }
 }

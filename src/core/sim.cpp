@@ -15,7 +15,9 @@ float entity_max_hp(EntityType t) {
         case EntityType::Hound: return 80;
         case EntityType::SkinStealer: return 130;
         case EntityType::Partygoer: return 100;
-        default: return 1e9f; // a smile can't be shot
+        case EntityType::Faceling: return 70;
+        case EntityType::Animation: return 90;
+        default: return 1e9f; // a smile can't be shot (and neither can the Landlord)
     }
 }
 
@@ -26,6 +28,11 @@ const char* entity_name(EntityType t) {
         case EntityType::Smiler: return "SMILER";
         case EntityType::SkinStealer: return "SKIN-STEALER";
         case EntityType::Partygoer: return "PARTYGOER";
+        case EntityType::Landlord: return "THE LANDLORD";
+        case EntityType::Faceling: return "FACELING";
+        case EntityType::Mangled: return "THE MANGLED";
+        case EntityType::Animation: return "ANIMATION";
+        case EntityType::FallenAngel: return "FALLEN ANGEL";
         default: return "?";
     }
 }
@@ -35,8 +42,17 @@ namespace {
 struct Population { EntityType type; int count; };
 
 // Who lives where (our take on the community lore).
-std::vector<Population> population(LevelId id) {
+std::vector<Population> population(LevelId id, bool night) {
     switch (id) {
+        case LevelId::TSG0: if (night) return {{EntityType::Bacteria, 2}, {EntityType::Hound, 2}}; return {}; // nothing lives here by day
+        case LevelId::TSG1: return {{EntityType::Landlord, 1}};
+        case LevelId::TSG2: return {{EntityType::FallenAngel, 3}};
+        case LevelId::TSG3: return {{EntityType::SkinStealer, 2}};                      // the islanders
+        case LevelId::TSG4: return {{EntityType::Faceling, 4}, {EntityType::Mangled, 1}, {EntityType::Smiler, 1}};
+        case LevelId::TSGEnd: return {};
+        case LevelId::L70: if (night) return {{EntityType::Hound, 3}, {EntityType::SkinStealer, 1}}; return {{EntityType::Hound, 1}, {EntityType::SkinStealer, 1}};
+        case LevelId::L94: if (night) return {{EntityType::Animation, 4}, {EntityType::Smiler, 1}, {EntityType::Hound, 1}}; return {}; // the town is safe by day
+        case LevelId::L188: return {{EntityType::Bacteria, 1}};
         case LevelId::L0: return {{EntityType::Bacteria, 1}, {EntityType::Smiler, 1}};
         case LevelId::L1: return {{EntityType::Hound, 3}, {EntityType::Bacteria, 1}};
         case LevelId::L2: return {{EntityType::Hound, 2}, {EntityType::Bacteria, 1}, {EntityType::Smiler, 1}};
@@ -55,12 +71,10 @@ std::vector<Population> population(LevelId id) {
         case LevelId::L36: return {{EntityType::Bacteria, 1}, {EntityType::Smiler, 1}};
         case LevelId::L51: return {{EntityType::Hound, 2}, {EntityType::Smiler, 2}};
         case LevelId::LRun: return {{EntityType::Partygoer, 5}, {EntityType::Hound, 1}}; // the chase (spawned behind you)
-        case LevelId::TSG: return {{EntityType::Bacteria, 2}};
         case LevelId::L3: return {{EntityType::Hound, 2}, {EntityType::Smiler, 1}};
         case LevelId::L10: return {{EntityType::Hound, 2}, {EntityType::SkinStealer, 1}};
         case LevelId::L13: return {{EntityType::SkinStealer, 1}, {EntityType::Partygoer, 1}, {EntityType::Smiler, 1}};
-        case LevelId::TSGBlack: return {{EntityType::Bacteria, 2}, {EntityType::Hound, 2}};
-        case LevelId::TSGMansion: return {{EntityType::SkinStealer, 1}, {EntityType::Smiler, 2}};
+        case LevelId::TSGFar: return {{EntityType::Bacteria, 2}, {EntityType::Hound, 2}};
         case LevelId::TSGHope: return {{EntityType::Smiler, 3}, {EntityType::Bacteria, 1}};
         default: return {}; // Level 11 and Level 37 are safe
     }
@@ -157,7 +171,7 @@ void GameSim::setup_objective() {
     objective = Objective{};
     LevelId id = world.id();
     uint32_t h = hash3(world.seed(), (int)id, 0, 9001);
-    if (id == LevelId::LRun) return; // the only objective here is the door at the end
+    if (id == LevelId::LRun || id == LevelId::TSGEnd) return; // the only objective here is the door
     bool safe = id == LevelId::L11 || id == LevelId::L37;
     int pick = safe ? 0 : (int)(h % 3u);
     objective.reward = (Perk)((h / 3u + objectives_done) % (uint32_t)PERK_COUNT);
@@ -169,7 +183,8 @@ void GameSim::setup_objective() {
         return;
     }
     // tapes lie on the floor; breaker boxes hang on walls
-    objective.type = pick == 0 ? ObjType::Tapes : ObjType::Breakers;
+    bool few_walls = id == LevelId::TSG3 || id == LevelId::L94 || id == LevelId::TSG2 || id == LevelId::TSG0; // nothing to hang a breaker box on
+    objective.type = (pick == 0 || few_walls) ? ObjType::Tapes : ObjType::Breakers;
     objective.need = (uint8_t)(hard ? 4 : 3);
     std::vector<std::pair<int, int>> cells;
     reachable_cells(cells, 7, 34);
@@ -403,6 +418,13 @@ void GameSim::use_item(int i, ItemType t) {
     p.inv[(int)t]--;
     switch (t) {
         case ItemType::AlmondWater: // calms you down and puts the wind back in your lungs
+            if (world.id() == LevelId::TSG0 && world.night(level_time)) { // ...except at night on 0Zero
+                p.health = std::max(5.0f, p.health - 35.0f);
+                p.hurt = 0;
+                p.sanity = std::min(100.0f, p.sanity + 55.0f);
+                toast(i, "IT TURNED INTO LIQUID PAIN");
+                break;
+            }
             p.stamina = 1;
             p.exhausted = false;
             p.sanity = std::min(100.0f, p.sanity + 30.0f);
@@ -453,6 +475,7 @@ void GameSim::use_item(int i, ItemType t) {
             for (Entity& e : ents) {
                 if ((e.pos - at).len() > 9.0f || world.segment_blocked(at, e.pos)) continue;
                 n++;
+                if (unstoppable(e.type)) continue;
                 if (e.type == EntityType::Smiler) { e.state = EntState::Retreat; e.state_t = 0; continue; }
                 e.state = EntState::Stunned;
                 e.state_t = -1.5f; // 5.5 s
@@ -508,6 +531,7 @@ void GameSim::attack(int i, ItemType weapon) {
 // Damage from a gun. Smilers just leave; everything else bleeds, flinches, and dies at 0.
 void GameSim::hurt_entity(size_t k, float dmg, int by) {
     Entity& e = ents[k];
+    if (unstoppable(e.type)) return;
     if (e.type == EntityType::Smiler) { e.state = EntState::Retreat; e.state_t = 0; return; }
     e.hp -= dmg;
     if (e.hp <= 0) {
@@ -566,7 +590,7 @@ void GameSim::swing(int i) {
         float d = (e.pos - Vec2{p.pos.x, p.pos.z}).len();
         if (d < best && looking_at(p, e.pos, 2.4f, 0.6f)) { best = d; hit = &e; }
     }
-    if (!hit) return;
+    if (!hit || unstoppable(hit->type)) return;
     if (hit->type == EntityType::Smiler) { // you can't hit a smile. it just leaves.
         hit->state = EntState::Retreat;
         hit->state_t = 0;
@@ -612,7 +636,7 @@ void GameSim::kill(int i, DeathCause c) {
         p.sanity = std::max(p.sanity, 30.0f);
         toast(i, "THE RABBIT'S FOOT SAVED YOU");
         for (Entity& e : ents) // and whatever did it is knocked back
-            if ((e.pos - Vec2{p.pos.x, p.pos.z}).len() < 4.0f && e.type != EntityType::Smiler) { e.state = EntState::Stunned; e.state_t = 0; }
+            if ((e.pos - Vec2{p.pos.x, p.pos.z}).len() < 4.0f && e.type != EntityType::Smiler && !unstoppable(e.type)) { e.state = EntState::Stunned; e.state_t = 0; }
         return;
     }
     p.alive = false;
@@ -633,6 +657,7 @@ void GameSim::lethal_touch(int i, Entity& e, DeathCause c) {
     if (e.attack_cd > 0) return;
     damage(i, 60.0f / world.diff().damage, c); // easy: a bad hit you can walk away from
     e.attack_cd = 2.0f;
+    if (unstoppable(e.type)) return;
     e.state = EntState::Stunned; // and it loses you for a moment
     e.state_t = 2.5f;
 }
@@ -712,14 +737,34 @@ void GameSim::update_player_stats(int i, float dt) {
     }
     if (p.hurt > 8.0f && p.health < 100) p.health = std::min(100.0f, p.health + 1.5f * dt * world.diff().regen);
 
-    // --- exits
+    // --- the weather and the water
     int cx = floor_to_int(p.pos.x / CELL), cz = floor_to_int(p.pos.z / CELL);
+    if (!p.noclip && !god) {
+        bool tick_msg = std::fmod(level_time, 5.0f) < dt;
+        if (world.toxic(cx, cz)) { // 3Three: mercury and gasoline
+            damage(i, 5.0f * dt, DeathCause::Toxic);
+            if (!p.alive) return;
+            if (tick_msg) toast(i, "THE WATER BURNS. GET TO AN ISLAND");
+        }
+        if (world.id() == LevelId::TSG2 && p.speed > WALK_SPEED * 1.25f) { // 2Two: 38 degrees in the snow
+            damage(i, 1.4f * dt, DeathCause::Heat);
+            if (!p.alive) return;
+            if (tick_msg) toast(i, "TOO HOT TO RUN");
+        }
+        if (world.id() == LevelId::L70 && !world.house(cx, cz)) { // Froidetown: you can't stay out here
+            damage(i, (world.night(level_time) ? 0.5f : 0.22f) * dt, DeathCause::Cold);
+            if (!p.alive) return;
+            if (tick_msg && p.health < 60) toast(i, "YOU'RE FREEZING. GET INSIDE A HOUSE");
+        }
+    }
+
+    // --- exits
     for (int dz = -1; dz <= 1; dz++)
         for (int dx = -1; dx <= 1; dx++) {
             ExitDoor door;
             if (!world.exit_door(cx + dx, cz + dz, &door)) continue;
             if ((door.pos - Vec2{p.pos.x, p.pos.z}).len() < 0.72f) { // walk into the door
-                if (world.id() == LevelId::TSGHope) { escaped = true; event(sp.name + " FOUND A WAY OUT..."); }
+                if (world.id() == LevelId::TSGEnd) { escaped = true; event(sp.name + " FADED INTO TH3 SH4DY GR3Y..."); }
                 pending_level_ = world.info().next;
             }
         }
@@ -846,7 +891,7 @@ void GameSim::update_entity(Entity& e, float dt) {
         if (e.state_t > 4.0f) { e.state = EntState::Wander; e.state_t = 0; }
         return;
     }
-    if (e.type != EntityType::Smiler && flee_flares(e, dt)) return;
+    if (e.type != EntityType::Smiler && !unstoppable(e.type) && flee_flares(e, dt)) return;
     Vec2 lure;
     if (e.state != EntState::Charge && lure_for(e, lure)) { // the music box: they can't help it
         e.state = EntState::Search;
@@ -1012,6 +1057,99 @@ void GameSim::update_entity(Entity& e, float dt) {
             }
             break;
         }
+        // ----------------------------------------------------------- The Landlord (1One)
+        // A walking shadow in a suit and fedora. Slow while he patrols his mansion; once he sees
+        // you he comes for you, shouting. Nothing hurts him. Be quiet and keep opening doors.
+        case EntityType::Landlord: {
+            if (e.state == EntState::Chase) {
+                if (los) { e.last_seen = ppos; e.state_t = 0; }
+                move_entity(e, los ? ppos : e.last_seen, 3.7f, dt);
+                if (e.state_t > 6.0f || !tp) { set_state(EntState::Search); e.stare_t = 0; }
+                if (contact(0.8f)) lethal_touch(pi, e, DeathCause::Landlord);
+            } else {
+                set_state(e.state == EntState::Search && e.state_t < 8.0f ? EntState::Search : EntState::Wander);
+                wander(e.state == EntState::Search ? 1.6f : 1.05f);
+                if (los && pd < 15.0f * sense) {
+                    if (e.stare_t <= 0) { event("THE LANDLORD: GET OUT OF MY HOUSE!"); e.stare_t = 1; }
+                    set_state(EntState::Chase);
+                    e.target = pi;
+                }
+            }
+            break;
+        }
+        // ----------------------------------------------------------- Faceling (4Four)
+        // Black jacket, beanie, no face, a knife. Corners you and takes something. They love almond
+        // water: hand one over and they leave you alone for a while. Got nothing? That's worse.
+        case EntityType::Faceling: {
+            if (e.state == EntState::Retreat) { // got what it wanted
+                if (tp && pd < 12.0f) move_entity(e, e.pos + (e.pos - ppos) * (3.0f / std::max(0.1f, pd)), 2.2f, dt);
+                else wander(1.0f);
+                if (e.state_t > e.stare_t) { set_state(EntState::Wander); }
+                break;
+            }
+            if (e.state == EntState::Chase) {
+                if (!tp || pd > 22.0f) { set_state(EntState::Wander); break; }
+                move_entity(e, ppos, 3.1f, dt);
+                if (contact(0.8f) && e.attack_cd <= 0) {
+                    PlayerState& v = players[pi].st;
+                    ItemType took = ItemType::None;
+                    if (v.has(ItemType::AlmondWater)) took = ItemType::AlmondWater;
+                    for (int tries = 0; tries < 24 && took == ItemType::None; tries++) {
+                        int k = 1 + (int)rng_.range(0, (float)(ITEM_COUNT - 1));
+                        if (k < ITEM_COUNT && v.inv[k] > 0 && (!item_info((ItemType)k).tool || tries > 12)) took = (ItemType)k;
+                    }
+                    e.attack_cd = 3.0f;
+                    if (took != ItemType::None) {
+                        v.inv[(int)took]--;
+                        if (took == ItemType::Flashlight && !v.has(ItemType::Flashlight)) v.light_on = false;
+                        toast(pi, std::string("A FACELING TOOK YOUR ") + item_info(took).name);
+                        e.stare_t = took == ItemType::AlmondWater ? 60.0f : 25.0f; // almond water buys a whole minute
+                    } else {
+                        damage(pi, 32.0f, DeathCause::Faceling);
+                        toast(pi, "YOU HAD NOTHING LEFT TO GIVE");
+                        e.stare_t = 12.0f;
+                    }
+                    set_state(EntState::Retreat);
+                }
+            } else {
+                set_state(EntState::Wander);
+                wander(1.2f);
+                if (los && pd < 11.0f * sense) { set_state(EntState::Chase); e.target = pi; }
+            }
+            break;
+        }
+        // ----------------------------------------------------------- The Mangled (4Four)
+        // Taller than the buildings, all limbs. Slow, but it doesn't look where it puts its feet.
+        case EntityType::Mangled: {
+            if (los && pd < 40.0f) { set_state(EntState::Chase); move_entity(e, ppos, 1.9f, dt); }
+            else { set_state(EntState::Wander); wander(1.5f); }
+            if (contact(2.1f)) lethal_touch(pi, e, DeathCause::Mangled);
+            break;
+        }
+        // ----------------------------------------------------------- Animation (Level 94, night)
+        // A cartoon that moves like stop-motion: a few frames on, a few frames still.
+        case EntityType::Animation: {
+            bool frame_on = std::fmod(e.state_t, 0.36f) < 0.24f;
+            if (e.state == EntState::Chase) {
+                if (!tp || pd > 30.0f) { set_state(EntState::Wander); break; }
+                if (los) e.last_seen = ppos;
+                if (frame_on) move_entity(e, los ? ppos : e.last_seen, 5.2f, dt); else e.speed = 0;
+                if (contact(0.85f)) lethal_touch(pi, e, DeathCause::Animation);
+            } else {
+                set_state(EntState::Wander);
+                if (frame_on) wander(1.6f); else e.speed = 0;
+                if (los && pd < 22.0f * sense) { set_state(EntState::Chase); e.target = pi; }
+            }
+            break;
+        }
+        // ----------------------------------------------------------- Fallen angel (2Two)
+        // Black wings, blue robes, wounds that never close. Docile: it only turns to watch you.
+        case EntityType::FallenAngel: {
+            e.speed = 0;
+            if (tp && pd < 10.0f) e.yaw = turn_toward(e.yaw, angle_to(e.pos, ppos), 1.2f * dt);
+            if (tp && pd < 3.0f && e.stare_t <= 0) { toast(pi, "FAD3 INT0 TH3 SH4DY GR3Y"); e.stare_t = 1; }
+            break;
+        }
         default: break;
     }
 }
@@ -1046,14 +1184,16 @@ bool GameSim::find_spawn_cell(Vec2& out, float min_d, float max_d, bool need_dar
 
 void GameSim::spawn_entities() {
     // despawn anything that drifted far from everyone (or faded away)
+    const bool day = !world.night(level_time);
     ents.erase(std::remove_if(ents.begin(), ents.end(), [&](const Entity& e) {
         float d;
         closest_player(e.pos, &d);
-        return d > 75.0f;
+        if (day && auto_spawn && (world.id() == LevelId::TSG0 || e.type == EntityType::Animation)) return true; // gone when the sun comes up
+        return d > (e.type == EntityType::Mangled ? 110.0f : 75.0f);
     }), ents.end());
     if (auto_spawn && world.id() == LevelId::LRun) { // Level !: they come up the corridor behind you, already running
         if (level_time < 3.0f) return;
-        for (const Population& pop : population(world.id())) {
+        for (const Population& pop : population(world.id(), world.night(level_time))) {
             int have = 0;
             for (const Entity& e : ents) have += e.type == pop.type;
             int want = std::max(1, (int)std::lround(pop.count * world.diff().ent_count));
@@ -1077,7 +1217,7 @@ void GameSim::spawn_entities() {
     }
     if (!auto_spawn || level_time < world.diff().grace) return; // a moment to get your bearings
     if (ents.size() >= 12) return;
-    for (const Population& pop : population(world.id())) {
+    for (const Population& pop : population(world.id(), world.night(level_time))) {
         int have = 0;
         for (const Entity& e : ents) have += e.type == pop.type;
         int want = std::max(1, (int)std::lround(pop.count * world.diff().ent_count));

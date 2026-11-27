@@ -165,7 +165,7 @@ inline void read_player(Reader& r, PlayerState& s) {
     s.light_on = f & 1; s.noclip = (f & 2) != 0; s.alive = (f & 4) != 0; s.nv_on = (f & 8) != 0;
     for (int i = 0; i < ITEM_COUNT; i++) s.inv[i] = r.u8();
     for (int i = 0; i < PERK_COUNT; i++) s.perks[i] = r.u8();
-    s.cause = (DeathCause)std::min<int>(r.u8(), (int)DeathCause::MemoryJuice);
+    s.cause = (DeathCause)std::min<int>(r.u8(), (int)DeathCause::LAST);
 }
 
 } // namespace iris

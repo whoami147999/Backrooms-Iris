@@ -462,6 +462,109 @@ void Renderer::draw_entity(const World& w, const DrawEntity& e, float time) {
             m.ellipsoid(ht + Vec3{0.02f, 0.31f, 0}, {0.03f, 0.03f, 0.03f}, {1, 0.9f, 0.3f}, 0.6f);
             break;
         }
+        case EntityType::Landlord: {
+            // a walking shadow in a good suit: fedora, briefcase, no face at all
+            Humanoid h;
+            h.leg = 1.0f; h.torso = 0.66f; h.neck = 0.1f; h.shoulder_w = 0.23f;
+            h.upper_arm = 0.34f; h.forearm = 0.32f; h.limb_r = 0.065f; h.arm_r = 0.05f;
+            h.chest = {0.22f, 0.24f, 0.13f}; h.belly = {0.19f, 0.2f, 0.12f}; h.head = {0.105f, 0.13f, 0.115f};
+            Rgb shadow{0.015f, 0.015f, 0.02f}, suit{0.07f, 0.07f, 0.08f};
+            h.skin = shadow; h.top = suit; h.legs = suit; h.feet = {0.02f, 0.02f, 0.02f}; h.hands = shadow; h.has_hair = false;
+            h.phase = e.anim; h.stride = stride; h.arm_swing = 0.35f;
+            h.lean = e.state == EntState::Chase ? 0.22f : 0.03f + breathe;
+            h.build(m);
+            Vec3 hat = h.head_c + Vec3{0, h.head.y * 0.62f, 0};
+            m.push_pose(h.head_c, h.head_tilt);
+            m.ellipsoid(hat, {0.2f, 0.012f, 0.2f}, suit, 0.9f);                       // brim
+            m.ellipsoid(hat + Vec3{0, 0.07f, 0}, {0.115f, 0.08f, 0.115f}, suit, 0.8f); // crown
+            m.ellipsoid(hat + Vec3{0, 0.025f, 0}, {0.118f, 0.02f, 0.118f}, {0.2f, 0.02f, 0.02f}, 0.7f); // the band
+            m.pop_pose();
+            Vec3 hd = h.hand[1];
+            m.box(hd + Vec3{0, -0.2f, 0.02f}, {0.06f, 0.16f, 0.21f}, {0.18f, 0.1f, 0.05f}); // the briefcase
+            m.box(hd + Vec3{0, -0.02f, 0.02f}, {0.015f, 0.03f, 0.06f}, {0.3f, 0.25f, 0.1f});
+            break;
+        }
+        case EntityType::Faceling: {
+            // a person-shaped blank: no eyes, no mouth. Black jacket, jeans, a beanie, a knife
+            Humanoid h;
+            h.skin = {0.84f, 0.74f, 0.66f}; h.top = {0.05f, 0.05f, 0.06f}; h.legs = {0.2f, 0.25f, 0.35f};
+            h.feet = {0.08f, 0.08f, 0.08f}; h.hands = h.skin; h.has_hair = false;
+            h.phase = e.anim; h.stride = stride; h.arm_swing = 0.5f;
+            h.arm_forward = e.state == EntState::Chase ? 0.35f : 0.0f;
+            h.lean = 0.06f + breathe;
+            h.build(m);
+            m.push_pose(h.head_c, h.head_tilt);
+            m.ellipsoid(h.head_c + Vec3{0, h.head.y * 0.45f, -0.01f}, {h.head.x * 1.08f, h.head.y * 0.62f, h.head.z * 1.08f}, {0.04f, 0.04f, 0.045f}, 0.8f);
+            m.pop_pose();
+            if (e.state == EntState::Chase) m.cone(h.hand[1], h.hand[1] + Vec3{0, 0.02f, 0.24f}, 0.02f, {0.75f, 0.75f, 0.78f});
+            break;
+        }
+        case EntityType::Mangled: {
+            // taller than the buildings: long grey limbs, a small head bent forward, it walks slowly
+            Humanoid h;
+            h.leg = 4.4f; h.torso = 2.5f; h.neck = 0.5f; h.hip_w = 0.32f; h.shoulder_w = 0.62f;
+            h.upper_arm = 2.2f; h.forearm = 2.4f; h.limb_r = 0.2f; h.arm_r = 0.14f;
+            h.chest = {0.6f, 0.75f, 0.38f}; h.belly = {0.42f, 0.6f, 0.3f}; h.head = {0.32f, 0.42f, 0.36f};
+            Rgb flesh{0.42f, 0.38f, 0.36f};
+            h.skin = flesh; h.top = flesh; h.legs = {0.36f, 0.33f, 0.31f}; h.feet = {0.25f, 0.22f, 0.2f}; h.hands = flesh; h.has_hair = false;
+            h.phase = e.anim * 0.5f; h.stride = std::min(1.0f, e.speed / 1.2f); h.arm_swing = 0.3f;
+            h.lean = 0.42f; h.head_tilt = 0.5f;
+            h.build(m);
+            for (int s2 = -1; s2 <= 1; s2 += 2) m.ellipsoid(h.head_c + Vec3{s2 * 0.12f, 0.02f, 0.3f}, {0.07f, 0.05f, 0.04f}, {0.02f, 0.0f, 0.0f}, 0.6f);
+            break;
+        }
+        case EntityType::Animation: {
+            // a 1930s cartoon: round black body, rubber-hose limbs, white gloves, pie-cut eyes, a grin
+            Humanoid h;
+            h.leg = 0.72f; h.torso = 0.5f; h.neck = 0.02f; h.hip_w = 0.12f; h.shoulder_w = 0.2f;
+            h.upper_arm = 0.34f; h.forearm = 0.32f; h.limb_r = 0.035f; h.arm_r = 0.03f;
+            h.chest = {0.24f, 0.24f, 0.2f}; h.belly = {0.26f, 0.26f, 0.22f}; h.head = {0.22f, 0.22f, 0.2f};
+            Rgb ink{0.03f, 0.03f, 0.03f};
+            h.skin = ink; h.top = ink; h.legs = ink; h.feet = {0.35f, 0.18f, 0.1f}; h.hands = {0.97f, 0.97f, 0.95f}; h.has_hair = false;
+            h.phase = e.anim; h.stride = std::min(1.0f, stride * 1.4f); h.arm_swing = 1.0f;
+            h.arm_forward = e.state == EntState::Chase ? 0.7f : 0.0f;
+            h.build(m);
+            for (int s2 = 0; s2 < 2; s2++) m.ellipsoid(h.hand[s2], {0.09f, 0.08f, 0.09f}, h.hands, 0.7f); // big gloves
+            for (int s2 = 0; s2 < 2; s2++) m.ellipsoid(h.foot[s2] + Vec3{0, 0, 0.06f}, {0.09f, 0.06f, 0.15f}, h.feet, 0.7f);
+            m.push_pose(h.head_c, h.head_tilt);
+            for (int s2 = -1; s2 <= 1; s2 += 2) {
+                m.ellipsoid(h.head_c + Vec3{s2 * 0.07f, 0.04f, 0.16f}, {0.055f, 0.08f, 0.05f}, {0.97f, 0.97f, 0.95f}, 0.6f);
+                m.ellipsoid(h.head_c + Vec3{s2 * 0.07f, 0.03f, 0.205f}, {0.025f, 0.045f, 0.012f}, ink, 0.5f);
+                m.ellipsoid(h.head_c + Vec3{s2 * 0.16f, 0.2f, 0.0f}, {0.1f, 0.1f, 0.03f}, ink, 0.6f); // round ears
+            }
+            m.ellipsoid(h.head_c + Vec3{0, -0.09f, 0.15f}, {0.12f, 0.035f, 0.06f}, {0.97f, 0.95f, 0.9f}, 0.6f); // grin
+            m.pop_pose();
+            break;
+        }
+        case EntityType::FallenAngel: {
+            // blue robes, black wings, wounds that never closed. It watches you, head bowed
+            Humanoid h;
+            h.leg = 0.95f; h.torso = 0.62f;
+            Rgb robe{0.22f, 0.3f, 0.5f};
+            h.skin = {0.82f, 0.8f, 0.78f}; h.top = robe; h.legs = robe; h.feet = robe; h.hands = h.skin; h.hair = {0.1f, 0.1f, 0.1f};
+            h.phase = 0; h.stride = 0; h.head_tilt = 0.35f; h.lean = breathe;
+            h.chest = {0.21f, 0.22f, 0.13f}; h.belly = {0.24f, 0.24f, 0.15f}; // the robe widens
+            h.build(m);
+            m.ellipsoid(h.hip_c + Vec3{0, -0.45f, 0}, {0.26f, 0.5f, 0.2f}, robe, 0.8f);
+            Rgb wing{0.03f, 0.03f, 0.035f};
+            for (int s2 = -1; s2 <= 1; s2 += 2) { // folded black wings: a bony arm, then long feathers fanning down
+                float flap = std::sin(time * 0.8f + e.id) * 0.04f;
+                Vec3 root = h.chest_c + Vec3{s2 * 0.1f, 0.15f, -0.13f};
+                Vec3 elbow = root + Vec3{s2 * 0.45f, 0.42f + flap, -0.14f};
+                Vec3 tip = elbow + Vec3{s2 * 0.35f, 0.18f + flap, -0.04f};
+                m.capsule(root, elbow, 0.035f, 0.03f, wing);
+                m.capsule(elbow, tip, 0.03f, 0.015f, wing);
+                for (int fth = 0; fth < 6; fth++) { // the feathers hang from the arm, longest at the tip
+                    float t = fth / 5.0f;
+                    Vec3 a = root + (tip - root) * (0.15f + t * 0.85f);
+                    float len = 0.55f + t * 0.6f;
+                    Vec3 b = a + Vec3{s2 * (0.05f + t * 0.15f), -len, -0.05f - t * 0.03f};
+                    m.capsule(a, b, 0.05f - t * 0.012f, 0.008f, wing, false);
+                }
+            }
+            m.ellipsoid(h.chest_c + Vec3{0.08f, -0.05f, 0.13f}, {0.05f, 0.05f, 0.02f}, {0.35f, 0.04f, 0.03f}, 0.6f); // the wound
+            break;
+        }
         case EntityType::Smiler: break;
         default: break;
     }
@@ -676,7 +779,14 @@ void Renderer::draw_world(const World& w, const Camera& cam, float time, float f
                           const std::vector<Phantom>& phantoms) {
     cam_ = cam;
     const LevelInfo& li = w.info();
-    glClearColor(li.fog[0], li.fog[1], li.fog[2], 1.0f);
+    // day and night: the sky and the haze go dark (0Zero: pitch black, the others a deep blue)
+    const float dk = darkness_;
+    float fogc[4] = {li.fog[0], li.fog[1], li.fog[2], 1.0f};
+    if (dk > 0) {
+        const float night[3] = {w.id() == LevelId::TSG0 ? 0.0f : 0.02f, w.id() == LevelId::TSG0 ? 0.0f : 0.025f, w.id() == LevelId::TSG0 ? 0.0f : 0.05f};
+        for (int k = 0; k < 3; k++) fogc[k] = lerpf(li.fog[k], night[k], dk);
+    }
+    glClearColor(fogc[0], fogc[1], fogc[2], 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     float far_z = li.outdoor ? s_.view_dist + 60.0f : s_.view_dist + 20.0f;
@@ -705,12 +815,13 @@ void Renderer::draw_world(const World& w, const Camera& cam, float time, float f
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
     glEnable(GL_FOG);
-    glFogfv(GL_FOG_COLOR, li.fog);
+    glFogfv(GL_FOG_COLOR, fogc);
 #if defined(IRIS_GL_VITA)
     fog_density_ = li.fog_density_vita * fog_mult;
 #else
     fog_density_ = li.fog_density * fog_mult;
 #endif
+    fog_density_ *= 1.0f + dk * (w.id() == LevelId::TSG0 ? 3.5f : 1.6f); // night closes in
     glFogf(GL_FOG_DENSITY, fog_density_);
     glEnable(GL_TEXTURE_2D);
     glDisable(GL_BLEND);
@@ -719,7 +830,8 @@ void Renderer::draw_world(const World& w, const Camera& cam, float time, float f
     glEnableClientState(GL_COLOR_ARRAY);
 
     // ----- night sky (outdoor levels): stars, and on the moon, the planets
-    if (w.id() == LevelId::L7 || w.id() == LevelId::L9 || w.id() == LevelId::L24) { // night skies
+    if (w.id() == LevelId::L7 || w.id() == LevelId::L9 || w.id() == LevelId::L24 ||
+        ((w.id() == LevelId::L70 || w.id() == LevelId::L94) && dk > 0.5f)) { // night skies
         glDepthMask(GL_FALSE);
         glEnable(GL_BLEND);
         const float R = far_z * 0.85f;
@@ -804,8 +916,14 @@ void Renderer::draw_world(const World& w, const Camera& cam, float time, float f
 
     // ----- entities and other players (opaque; box models are drawn without culling)
     glDisable(GL_CULL_FACE);
-    for (const DrawEntity& e : ents)
-        if (e.type != EntityType::Smiler) draw_entity(w, e, time);
+    for (const DrawEntity& e : ents) {
+        if (e.type == EntityType::Smiler) continue;
+        if (w.id() == LevelId::L94 || e.type == EntityType::Animation) { // Motion: everything moves at 12 frames a second
+            DrawEntity q = e;
+            q.anim = std::floor(e.anim * 2.0f) / 2.0f;
+            draw_entity(w, q, std::floor(time * 12.0f) / 12.0f);
+        } else draw_entity(w, e, time);
+    }
     for (const DrawPlayer& p : players) draw_player(w, p, time);
     glEnable(GL_CULL_FACE);
     glEnable(GL_BLEND);
@@ -962,6 +1080,7 @@ void Renderer::draw_world(const World& w, const Camera& cam, float time, float f
     const bool dim_signs = w.difficulty() >= Difficulty::Hard;
     for (const GpuChunk* g : visible)
         for (const ExitDoor& ex : g->exits) {
+            if (ex.side < 0 && w.exit_style() != ExitStyle::LoneDoor) continue; // (holes, clocks, angels have no sign)
             Vec3 n{ex.normal.x, 0, ex.normal.z}, t{n.z, 0, -n.x};
             Vec3 c = Vec3{ex.pos.x, 0, ex.pos.z} + n * 0.08f;
             float y0 = 2.26f, y1 = 2.46f;
@@ -975,6 +1094,61 @@ void Renderer::draw_world(const World& w, const Camera& cam, float time, float f
                 flush_dyn(spr_[SPR_GLOW], true, false);
             }
         }
+    // ----- Level 94: the castle on its transparent mountain, floating far over the hills
+    if (w.id() == LevelId::L94) {
+        glDisable(GL_FOG);
+        ModelBuilder m(dyn_, 8);
+        Vec2 dir{0.8f, -0.6f};
+        float R = far_z * 0.8f;
+        m.place({cam.eye.x + dir.x * R, cam.eye.z + dir.z * R}, -0.6f);
+        m.set_light(1.0f - dk * 0.7f, {0.3f, 0.9f, 0.3f});
+        const float y = 26.0f;
+        Rgb wall{0.86f, 0.8f, 0.9f}, roof{0.55f, 0.3f, 0.6f}, glassm{0.75f, 0.88f, 0.95f};
+        m.cone({0, y - 1, 0}, {0, y - 24, 0}, 16, glassm);              // the transparent mountain, upside down beneath it
+        m.box({0, y + 4, 0}, {9, 4, 6}, wall);
+        for (int k = -1; k <= 1; k += 2) {
+            m.box({k * 10.0f, y + 7, 0}, {2.2f, 7, 2.2f}, wall);
+            m.cone({k * 10.0f, y + 14, 0}, {k * 10.0f, y + 20, 0}, 3.0f, roof);
+        }
+        m.box({0, y + 11, 0}, {3, 4, 3}, wall);
+        m.cone({0, y + 15, 0}, {0, y + 23, 0}, 4.0f, roof);
+        flush_dyn(spr_[SPR_WHITE], false, false);
+        glEnable(GL_FOG);
+    }
+    // ----- snow falling (Froidetown, 2Two: never stops, never melts)
+    if ((w.id() == LevelId::L70 || w.id() == LevelId::TSG2) && s_.particles > 0) {
+        glEnable(GL_BLEND);
+        glDepthMask(GL_FALSE);
+        const int flakes = std::max(40, (int)(160 * s_.particles));
+        const float Rr = 9.0f, top = 7.0f;
+        for (int i = 0; i < flakes; i++) {
+            float hx = hash01(707, i, 0, 1), hz = hash01(707, i, 1, 1), hy = hash01(707, i, 2, 1);
+            float fall = std::fmod(hy * top + time * (0.8f + hx * 0.6f), top);
+            float x = cam.eye.x + std::fmod(hx * 2 * Rr + std::sin(time * 0.7f + i) * 0.4f + 1000.0f * Rr, 2 * Rr) - Rr;
+            float z = cam.eye.z + std::fmod(hz * 2 * Rr + time * 0.3f + 1000.0f * Rr, 2 * Rr) - Rr;
+            billboard({x, top - fall, z}, 0.05f, 0.05f, rgba(1, 1, 1, 0.75f * (1.0f - dk * 0.6f)));
+        }
+        flush_dyn(spr_[SPR_GLOW], false, true);
+        glDepthMask(GL_TRUE);
+        glDisable(GL_BLEND);
+    }
+    // ----- exits that stand free: the angel who'll push you through, the clock's glow
+    if (w.exit_style() == ExitStyle::Angel || w.exit_style() == ExitStyle::Clock) {
+        for (const GpuChunk* g : visible)
+            for (const ExitDoor& ex : g->exits) {
+                if (w.exit_style() == ExitStyle::Angel) {
+                    DrawEntity a{0, EntityType::FallenAngel, EntState::Wander, ex.pos, std::atan2(cam.eye.x - ex.pos.x, cam.eye.z - ex.pos.z), 0, 0};
+                    draw_entity(w, a, time);
+                }
+                glEnable(GL_BLEND);
+                glDepthMask(GL_FALSE);
+                float y = w.exit_style() == ExitStyle::Clock ? 1.98f : 1.4f;
+                billboard({ex.pos.x, y, ex.pos.z}, 1.6f, 1.6f, rgba(0.9f, 0.95f, 1.0f, 0.18f + 0.06f * std::sin(time * 2.0f)));
+                flush_dyn(spr_[SPR_GLOW], true, false);
+                glDepthMask(GL_TRUE);
+                glDisable(GL_BLEND);
+            }
+    }
     if (s_.atmosphere) draw_atmosphere(w, visible, time);
     // smilers last: their faces float in the dark
     for (const DrawEntity& e : ents)
@@ -1420,6 +1594,20 @@ bool Renderer::post_film(const FilmParams& f) {
     glEnable(GL_DEPTH_TEST);
     return true;
 #endif
+}
+
+void Renderer::night_dim(float amount) {
+    if (amount <= 0.01f) return;
+    begin_2d();
+    glBlendFunc(GL_DST_COLOR, GL_ZERO); // multiply: everything darker, nothing lifted
+    float k = 1.0f - amount;
+    push_quad({0, (float)height, 0}, {(float)width, (float)height, 0}, {(float)width, 0, 0}, {0, 0, 0}, rgba(k * 0.85f, k * 0.9f, k, 1));
+    set_pointers(dyn_.data());
+    glBindTexture(GL_TEXTURE_2D, spr_[SPR_WHITE]);
+    draws_++; glDrawArrays(GL_TRIANGLES, 0, (GLsizei)dyn_.size());
+    dyn_.clear();
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    end_2d();
 }
 
 void Renderer::night_vision(float time) {

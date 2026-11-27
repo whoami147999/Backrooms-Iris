@@ -158,7 +158,8 @@ static void test_all_levels() {
         CHECK(reach > 80.0, "%s: only %.1f%% of open cells reachable", nm, reach);
         bool run = (LevelId)li == LevelId::LRun; // one corridor, one door at the end
         CHECK(exits >= (run ? 1 : 2), "%s: only %d reachable exits in a 350 m square", nm, exits);
-        CHECK(items >= (run ? 4 : 20), "%s: only %d items", nm, items);
+        bool end = (LevelId)li == LevelId::TSGEnd; // TH3 3ND: nothing left to find
+        CHECK(end ? items == 0 : items >= (run ? 4 : 20), "%s: %d items", nm, items);
         std::printf("  %-9s reachable %5.1f%%  exits %3d  items %4d\n", nm, reach, exits, items);
     }
 }
@@ -252,6 +253,7 @@ static void test_sim_soak() {
         GameSim sim(99);
         sim.multiplayer = true;
         sim.start_level((LevelId)li, 1000 + li);
+        if ((LevelId)li == LevelId::L94) sim.level_time = 230; // Motion is safe by day: start near dusk so the night shift turns up
         int a = sim.add_player("A"), b = sim.add_player("B");
         Rng rng(li + 1);
         InputCmd ca, cb;
@@ -267,7 +269,7 @@ static void test_sim_soak() {
             if (sim.world.id() == (LevelId)li) max_ents = std::max(max_ents, (int)sim.ents.size()); // (random walks find exits)
             for (int i : {a, b}) deaths += !sim.players[i].st.alive && sim.players[i].respawn_t > 9.98f;
         }
-        bool expect = (LevelId)li != LevelId::L11 && (LevelId)li != LevelId::L37; // the two safe levels
+        bool expect = (LevelId)li != LevelId::L11 && (LevelId)li != LevelId::L37 && (LevelId)li != LevelId::TSGEnd; // the safe levels
         CHECK(!expect || max_ents > 0, "%s: no entities ever spawned", level_info((LevelId)li).code);
         CHECK(expect || max_ents == 0, "%s should be safe", level_info((LevelId)li).code);
         std::printf("  %-9s max entities %d, deaths in 3 min of random walking: %d\n", level_info((LevelId)li).code, max_ents, deaths);
@@ -453,12 +455,15 @@ static void test_difficulty_exits() {
                     ExitDoor door;
                     if (!L.exit_door(x, z, &door)) continue;
                     n++;
-                    CHECK(L.wall_face(x, z, door.side), "%s %s: exit door at %d,%d is not on a wall", level_info((LevelId)li).code,
-                          diff_info((Difficulty)d).name, x, z);
+                    if (L.exit_style() == ExitStyle::Door)
+                        CHECK(L.wall_face(x, z, door.side), "%s %s: exit door at %d,%d is not on a wall", level_info((LevelId)li).code,
+                              diff_info((Difficulty)d).name, x, z);
+                    else // holes, clocks, angels, lone doors stand free in the middle of an open cell
+                        CHECK(door.side == -1 && std::fabs(door.pos.x - (x + 0.5f) * CELL) < 0.01f, "%s: free-standing exit misplaced", level_info((LevelId)li).code);
                     CHECK(!L.solid(x, z), "exit opens into a solid cell");
                 }
             CHECK(n >= ((LevelId)li == LevelId::LRun ? 1 : 3), "%s %s: only %d exits in a 400 m square", level_info((LevelId)li).code, diff_info((Difficulty)d).name, n);
-            CHECK(n <= prev + 2, "%s: %s has more exits (%d) than an easier difficulty (%d)", level_info((LevelId)li).code,
+            CHECK(n <= prev + 2 || (LevelId)li == LevelId::TSGEnd, "%s: %s has more exits (%d) than an easier difficulty (%d)", level_info((LevelId)li).code,
                   diff_info((Difficulty)d).name, n, prev);
             prev = n;
         }
@@ -527,7 +532,7 @@ static void test_objectives() {
         sim.add_player("A");
         const Objective& o = sim.objective;
         types[(int)o.type]++;
-        if (sim.world.id() == LevelId::LRun) continue; // no objective on Level !: just run
+        if (sim.world.id() == LevelId::LRun || sim.world.id() == LevelId::TSGEnd) continue; // no objective on Level ! or at the end
         CHECK(o.type != ObjType::None && o.need > 0, "seed %u: no objective", seed);
         int things = 0;
         for (const Prop& p : sim.props) things += p.kind == PropKind::Tape || p.kind == PropKind::Breaker;

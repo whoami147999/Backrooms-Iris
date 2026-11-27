@@ -479,7 +479,7 @@ Image fungus(int N) {
 }
 
 // ------------------------------------------------------------------ Level 9
-Image siding(int N) {
+Image siding(int N, bool door = true) {
     const int W = N / 2, H = N;
     Image im = paint(W, H, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
         int board = H / 22;
@@ -499,6 +499,7 @@ Image siding(int N) {
             if (mull) im.set(x, y, 0.92f, 0.92f, 0.9f);
             else im.set(x, y, glass, glass * 1.05f, glass * 1.3f);
         }
+    if (!door) return im; // (house walls you can walk through have a real door)
     // front door on the lower half
     int dx0 = W * 35 / 100, dx1 = W * 65 / 100, dy0 = H * 62 / 100;
     im.rect(dx0 - 4, dy0 - 4, dx1 + 4, H, 0.9f, 0.9f, 0.88f);
@@ -569,6 +570,115 @@ Image metal(int N, float base) {
     return paint(N, N, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
         float l = base + (vnoise(u * 2, v * 40, 2, 40, 271) - 0.5f) * 0.08f + grain(x, y, 272) * 0.03f;
         r = l; g = l * 1.01f; b = l * 1.04f;
+    });
+}
+
+// ================================================================== 1.1 levels
+void desaturate(Image& im, float amount, float bright);
+
+// fresh snow: blue-grey hollows, sparkle
+Image snow(int N) {
+    return paint(N, N, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
+        float drift = fbm(u, v, 3, 3, 4, 7001) - 0.5f;
+        float l = 0.90f + drift * 0.12f + grain(x, y, 7002) * 0.03f + (hash01(7003, x, y, 1) < 0.004f ? 0.1f : 0.0f);
+        r = l * 0.95f; g = l * 0.97f; b = l * 1.04f;
+    });
+}
+
+// a road under packed snow: ruts where the cars went
+Image snow_road(int N) {
+    Image a = asphalt(N, false), s = snow(N);
+    for (int y = 0; y < N; y++)
+        for (int x = 0; x < N; x++) {
+            float u = (float)x / N, v = (float)y / N;
+            float rut = std::fabs(std::sin(u * 2 * PI * 2)) ;
+            float t = clampf(0.25f + (fbm(u, v, 4, 4, 3, 7011) - 0.5f) * 0.8f + rut * 0.35f, 0, 1);
+            for (int k = 0; k < 3; k++) {
+                size_t i = ((size_t)y * N + x) * 4 + k;
+                a.rgba[i] = (uint8_t)(a.rgba[i] * (1 - t) + s.rgba[i] * t);
+            }
+        }
+    return a;
+}
+
+// river ice: bluish, cracked
+Image ice(int N) {
+    return paint(N, N, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
+        float c = vnoise(u * 6, v * 6, 6, 6, 7021);
+        float crack = (c > 0.49f && c < 0.51f) ? 0.15f : 0.0f;
+        float l = 0.62f + (fbm(u, v, 3, 3, 3, 7022) - 0.5f) * 0.12f + crack + grain(x, y, 7023) * 0.02f;
+        r = l * 0.78f; g = l * 0.92f; b = l * 1.08f;
+    });
+}
+
+Image bark(int N) {
+    return paint(N, N, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
+        float s = vnoise(u * 16, v * 2, 16, 2, 7031) - 0.5f;
+        float l = 0.30f + s * 0.25f + grain(x, y, 7032) * 0.05f;
+        r = l * 1.0f; g = l * 0.82f; b = l * 0.62f;
+    });
+}
+
+// a canopy of leaves; `frost` whitens the tops (2Two's pines)
+Image leaves(int N, float frost) {
+    return paint(N, N, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
+        float clump = vnoise(u * 12, v * 12, 12, 12, 7041), fine = grain(x, y, 7042);
+        float l = 0.42f + (clump - 0.5f) * 0.5f + fine * 0.2f;
+        float sn = clampf((clump - (1.0f - frost)) * 4.0f, 0.0f, 1.0f);
+        r = lerpf(l * 0.42f, 0.92f, sn); g = lerpf(l * 0.70f, 0.94f, sn); b = lerpf(l * 0.30f, 0.98f, sn);
+    });
+}
+
+// the jungle floor: dark earth, fallen leaves
+Image leaf_litter(int N) {
+    return paint(N, N, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
+        float leaf = vnoise(u * 20, v * 20, 20, 20, 7051);
+        float l = 0.24f + (leaf - 0.5f) * 0.3f + grain(x, y, 7052) * 0.06f + (fbm(u, v, 3, 3, 3, 7053) - 0.5f) * 0.1f;
+        r = l * 1.0f; g = l * 0.92f; b = l * 0.7f;
+    });
+}
+
+// Motion: grass like modelling clay, thumbprints and all
+Image toon_grass(int N) {
+    return paint(N, N, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
+        float thumb = vnoise(u * 7, v * 7, 7, 7, 7061);
+        float l = 0.78f + (thumb - 0.5f) * 0.22f + grain(x, y, 7062) * 0.05f;
+        r = 0.36f * l; g = 0.70f * l; b = 0.26f * l;
+    });
+}
+
+Image cobbles(int N) {
+    return paint(N, N, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
+        int S = N / 6;
+        int row = y / S, off = (row & 1) * S / 2;
+        int lx = (x + off) % S, ly = y % S;
+        float dx = (lx - S * 0.5f) / (S * 0.5f), dy = (ly - S * 0.5f) / (S * 0.5f);
+        float dome = 1.0f - std::min(1.0f, dx * dx * 0.7f + dy * dy * 0.9f);
+        float l = 0.38f + dome * 0.22f + (hash01(7071, (x + off) / S, row, 1) - 0.5f) * 0.12f + grain(x, y, 7072) * 0.04f;
+        r = l * 1.0f; g = l * 0.92f; b = l * 0.8f;
+        (void)u; (void)v;
+    });
+}
+
+// Level 188: stark white concrete, one deep, dark window per cell per storey
+Image court_wall(int N) {
+    const int W = N / 2, H = N;
+    return paint(W, H, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
+        float conc = 0.86f + (fbm(u, v, 3, 6, 3, 7081) - 0.5f) * 0.06f + grain(x, y, 7082) * 0.02f;
+        bool frame = u > 0.26f && u < 0.74f && v > 0.18f && v < 0.72f;
+        bool glass = u > 0.29f && u < 0.71f && v > 0.21f && v < 0.69f;
+        if (glass) { float l = 0.07f + (1.0f - v) * 0.05f; r = l; g = l; b = l * 1.1f; return; }
+        if (frame) { r = g = b = 0.62f; return; }
+        float sill = (v > 0.72f && v < 0.75f && u > 0.24f && u < 0.76f) ? -0.12f : 0.0f;
+        r = g = b = conc + sill;
+    });
+}
+
+// TH3 3ND: a floor that isn't really anything
+Image void_floor(int N) {
+    return paint(N, N, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
+        float l = 0.34f + (fbm(u, v, 2, 2, 3, 7091) - 0.5f) * 0.05f + grain(x, y, 7092) * 0.015f;
+        r = g = b = l;
     });
 }
 
@@ -1205,7 +1315,7 @@ Image confetti_carpet(int N) {
 } // namespace
 
 // =================================================================== levels
-static float id_bright(LevelId l) { return l == LevelId::TSGBlack ? 0.45f : 0.95f; }
+static float id_bright(LevelId l) { return l == LevelId::TSGFar ? 0.45f : 0.95f; }
 
 void make_level_textures(LevelId level, int N, Image out[MAT_COUNT]) {
     for (int i = 0; i < MAT_COUNT; i++) out[i] = Image();
@@ -1249,13 +1359,74 @@ void make_level_textures(LevelId level, int N, Image out[MAT_COUNT]) {
             break;
         case LevelId::L9:
             out[MAT_BLOCK] = siding(N);
+            out[MAT_WALL] = siding(N, false); // the walls of houses you can walk into (their door is real)
             out[MAT_ROOF] = shingles(N / 2);
             out[MAT_FLOOR] = grass(N);
             out[MAT_FLOOR2] = asphalt(N, false);
             out[MAT_FLOOR3] = sidewalk(N / 2);
             out[MAT_LIGHT] = light_panel(N / 8, N / 8, 1.0f);
             out[MAT_PROP] = metal(N / 4, 0.35f);
-            out[MAT_WALL] = out[MAT_PROP];
+            break;
+        case LevelId::L70:
+            out[MAT_FLOOR] = snow(N);
+            out[MAT_FLOOR2] = snow_road(N);
+            out[MAT_FLOOR3] = ice(N);
+            out[MAT_BLOCK] = facade(N);
+            out[MAT_WALL] = siding(N, false);
+            out[MAT_ROOF] = shingles(N / 2);
+            for (size_t i = 0; i + 3 < out[MAT_ROOF].rgba.size(); i += 4) // snow on the roofs
+                if (hash01(7101, (int)(i / 4) % (N / 2), (int)(i / 4) / (N / 2), 1) < 0.7f) { out[MAT_ROOF].rgba[i] = 230; out[MAT_ROOF].rgba[i + 1] = 234; out[MAT_ROOF].rgba[i + 2] = 240; }
+            out[MAT_LIGHT] = light_panel(N / 8, N / 8, 1.0f);
+            out[MAT_PROP] = metal(N / 4, 0.35f);
+            break;
+        case LevelId::L94:
+            out[MAT_FLOOR] = toon_grass(N);
+            out[MAT_FLOOR2] = cobbles(N);
+            out[MAT_FLOOR3] = dirt(N);
+            out[MAT_BLOCK] = siding(N);
+            out[MAT_WALL] = siding(N, false);
+            out[MAT_ROOF] = shingles(N / 2);
+            out[MAT_LIGHT] = light_panel(N / 8, N / 8, 1.0f);
+            out[MAT_PROP] = metal(N / 4, 0.45f);
+            break;
+        case LevelId::L188:
+            out[MAT_FLOOR] = concrete(N, N, 0.72f, 18801, false);
+            out[MAT_FLOOR2] = planks(N, 0.5f, 0.85f, 0.65f, 0.45f, 18802);
+            out[MAT_BLOCK] = court_wall(N);
+            out[MAT_ROOF] = concrete(N / 2, N / 2, 0.8f, 18803, false);
+            out[MAT_CEIL] = concrete(N / 2, N / 2, 0.85f, 18804, false);
+            out[MAT_LIGHT] = light_panel(N / 4, N / 4, 0.1f);
+            out[MAT_PROP] = concrete(N / 4, N / 4, 0.7f, 18805, false);
+            out[MAT_WALL] = out[MAT_BLOCK];
+            break;
+        case LevelId::TSG0: case LevelId::TSG2:
+            out[MAT_FLOOR] = level == LevelId::TSG0 ? leaf_litter(N) : snow(N);
+            out[MAT_FLOOR2] = sea_water(N);                 // (0Zero's almond water lakes)
+            out[MAT_FLOOR3] = planks(N, 0.32f, 0.8f, 0.62f, 0.42f, 2001);
+            out[MAT_BLOCK] = bark(N / 2);
+            out[MAT_ROOF] = leaves(N / 2, level == LevelId::TSG2 ? 0.55f : 0.0f);
+            out[MAT_WALL] = planks(N / 2, 0.28f, 0.8f, 0.62f, 0.42f, 2002);
+            out[MAT_PROP] = metal(N / 4, 0.4f);
+            break;
+        case LevelId::TSG3:
+            out[MAT_FLOOR] = regolith(N, 0.62f, 3001);      // the islands' sand
+            out[MAT_FLOOR2] = sea_water(N);                 // mercury and gasoline
+            out[MAT_BLOCK] = rock(N, 0.4f, 3002);
+            out[MAT_ROOF] = out[MAT_BLOCK];
+            out[MAT_PROP] = metal(N / 4, 0.4f);
+            break;
+        case LevelId::TSG4:
+            out[MAT_FLOOR] = sea_water(N);                  // the river
+            out[MAT_FLOOR2] = asphalt(N, true);
+            out[MAT_FLOOR3] = paving(N);
+            out[MAT_BLOCK] = facade(N);
+            out[MAT_ROOF] = concrete(N / 2, N / 2, 0.5f, 4001, false);
+            out[MAT_LIGHT] = light_panel(N / 8, N / 8, 0.5f);
+            out[MAT_PROP] = metal(N / 4, 0.3f);
+            break;
+        case LevelId::TSGEnd:
+            out[MAT_FLOOR] = void_floor(N);
+            out[MAT_PROP] = metal(N / 4, 0.3f);
             break;
         case LevelId::L11:
             out[MAT_BLOCK] = facade(N);
@@ -1429,7 +1600,7 @@ void make_level_textures(LevelId level, int N, Image out[MAT_COUNT]) {
             out[MAT_LIGHT] = light_panel(N / 4, N / 8, 1.0f);
             out[MAT_PROP] = metal(N / 4, 0.4f);
             break;
-        case LevelId::TSG: case LevelId::TSGBlack:
+        case LevelId::TSGFar:
             out[MAT_WALL] = wallpaper(N);
             desaturate(out[MAT_WALL], 1.0f, id_bright(level));
             out[MAT_FLOOR] = carpet(N);
@@ -1439,7 +1610,7 @@ void make_level_textures(LevelId level, int N, Image out[MAT_COUNT]) {
             out[MAT_LIGHT] = light_panel(N / 4, N / 8, 0);
             out[MAT_PROP] = out[MAT_WALL];
             break;
-        case LevelId::TSGMansion:
+        case LevelId::TSG1:
             out[MAT_WALL] = hotel_wall(N, false);
             out[MAT_BLOCK] = hotel_wall(N, true);
             out[MAT_FLOOR] = hotel_carpet(N);
@@ -1460,6 +1631,8 @@ void make_level_textures(LevelId level, int N, Image out[MAT_COUNT]) {
             break;
         default: break;
     }
+    if (level >= LevelId::TSG0 && level <= LevelId::TSGEnd) // TH3 SH4DY GR3Y: no colour, anywhere (the Vita has no shader for it)
+        for (int i = 0; i < MAT_COUNT; i++) if (out[i].w) desaturate(out[i], 1.0f, 1.0f);
     // anything a level doesn't use still gets a valid texture
     if (out[MAT_FURN].w == 0) out[MAT_FURN] = furniture_atlas(std::min(N, 512)); // props are everywhere now
     out[MAT_DECAL] = decal_atlas(std::min(N, 512));

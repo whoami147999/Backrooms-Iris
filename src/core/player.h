@@ -34,7 +34,8 @@ constexpr int PERK_MAX = 3;
 struct PerkInfo { const char* name; const char* text; };
 const PerkInfo& perk_info(Perk p);
 
-enum class DeathCause : uint8_t { None, Bacteria, Hound, Smiler, SkinStealer, Partygoer, Sanity, MemoryJuice };
+enum class DeathCause : uint8_t { None, Bacteria, Hound, Smiler, SkinStealer, Partygoer, Sanity, MemoryJuice,
+                                  Landlord, Faceling, Mangled, Animation, Heat, Cold, Toxic, LAST = Toxic };
 const char* death_text(DeathCause c);
 
 struct PlayerState {

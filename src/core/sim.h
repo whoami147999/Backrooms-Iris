@@ -16,7 +16,10 @@
 
 namespace iris {
 
-enum class EntityType : uint8_t { Bacteria, Hound, Smiler, SkinStealer, Partygoer, COUNT };
+enum class EntityType : uint8_t { Bacteria, Hound, Smiler, SkinStealer, Partygoer,
+                                  Landlord, Faceling, Mangled, Animation, FallenAngel, COUNT };
+// nothing you carry stops these: no stun, no damage, fire doesn't scare them
+inline bool unstoppable(EntityType t) { return t == EntityType::Landlord || t == EntityType::Mangled || t == EntityType::FallenAngel; }
 enum class EntState : uint8_t { Wander, Notice, Chase, Search, Stare, Charge, Retreat, Stunned };
 
 const char* entity_name(EntityType t);

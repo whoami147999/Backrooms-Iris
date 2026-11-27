@@ -129,6 +129,8 @@ public:
     void set_style(bool film, bool camcorder, bool atmosphere, bool retro);
     // graphics preset changes: view distance and detail now; textures / lighting grids rebuild
     void set_quality(float view_dist, int texture_size, int mesh_detail, float particles, float entity_detail);
+    void set_darkness(float d) { darkness_ = d; }  // night on the levels with a day/night cycle (0..1)
+    void night_dim(float amount);                  // after the world: darken the whole picture
     // How much a nearby flickering light is darkening the view right now (0..1), set by draw_world.
     float flicker_dim() const { return flicker_dim_; }
 
@@ -157,6 +159,7 @@ private:
     // the main thread uploads it to the GPU
     std::vector<const GpuChunk*> visible_;   // (reused every frame)
     int draws_ = 0, last_draws_ = 0;
+    float darkness_ = 0;
     bool in_2d_ = false, batch_add_ = false;  // 2D batching state
     uint32_t batch_tex_ = 0;
     void pre2d(uint32_t tex, bool additive);
