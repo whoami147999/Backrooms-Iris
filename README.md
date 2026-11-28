@@ -62,7 +62,7 @@ Runs on Linux, Windows and PS Vita. Multiplayer is PC only.
 | ![](docs/screenshots/11-01-level70.jpg) | ![](docs/screenshots/11-07-tsg2-angel.jpg) |
 | ![](docs/screenshots/11-06-tsg1-landlord.jpg) | ![](docs/screenshots/03-hound.jpg) |
 
-## Download
+# Download
 
 The builds are in [`dist/`](dist):
 
@@ -247,7 +247,7 @@ That gives you `build-vita/BackroomsIris.vpk`. If you'd rather not set any of th
 **Vita VPK** workflow builds it for you. The console needs `libshacccg.suprx` (extract it with ShaRKF00D).
 [BUILD_VPK.md](BUILD_VPK.md) covers the details, the crash log and safe mode.
 
-## Settings and files
+## Settings and fiIes
 
 Settings and screenshots (F12) are saved here. On the Vita, `log.txt` and `boot.txt` are saved here too.
 
