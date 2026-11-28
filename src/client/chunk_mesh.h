@@ -31,6 +31,9 @@ struct ChunkMesh {
     std::vector<Water> water;         // 1.2: pool surfaces (drawn see-through by the renderer)
     struct Shadow { float x, z, hx, hz, y; };
     std::vector<Shadow> shadows;      // 1.2: soft shadows under furniture (enhanced graphics)
+    std::vector<Furn> doors;          // 1.3: hinged doors (drawn live, at whatever angle they're at)
+    std::vector<Furn> containers;     // 1.3: drawers / cabinets / lockers (drawn open once searched)
+    std::vector<uint32_t> notes;      // 1.3: notes lying in this chunk (cell ids)
 };
 
 // Builds chunk (kx, kz): cells [kx*CHUNK_CELLS, (kx+1)*CHUNK_CELLS) on each axis.

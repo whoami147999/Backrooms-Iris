@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "../core/sim.h"
+#include "../core/voice.h"
 #include "udp.h"
 
 namespace iris {
@@ -44,6 +45,7 @@ struct Snapshot {
     std::vector<PropSnap> props;
     uint32_t toast_seq = 0;
     std::string toast;
+    std::vector<uint32_t> doors, searched; // 1.3: near this player
 };
 
 struct FoundServer {
@@ -78,6 +80,9 @@ public:
     void send_input(uint32_t seq, const InputCmd* cmds, const uint32_t* seqs, int count);
     void send_sandbox(uint8_t action, uint8_t arg, float yaw);
     void send_hostcmd(uint32_t token, LevelId level, Difficulty d, bool sandbox);
+    // 1.3 proximity chat
+    std::vector<VoiceFrame> voice_in;     // frames heard since last time (the game drains this)
+    void send_voice(uint16_t seq, AdpcmState state, const uint8_t* payload);
 
     // LAN browser
     std::vector<FoundServer> found;

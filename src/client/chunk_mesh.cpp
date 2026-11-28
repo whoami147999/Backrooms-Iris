@@ -1013,6 +1013,224 @@ struct Builder {
                 break;
             }
             case FurnKind::Window: break; // (windows are cut into the walls themselves)
+            // ----- 1.3
+            case FurnKind::DoorFrame: box(MAT_PROP, mx, mz, hx, hz, 0, f.y1, 0.3f, 2.3f, 1); break; // a shop's door surround
+            case FurnKind::Toilet: {
+                Vec2 back{-fd.x, -fd.z};
+                set_tint(0xf2f2ee);
+                cyl(M, mx + fd.x * 0.05f, mz + fd.z * 0.05f, 0.17f, 0.2f, 0, 0.4f, SHEET, true, false, 1.0f);
+                fbox(M, mx + back.x * 0.22f - 0.18f, mz + back.z * 0.22f - 0.18f, mx + back.x * 0.22f + 0.18f, mz + back.z * 0.22f + 0.18f, 0.3f, 0.8f, SHEET, SHEET, SHEET, fd);
+                clear_tint();
+                break;
+            }
+            case FurnKind::Bathtub:
+                set_tint(0xf0f0ea);
+                fbox(M, f.x0, f.z0, f.x1, f.z1, 0, f.y1, SHEET, SHEET, SHEET, fd);
+                clear_tint();
+                set_tint(0x7a8c90);
+                fbox(M, f.x0 + 0.08f, f.z0 + 0.08f, f.x1 - 0.08f, f.z1 - 0.08f, f.y1 - 0.05f, f.y1 + 0.002f, SHEET, SHEET, SHEET, fd);
+                clear_tint();
+                break;
+            case FurnKind::Mirror:
+                fbox(M, f.x0, f.z0, f.x1, f.z1, f.y0, f.y1, METAL, METAL, METAL, f.face);
+                glow = true; glow_g = 0.95f; glow_b = 1.0f;
+                set_tint(0x9aa6aa);
+                fbox(M, f.x0 + std::fabs(fd.z) * 0.03f, f.z0 + std::fabs(fd.x) * 0.03f, f.x1 - std::fabs(fd.z) * 0.03f, f.z1 - std::fabs(fd.x) * 0.03f, f.y0 + 0.03f, f.y1 - 0.03f, SHEET, SHEET, SHEET, f.face);
+                clear_tint();
+                glow = false; glow_g = glow_b = 1;
+                break;
+            case FurnKind::Reception: // a long reception desk: a counter, a raised front
+                fbox(M, f.x0, f.z0, f.x1, f.z1, 0, f.y1 - 0.05f, WOOD, WOOD, DRAWER, fd);
+                fbox(M, f.x0 - 0.04f, f.z0 - 0.04f, f.x1 + 0.04f, f.z1 + 0.04f, f.y1 - 0.05f, f.y1, STONE, STONE, STONE, fd);
+                fbox(M, mx - 0.2f, mz - 0.12f, mx + 0.2f, mz + 0.12f, f.y1, f.y1 + 0.3f, RUBBER, RUBBER, RUBBER, fd); // a monitor
+                break;
+            case FurnKind::Mailboxes: { // a bank of little brass doors on the wall
+                fbox(M, f.x0, f.z0, f.x1, f.z1, f.y0, f.y1, METAL, METAL, LOCKER, fd);
+                break;
+            }
+            case FurnKind::Elevator: { // lift doors set into the wall, a call button, an arrow lit above
+                fbox(M, f.x0, f.z0, f.x1, f.z1, 0, f.y1, METAL, METAL, METAL, fd);
+                Vec2 sd{std::fabs(fd.z), std::fabs(fd.x)};
+                float ex = mx + fd.x * 0.01f, ez = mz + fd.z * 0.01f;
+                fbox(M, ex - sd.x * 0.005f - std::fabs(fd.x) * 0.02f, ez - sd.z * 0.005f - std::fabs(fd.z) * 0.02f, ex + sd.x * 0.005f + std::fabs(fd.x) * 0.02f, ez + sd.z * 0.005f + std::fabs(fd.z) * 0.02f, 0, f.y1 - 0.1f, RUBBER, RUBBER, RUBBER, fd);
+                glow = true; glow_g = 0.6f; glow_b = 0.3f;
+                Vec3 lc{mx + fd.x * 0.03f, f.y1 + 0.15f, mz + fd.z * 0.03f};
+                sphere(M, lc, {0.05f, 0.05f, 0.05f}, GLOWC, 0.5f);
+                glow = false; glow_g = glow_b = 1;
+                break;
+            }
+            case FurnKind::Sofa: { // a lobby sofa, low and long
+                Vec2 back{-fd.x, -fd.z};
+                set_tint(0x6a4a3a);
+                fbox(M, f.x0, f.z0, f.x1, f.z1, 0.08f, 0.42f, FABRIC, FABRIC, FABRIC, fd);
+                float bx0 = f.x0, bx1 = f.x1, bz0 = f.z0, bz1 = f.z1;
+                if (back.z < -0.5f) bz1 = f.z0 + 0.2f; else if (back.z > 0.5f) bz0 = f.z1 - 0.2f; else if (back.x < -0.5f) bx1 = f.x0 + 0.2f; else bx0 = f.x1 - 0.2f;
+                fbox(M, bx0, bz0, bx1, bz1, 0.42f, f.y1, FABRIC, FABRIC, FABRIC, fd);
+                clear_tint();
+                legs(0.05f, 0.08f, 0.02f);
+                break;
+            }
+            case FurnKind::Boulder: { // a lumpy grey rock, half buried
+                float r = rad;
+                uint32_t hb = hsh;
+                sphere(M, {mx, r * 0.35f, mz}, {r, r * 0.85f, r * 0.95f}, STONE, 1.0f);
+                for (int k = 0; k < 3; k++) {
+                    float a = (hb >> (k * 4) & 15) / 16.0f * 2 * PI;
+                    sphere(M, {mx + std::cos(a) * r * 0.5f, r * 0.45f, mz + std::sin(a) * r * 0.5f}, {r * 0.55f, r * 0.5f, r * 0.55f}, STONE, 0.75f);
+                }
+                break;
+            }
+            case FurnKind::Lander: { // a lunar lander left behind: gold-foil body, four splayed legs, an empty hatch
+                set_tint(0xd8b050);
+                fbox(M, mx - 0.9f, mz - 0.9f, mx + 0.9f, mz + 0.9f, 0.9f, 1.8f, FABRIC, FABRIC, FABRIC, fd);
+                clear_tint();
+                fbox(M, mx - 0.6f, mz - 0.6f, mx + 0.6f, mz + 0.6f, 1.8f, 2.7f, METAL, METAL, METAL, fd);
+                for (int a = -1; a <= 1; a += 2)
+                    for (int b = -1; b <= 1; b += 2) {
+                        tube(M, {mx + a * 0.8f, 1.1f, mz + b * 0.8f}, {mx + a * 1.15f, 0.05f, mz + b * 1.15f}, 0.035f, METAL, 0.5f);
+                        cyl(M, mx + a * 1.15f, mz + b * 1.15f, 0.16f, 0.12f, 0, 0.05f, METAL, true, false, 0.75f);
+                    }
+                fbox(M, mx + fd.x * 0.61f - 0.2f * std::fabs(fd.z) - 0.005f, mz + fd.z * 0.61f - 0.2f * std::fabs(fd.x) - 0.005f, mx + fd.x * 0.61f + 0.2f * std::fabs(fd.z) + 0.005f, mz + fd.z * 0.61f + 0.2f * std::fabs(fd.x) + 0.005f, 1.95f, 2.45f, RUBBER, RUBBER, RUBBER, fd);
+                tube(M, {mx, 2.7f, mz}, {mx + 0.3f, 3.2f, mz}, 0.02f, METAL, 0.5f);
+                break;
+            }
+            case FurnKind::Antenna: // a tripod mast with a dish, pointed at the Earth
+                for (int k = 0; k < 3; k++) { float a = k * 2 * PI / 3; tube(M, {mx + std::cos(a) * rad, 0, mz + std::sin(a) * rad}, {mx, 1.4f, mz}, 0.02f, METAL, 0.5f); }
+                cyl(M, mx, mz, 0.03f, 0.03f, 1.4f, f.y1 - 0.6f, METAL, false, false, 0.5f);
+                cyl(M, mx, mz, 0.05f, 0.65f, f.y1 - 0.65f, f.y1 - 0.4f, SHEET, true, true, 1.25f);
+                break;
+            case FurnKind::Flag: { // a pole and a flag with nothing on it
+                cyl(M, mx, mz, 0.02f, 0.02f, 0, f.y1, METAL, true, false, 0.5f);
+                tube(M, {mx, f.y1 - 0.05f, mz}, {mx + 0.8f, f.y1 - 0.05f, mz}, 0.01f, METAL, 0.5f);
+                fbox(M, mx + 0.02f, mz - 0.005f, mx + 0.8f, mz + 0.005f, f.y1 - 0.55f, f.y1 - 0.06f, SHEET, SHEET, SHEET, {0, 1});
+                break;
+            }
+            case FurnKind::Pine: { // a snowed-on pine: trunk, three tiers, white on top
+                cyl(M, mx, mz, 0.12f, 0.09f, 0, 1.2f, BARK, false, false, 0.75f);
+                for (int k = 0; k < 3; k++) {
+                    float y0 = 0.9f + k * 0.95f, r = 0.95f - k * 0.25f;
+                    cyl(M, mx, mz, r, 0.05f, y0, y0 + 1.35f, LEAVES, true, false, 1.0f);
+                    set_tint(0xf4f6fa);
+                    cyl(M, mx, mz, r * 0.62f, 0.04f, y0 + 0.55f, y0 + 1.4f, SHEET, true, false, 0.9f);
+                    clear_tint();
+                }
+                break;
+            }
+            case FurnKind::Fence: { // a run of white picket fence
+                bool along_x = (f.x1 - f.x0) > (f.z1 - f.z0);
+                float L = along_x ? f.x1 - f.x0 : f.z1 - f.z0;
+                set_tint(0xf6f2e6);
+                int np = std::max(3, (int)(L / 0.2f));
+                for (int k = 0; k < np; k++) {
+                    float t = (k + 0.5f) / np;
+                    float px = along_x ? f.x0 + t * L : mx, pz = along_x ? mz : f.z0 + t * L;
+                    fbox(M, px - 0.035f, pz - 0.015f, px + 0.035f, pz + 0.015f, 0, f.y1 - 0.08f, SHEET, SHEET, SHEET, fd);
+                    cyl(M, px, pz, 0.035f, 0.0f, f.y1 - 0.08f, f.y1, SHEET, false, false, 0.5f);
+                }
+                for (int r2 = 0; r2 < 2; r2++) {
+                    float y = 0.25f + r2 * 0.4f;
+                    if (along_x) fbox(M, f.x0, mz - 0.03f, f.x1, mz - 0.01f, y, y + 0.06f, SHEET, SHEET, SHEET, fd);
+                    else fbox(M, mx - 0.03f, f.z0, mx - 0.01f, f.z1, y, y + 0.06f, SHEET, SHEET, SHEET, fd);
+                }
+                clear_tint();
+                break;
+            }
+            case FurnKind::PowerPole: // a wooden pole, a crossbar, insulators
+                cyl(M, mx, mz, 0.12f, 0.09f, 0, f.y1, WOOD, true, false, 0.75f);
+                fbox(M, mx - 1.0f, mz - 0.06f, mx + 1.0f, mz + 0.06f, f.y1 - 0.6f, f.y1 - 0.48f, WOOD, WOOD, WOOD, {0, 1});
+                for (int k = -1; k <= 1; k++) cyl(M, mx + k * 0.8f, mz, 0.04f, 0.03f, f.y1 - 0.48f, f.y1 - 0.32f, SHEET, true, false, 0.5f);
+                break;
+            case FurnKind::WaterTower: { // a water tower on four legs, a round tank, a cone roof
+                for (int a = -1; a <= 1; a += 2)
+                    for (int b = -1; b <= 1; b += 2) tube(M, {mx + a * hx * 0.9f, 0, mz + b * hz * 0.9f}, {mx + a * hx * 0.6f, f.y1 - 3.0f, mz + b * hz * 0.6f}, 0.07f, METAL, 0.5f);
+                set_tint(0xd8d8d0);
+                cyl(M, mx, mz, rad * 0.95f, rad * 0.95f, f.y1 - 3.2f, f.y1 - 0.9f, SHEET, false, true, 1.5f);
+                clear_tint();
+                cyl(M, mx, mz, rad * 1.0f, 0.06f, f.y1 - 0.9f, f.y1, METAL, true, false, 1.5f);
+                break;
+            }
+            case FurnKind::Cottage: { // a little clapboard house sitting alone on a hill, its windows dark
+                static const uint32_t PAINT_H[] = {0xf2e2a8, 0xe8e2d0, 0xd8c890, 0xf0d8b0};
+                set_tint(PAINT_H[hsh % 4u]);
+                fbox(M, f.x0, f.z0, f.x1, f.z1, 0, 2.6f, SHEET, SHEET, SHEET, fd);
+                clear_tint();
+                for (int s2 = -1; s2 <= 1; s2 += 2) { // two windows on each long side
+                    for (int k = -1; k <= 1; k += 2) {
+                        float wx = mx + k * hx * 0.45f, wz = mz + s2 * (hz + 0.01f);
+                        fbox(M, wx - 0.25f, wz - 0.01f, wx + 0.25f, wz + 0.01f, 1.0f, 1.8f, RUBBER, RUBBER, RUBBER, {0, (float)s2});
+                    }
+                }
+                // the roof: two slopes meeting at a ridge along x
+                set_tint(0x5a4038);
+                for (int s2 = -1; s2 <= 1; s2 += 2) {
+                    Vec3 a{f.x0 - 0.15f, 2.6f, mz + s2 * (hz + 0.2f)}, b{f.x1 + 0.15f, 2.6f, mz + s2 * (hz + 0.2f)}, c{f.x1 + 0.15f, f.y1, mz}, d{f.x0 - 0.15f, f.y1, mz};
+                    Vec3 nn{0, 0.75f, s2 * 0.66f};
+                    if (s2 > 0) emit_quad(M, lit(b, nn, WOOD.u1, WOOD.v1), lit(a, nn, WOOD.u0, WOOD.v1), lit(d, nn, WOOD.u0, WOOD.v0), lit(c, nn, WOOD.u1, WOOD.v0));
+                    else emit_quad(M, lit(a, nn, WOOD.u0, WOOD.v1), lit(b, nn, WOOD.u1, WOOD.v1), lit(c, nn, WOOD.u1, WOOD.v0), lit(d, nn, WOOD.u0, WOOD.v0));
+                }
+                clear_tint();
+                set_tint(PAINT_H[hsh % 4u]);
+                for (int s2 = -1; s2 <= 1; s2 += 2) { // the gable ends
+                    float x = s2 < 0 ? f.x0 : f.x1;
+                    Vec3 a{x, 2.6f, mz - hz}, b{x, 2.6f, mz + hz}, c{x, f.y1 - 0.05f, mz};
+                    Vec3 nn{(float)s2, 0, 0};
+                    if (s2 > 0) emit_quad(M, lit(a, nn, 0, 1), lit(c, nn, 0.5f, 0), lit(c, nn, 0.5f, 0), lit(b, nn, 1, 1));
+                    else emit_quad(M, lit(b, nn, 1, 1), lit(c, nn, 0.5f, 0), lit(c, nn, 0.5f, 0), lit(a, nn, 0, 1));
+                }
+                clear_tint();
+                break;
+            }
+            case FurnKind::SpiralStair: { // tiled steps winding up round the column into the ceiling
+                float gx = mx, gz = mz, R0 = 0.9f, R1 = 1.7f;
+                const int NS = 22;
+                set_tint(0xf4f6f4);
+                for (int k = 0; k < NS; k++) {
+                    float a0 = k * (2.2f * PI / NS), a1 = (k + 1) * (2.2f * PI / NS);
+                    float y = 0.2f + k * (f.y1 - 0.2f) / NS;
+                    Vec3 p0{gx + std::cos(a0) * R0, y, gz + std::sin(a0) * R0}, p1{gx + std::cos(a1) * R0, y, gz + std::sin(a1) * R0};
+                    Vec3 p2{gx + std::cos(a1) * R1, y, gz + std::sin(a1) * R1}, p3{gx + std::cos(a0) * R1, y, gz + std::sin(a0) * R1};
+                    emit_quad(M, lit(p0, {0, 1, 0}, SHEET.u0, SHEET.v0), lit(p3, {0, 1, 0}, SHEET.u1, SHEET.v0), lit(p2, {0, 1, 0}, SHEET.u1, SHEET.v1), lit(p1, {0, 1, 0}, SHEET.u0, SHEET.v1));
+                    Vec3 q0 = p0 - Vec3{0, 0.18f, 0}, q3 = p3 - Vec3{0, 0.18f, 0};
+                    Vec3 nn{-std::sin(a0), 0, std::cos(a0)};
+                    emit_quad(M, lit(q0, nn * -1.0f, SHEET.u0, SHEET.v1), lit(p0, nn * -1.0f, SHEET.u0, SHEET.v0), lit(p3, nn * -1.0f, SHEET.u1, SHEET.v0), lit(q3, nn * -1.0f, SHEET.u1, SHEET.v1));
+                    emit_quad(M, lit(q3, nn, SHEET.u1, SHEET.v1), lit(p3, nn, SHEET.u1, SHEET.v0), lit(p0, nn, SHEET.u0, SHEET.v0), lit(q0, nn, SHEET.u0, SHEET.v1));
+                    if (k % 2 == 0) tube(M, {p3.x, y, p3.z}, {p3.x, y + 0.95f, p3.z}, 0.02f, METAL, 0.5f);
+                }
+                clear_tint();
+                break;
+            }
+            case FurnKind::Bookshelf: { // a free-standing shelf unit, both sides, nearly empty
+                fbox(M, f.x0, f.z0, f.x1, f.z1, 0, f.y1, WOOD, WOOD, WOOD, fd);
+                bool along_x = (f.x1 - f.x0) > (f.z1 - f.z0);
+                for (int k = 0; k < 4; k++) {
+                    float y = 0.15f + k * (f.y1 - 0.2f) / 4.0f;
+                    if ((hsh >> k) & 3) continue; // most shelves are bare
+                    set_tint(((hsh >> (k + 4)) & 1) ? 0x8a3a2a : 0x2a4a6a);
+                    float o = (((hsh >> (k + 6)) % 5u) - 2.0f) * 0.25f;
+                    float bx = along_x ? mx + o : mx, bz = along_x ? mz : mz + o;
+                    fbox(M, bx - (along_x ? 0.2f : hx + 0.01f), bz - (along_x ? hz + 0.01f : 0.2f), bx + (along_x ? 0.2f : hx + 0.01f), bz + (along_x ? hz + 0.01f : 0.2f), y, y + 0.24f, FABRIC, FABRIC, FABRIC, fd);
+                    clear_tint();
+                }
+                break;
+            }
+            case FurnKind::GlassLift: { // the rotunda's glass lift: a teal-framed glass shaft up to the gallery
+                float r = rad * 0.85f;
+                set_tint(0x3a9c8c);
+                for (int k = 0; k < 8; k++) { float a = k * PI / 4; cyl(M, mx + std::cos(a) * r, mz + std::sin(a) * r, 0.04f, 0.04f, 0, f.y1, METAL, false, false, 0.5f); }
+                for (int k = 0; k < 4; k++) cyl(M, mx, mz, r + 0.03f, r + 0.03f, 0.05f + k * f.y1 / 3.5f, 0.12f + k * f.y1 / 3.5f, METAL, false, false, 1.5f);
+                clear_tint();
+                set_tint(0xb8d8d4);
+                cyl(M, mx, mz, r, r, 0, f.y1, PLASTIC, true, false, 1.5f); // the glass (pale)
+                clear_tint();
+                set_tint(0xf0f0ec);
+                cyl(M, mx, mz, r + 0.15f, r * 0.4f, f.y1, f.y1 + 1.2f, SHEET, true, false, 1.5f); // the domed top
+                clear_tint();
+                break;
+            }
+            case FurnKind::SignBoard: break;
+            case FurnKind::Note: break;
+            case FurnKind::Arch: break;
+
 
         }
     }
@@ -1086,6 +1304,7 @@ void block_tex(LevelId id, float& tw, float& th) {
         case LevelId::L70: tw = CELL; th = 3.5f; break;    // a storey of windows on the towers
         case LevelId::L188: tw = CELL; th = 3.2f; break;   // a window per cell per storey
         case LevelId::TSG4: tw = CELL; th = 5.0f; break;   // tall baroque storeys
+        case LevelId::TheEnd: tw = CELL; th = 1.9f; break; // a run of shelves per cell
         case LevelId::L11: tw = CELL; th = 18.0f; break;   // ~3 m per storey
         case LevelId::L7: case LevelId::L24: tw = 3.0f; th = 3.0f; break;
         case LevelId::L19: tw = CELL; th = CELL; break;
@@ -1145,6 +1364,9 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
     out.lights.clear();
     out.water.clear();
     out.shadows.clear();
+    out.doors.clear();
+    out.containers.clear();
+    out.notes.clear();
     B.terr = W.terrain();
     // how tall a building's outside walls are (the city, the hotel ring, houses)
     auto facade_h = [&](int fcx, int fcz) {
@@ -1222,7 +1444,7 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
                 const float IH = W.indoors(cx, cz) ? W.indoor_h(cx, cz) : H;
                 const bool shack = (id == LevelId::TSG0 || id == LevelId::TSG2) && cx >= -1 && cx <= 1 && cz >= -1 && cz <= 1;
                 if (W.terrain()) { // pools and hills: the floor follows the ground, finely
-                    int ts = (id == LevelId::L94 ? 3 : (W.pool(cx, cz) ? 4 : 1)) * D;
+                    int ts = ((id == LevelId::L94 || id == LevelId::L24) ? 3 : (W.pool(cx, cz) ? 4 : 1)) * D;
                     B.grid(fmat, {x0, 0, z1}, {CELL, 0, 0}, {0, 0, -CELL}, ts, ts, {0, 1, 0}, floor_uv,
                            [&](Vec3 p) { return (id == LevelId::L37 ? B.corner_ao(p) : 1.0f) * damp(p); },
                            [&](Vec3 p) { p.y = W.floor_y(p.x, p.z); return p; });
@@ -1240,6 +1462,13 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
                            [&](Vec3 p) { return B.corner_ao(p) * damp(p); });
                     if (W.court() && indoors) // the hotel ring's plaster ceiling
                         B.grid(MAT_CEIL, {x0, IH, z0}, {CELL, 0, 0}, {0, 0, CELL}, sub, sub, {0, -1, 0}, floor_uv, ao);
+                }
+                if (W.court() && W.court_cell(cx, cz) == 0) { // the atrium's glass roof, way up
+                    float ry = li.ceil_h;
+                    B.quad(MAT_LIGHT, {x0, ry, z0}, {x1, ry, z0}, {x1, ry, z1}, {x0, ry, z1}, 200, 0.92f, 0.94f, 1.0f);
+                    Builder::UV uv{0, 0, 1, 1};
+                    B.tube(MAT_PROP, {x0, ry - 0.06f, z0}, {x1, ry - 0.06f, z0}, 0.06f, uv, 0.5f);
+                    B.tube(MAT_PROP, {x0, ry - 0.06f, z0}, {x0, ry - 0.06f, z1}, 0.06f, uv, 0.5f);
                 }
                 if (indoors && (W.city() || W.court())) // the building's flat roof, up where the facade ends
                     B.grid(MAT_ROOF, {x0, facade_h(cx, cz), z1}, {CELL, 0, 0}, {0, 0, -CELL}, 1, 1, {0, 1, 0}, floor_uv, [](Vec3) { return 1.0f; });
@@ -1273,8 +1502,8 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
                             (void)n;
                         }
                         (void)k;
-                        // a teal rib across the vault at every cell line
-                        B.set_tint(0x3a9c9a);
+                        // a white rib across the vault at every cell line
+                        B.set_tint(0xf0f0ea);
                         for (int s2 = 0; s2 < 4; s2++) {
                             float t0 = s2 / 4.0f, t1 = (s2 + 1) / 4.0f;
                             if (t1 * 3 * CELL + hall0 < a0 - 0.01f || t0 * 3 * CELL + hall0 > a0 + CELL + 0.01f) continue;
@@ -1300,7 +1529,7 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
                             }
                         }
                         B.glow = false; B.glow_g = B.glow_b = 1;
-                        B.set_tint(0x3a9c9a);
+                        B.set_tint(0xf0f0ea);
                         B.cyl(MAT_PROP, dcx, dcz, 3.75f, 3.75f, VB - 0.3f, VB, glass, false, true, 2.0f);
                         B.clear_tint();
                     }
@@ -1329,9 +1558,18 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
                         Vertex q2 = B.lit({ex1, GY + 1.0f, ez1}, nn, pl.u1, pl.v0), q3 = B.lit({ex0, GY + 1.0f, ez0}, nn, pl.u0, pl.v0);
                         B.emit_quad(MAT_FURN, q0, q1, q2, q3);
                         B.emit_quad(MAT_FURN, q1, q0, q3, q2);
-                        B.set_tint(0x3a9c9a);
+                        B.set_tint(0xc8a050);
                         B.tube(MAT_PROP, {ex0, GY + 1.02f, ez0}, {ex1, GY + 1.02f, ez1}, 0.045f, glass, 0.5f);
                         B.clear_tint();
+                        if (hash01(W.seed(), cx * 4 + sd, cz, 7401) < 0.55f) { // ivy spilling over the gallery's edge
+                            Builder::UV lv = Builder::cell(FT_LEAVES);
+                            for (int k = 0; k < 3; k++) {
+                                float t = (k + 0.5f) / 3.0f;
+                                float ix = ex0 + (ex1 - ex0) * t, iz = ez0 + (ez1 - ez0) * t;
+                                B.sphere(MAT_FURN, {ix, GY - 0.12f, iz}, {0.28f, 0.22f, 0.28f}, lv, 0.6f);
+                                B.sphere(MAT_FURN, {ix, GY - 0.45f, iz}, {0.12f, 0.3f, 0.12f}, lv, 0.5f);
+                            }
+                        }
                     }
                 }
 
@@ -1343,7 +1581,7 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
                     B.grid(MAT_ROOF, {x0, lift, z0}, {CELL, 0, 0}, {0, 0, CELL}, 1, 1, {0, -1, 0}, floor_uv, [](Vec3) { return 0.45f; });
                     B.clear_tint();
                 }
-                if (indoors && W.houses()) { // the house's gable roof: the ridge runs along x through the middle
+                if (indoors && W.houses() && W.house(cx, cz)) { // the house's gable roof: the ridge runs along x through the middle
                     int lx, lz, hbx, hbz;
                     W.house_lot(cx, cz, lx, lz, hbx, hbz);
                     const float eave = W.house_h(), ridge = eave + 1.7f, ov = 0.25f;
@@ -1440,7 +1678,8 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
                             break;
                         }
                         case ExitStyle::Clock: { // an analog grandfather clock standing in the sea
-                            Furn f{FurnKind::Clock, ex - 0.4f, ez - 0.3f, ex + 0.4f, ez + 0.3f, 0.0f, 2.2f, true, {0, 1}};
+                            Furn f{};
+                            f.kind = FurnKind::Clock; f.x0 = ex - 0.4f; f.z0 = ez - 0.3f; f.x1 = ex + 0.4f; f.z1 = ez + 0.3f; f.y0 = 0.0f; f.y1 = 2.2f; f.solid = true; f.face = {0, 1};
                             B.furniture(f, H);
                             break;
                         }
@@ -1506,6 +1745,7 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
                     out.exits.push_back(door);
                 }
                 if (W.item(cx, cz) != ItemType::None) out.items.push_back(World::item_id(cx, cz));
+                if (W.note(cx, cz)) out.notes.push_back(World::item_id(cx, cz));
                 // ----- wheat: crossed alpha-tested cards, a little uneven
                 if (W.crop(cx, cz)) {
                     int nq = 3 * D;
@@ -1570,6 +1810,18 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
                 } else if (id == LevelId::L94 && W.hill(cx, cz)) { // the hills: soft, round, overlapping
                     special = true;
                     B.sphere(MAT_FLOOR, {cxm0, 0.0f, czm0}, {CELL * 0.98f, h, CELL * 0.98f}, {0, 0, 2.0f, 2.0f}, 1.5f);
+                } else if (id == LevelId::L24) { // a great lumpy moon boulder
+                    special = true;
+                    float gy = W.floor_y(cxm0, czm0);
+                    Builder::UV uv{0, 0, 2.0f, 2.0f};
+                    size_t v0 = B.v[MAT_BLOCK].size();
+                    B.sphere(MAT_BLOCK, {cxm0, h * 0.35f, czm0}, {1.25f, h * 0.7f, 1.15f}, uv, 1.25f);
+                    uint32_t bh = hash3(W.seed(), cx, cz, 6101);
+                    for (int k = 0; k < 3; k++) {
+                        float a = ((bh >> (k * 5)) & 31) / 32.0f * 2 * PI;
+                        B.sphere(MAT_BLOCK, {cxm0 + std::cos(a) * 0.6f, h * 0.45f, czm0 + std::sin(a) * 0.6f}, {0.8f, h * 0.5f, 0.75f}, uv, 0.9f);
+                    }
+                    for (size_t q = v0; q < B.v[MAT_BLOCK].size(); q++) B.v[MAT_BLOCK][q].y += gy - 0.2f;
                 } else if (id == LevelId::L70 && h < 2.0f) { // an igloo
                     special = true;
                     Builder::UV uv{0, 0, 3.0f, 1.5f};
@@ -1582,7 +1834,8 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
                     B.clear_tint();
                     int sfm = W.floor_mat(cx, cz);
                     Material sm = sfm == 1 ? MAT_FLOOR2 : (sfm == 2 ? MAT_FLOOR3 : MAT_FLOOR);
-                    B.grid(sm, {x0, 0, z1}, {CELL, 0, 0}, {0, 0, -CELL}, D, D, {0, 1, 0}, floor_uv, [&](Vec3 p) { return 0.8f * damp(p); });
+                    B.grid(sm, {x0, 0, z1}, {CELL, 0, 0}, {0, 0, -CELL}, 2 * D, 2 * D, {0, 1, 0}, floor_uv, [&](Vec3 p) { return 0.8f * damp(p); },
+                           [&](Vec3 p) { if (W.terrain()) p.y = W.floor_y(p.x, p.z); return p; });
                 }
                 size_t shear0 = B.v[MAT_BLOCK].size(), shear1 = B.v[MAT_ROOF].size();
                 if (!special) {
@@ -1724,7 +1977,7 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
             const bool low = WH < H - 0.01f;
             // a wall face inside a house gets wallpaper (atlas) instead of the outside siding
             auto inside_face = [&](int fcx, int fcz) { return W.houses() && W.house(fcx, fcz); };
-            const float wtw = W.houses() ? CELL : TEX_WALL; // siding: one window per cell
+            const float wtw = W.houses() ? CELL : (id == LevelId::TheEnd ? 4 * CELL : TEX_WALL); // siding: one window per cell; THE END: one sign every 10 m
             auto paper = [&](Vec3 o, Vec3 a, Vec3 n, float h) {
                 B.set_tint(0xe8dcc0);
                 B.atlas_grid(FT_SHEET, o, a, Vec3{0, h, 0}, n, D, 1.25f, 0.8f);
@@ -1842,6 +2095,31 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
             if (id == LevelId::L37) { // the poolrooms: every wall meets the floor and the ceiling in a soft tiled curve
                 Builder::UV uv{0, 0, 1, 1};
                 const float R = 0.17f;
+                // tall arched windows glowing in some of the walls (light from somewhere else)
+                auto arch = [&](Vec3 c, Vec3 along, Vec3 n) {
+                    const float hwid = 0.36f, y0 = 0.9f, y1 = 2.5f;
+                    Vec3 o = c + n * 0.012f;
+                    Vec3 a = o - along * hwid, b = o + along * hwid;
+                    B.quad(MAT_LIGHT, {b.x, y0, b.z}, {a.x, y0, a.z}, {a.x, y1, a.z}, {b.x, y1, b.z}, 235, 1.0f, 0.97f, 0.86f);
+                    B.quad(MAT_LIGHT, {b.x, y1, b.z}, {a.x, y1, a.z}, {a.x, y0, a.z}, {b.x, y0, b.z}, 235, 1.0f, 0.97f, 0.86f);
+                    const int SEG = 6;
+                    for (int k = 0; k < SEG; k++) {
+                        float t0 = PI * k / SEG, t1 = PI * (k + 1) / SEG;
+                        Vec3 p0 = o + along * (std::cos(t0) * hwid), p1 = o + along * (std::cos(t1) * hwid);
+                        p0.y = y1 + std::sin(t0) * hwid; p1.y = y1 + std::sin(t1) * hwid;
+                        Vec3 cc{o.x, y1, o.z};
+                        B.quad(MAT_LIGHT, p0, p1, cc, cc, 235, 1.0f, 0.97f, 0.86f);
+                        B.quad(MAT_LIGHT, p1, p0, cc, cc, 235, 1.0f, 0.97f, 0.86f);
+                    }
+                };
+                if (W.wall_x(cx, cz) && hash01(W.seed(), cx, cz, 7501) < 0.3f) {
+                    arch({x0 + hw, 0, z0 + CELL * 0.5f}, {0, 0, -1}, {1, 0, 0});
+                    arch({x0 - hw, 0, z0 + CELL * 0.5f}, {0, 0, 1}, {-1, 0, 0});
+                }
+                if (W.wall_z(cx, cz) && hash01(W.seed(), cx, cz, 7502) < 0.3f) {
+                    arch({x0 + CELL * 0.5f, 0, z0 + hw}, {1, 0, 0}, {0, 0, 1});
+                    arch({x0 + CELL * 0.5f, 0, z0 - hw}, {-1, 0, 0}, {0, 0, -1});
+                }
                 if (W.wall_x(cx, cz))
                     for (int s2 = -1; s2 <= 1; s2 += 2) {
                         float x = x0 + s2 * hw;
@@ -1866,13 +2144,21 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
                 }
                 if (low) cap(x0 - hp, z0 - hp, x0 + hp, z0 + hp);
             } else if (W.pillar(cx, cz)) {
-                bool square = id == LevelId::L0 || id == LevelId::L6 || id == LevelId::LFun || id == LevelId::TSGFar || id == LevelId::L1;
+                bool square = id == LevelId::L0 || id == LevelId::L6 || id == LevelId::LFun || id == LevelId::TSGFar || id == LevelId::L1 || id == LevelId::TheEnd;
                 if (square) B.box(MAT_PROP, x0, z0, hl, hl, 0, H, TEX_WALL, H, 1);
                 else { // round columns, with a base and a capital where it suits
                     float r = hl * 1.1f;
                     float ptop = cave ? ceiling_y(W, x0, z0) : H;
                     Builder::UV uv{0, 0, 2 * PI * r / TEX_WALL, 1.0f};
                     B.cyl(MAT_PROP, x0, z0, r, r, 0, ptop, uv, false, false, 1.25f);
+                    if (id == LevelId::L33) { // the mall's white columns: a green band at the foot, a moulded capital
+                        Builder::UV ring{0, 0.9f, 2 * PI * r / TEX_WALL, 1.0f};
+                        B.set_tint(0x2e8a70);
+                        B.cyl(MAT_PROP, x0, z0, r * 1.12f, r * 1.12f, 0, 0.9f, ring, true, false, 1.25f);
+                        B.clear_tint();
+                        B.cyl(MAT_PROP, x0, z0, r * 1.2f, r * 1.12f, 0.9f, 1.0f, ring, true, false, 1.25f);
+                        B.cyl(MAT_PROP, x0, z0, r * 1.05f, r * 1.4f, 4.25f, 4.6f, ring, true, false, 1.25f);
+                    }
                     if (id == LevelId::L51 || id == LevelId::L5 || id == LevelId::TSG1 || id == LevelId::L37) {
                         Builder::UV ring{0, 0.9f, 2 * PI * r / TEX_WALL, 1.0f};
                         B.cyl(MAT_PROP, x0, z0, r * 1.35f, r * 1.3f, 0, 0.22f, ring, true, false, 1.25f);
@@ -1915,6 +2201,8 @@ void build_chunk_mesh(const World& W, int kx, int kz, ChunkMesh& out, int detail
                 int nf = W.furniture(cx, cz, fs, &owner);
                 for (int k = 0; owner && k < nf; k++) {
                     const Furn& f = fs[k];
+                    if (f.kind == FurnKind::DoorLeaf && f.width > 0) { out.doors.push_back(f); continue; } // drawn live
+                    if (World::searchable(f.kind)) out.containers.push_back(f);
                     size_t vb[MAT_COUNT];
                     for (int mm = 0; mm < MAT_COUNT; mm++) vb[mm] = B.v[mm].size();
                     B.furniture(fs[k], W.indoors(cx, cz) ? W.indoor_h(cx, cz) : (li.outdoor ? 2.6f : H));

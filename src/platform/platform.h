@@ -28,6 +28,8 @@ struct InputState {
     bool sandbox_menu = false;          // Tab / Select
     bool backspace = false;
     bool click = false;                 // left mouse button (menus)
+    int emote = 0;                      // 1.3: G wave, H point, J sit, K dance (D-pad down: wave)
+    bool talk = false;                  // 1.3: push-to-talk held (V)
     bool screenshot = false, toggle_fullscreen = false, toggle_debug = false, quit = false;
     std::string text;                   // typed characters this frame
 

@@ -80,6 +80,7 @@ enum Sprite : int {
     SPR_STAR,          // a tiny bright point
     SPR_GRIT,          // near-white noise: surface grain for models
     SPR_SHELLS,        // 1.2: shotgun shells
+    SPR_NOTE,          // 1.3: a handwritten note
     SPR_COUNT
 };
 Image make_sprite(Sprite s);

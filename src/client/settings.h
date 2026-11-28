@@ -30,8 +30,26 @@ struct Settings {
     bool safe_mode = false;     // Vita: no MSAA, sound, mipmaps or worker thread (turned on after a crashed boot)
     std::string safe_mode_ver;  // the version that turned it on (a new version starts without it)
 
+    // 1.3
+    bool voice = true;          // proximity chat (PC)
+    bool open_mic = false;      // false: push to talk (V)
+    float voice_volume = 1.0f;
+    bool reduce_flashing = false; // accessibility: no strobing lights, no screen flashes
+
     void load(const std::string& path);
     void save(const std::string& path) const;
+};
+
+// 1.3: what you've done, kept between games (stats.cfg next to the settings)
+struct Stats {
+    int runs = 0, deaths = 0, escapes = 0, levels_seen = 0;
+    double play_seconds = 0;
+    std::string notes;          // one char per note: '1' found
+    std::string levels;         // one char per level: '1' visited
+    void load(const std::string& path);
+    void save(const std::string& path) const;
+    bool note(int n) const { return n >= 1 && n <= (int)notes.size() && notes[(size_t)n - 1] == '1'; }
+    int notes_found() const { int c = 0; for (char ch : notes) c += ch == '1'; return c; }
 };
 
 } // namespace iris

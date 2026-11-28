@@ -160,7 +160,8 @@ static void test_all_levels() {
         bool hub = (LevelId)li == LevelId::Hub;  // the lobby: no exits, just the outpost's supplies
         CHECK(hub || exits >= (run ? 1 : 2), "%s: only %d reachable exits in a 350 m square", nm, exits);
         bool end = (LevelId)li == LevelId::TSGEnd; // TH3 3ND: nothing left to find
-        CHECK(end ? items == 0 : (hub ? items <= 4 : items >= (run ? 2 : 20)), "%s: %d items", nm, items);
+        bool hotel = (LevelId)li == LevelId::L188; // one finite hotel (its drawers hold more)
+        CHECK(end ? items == 0 : (hub ? items <= 4 : items >= (run ? 2 : hotel ? 12 : 20)), "%s: %d items", nm, items);
         std::printf("  %-9s reachable %5.1f%%  exits %3d  items %4d\n", nm, reach, exits, items);
     }
 }
@@ -274,7 +275,7 @@ static void test_sim_soak() {
             }
             for (int i : {a, b}) deaths += !sim.players[i].st.alive && sim.players[i].respawn_t > 9.98f;
         }
-        bool expect = (LevelId)li != LevelId::L37 && (LevelId)li != LevelId::TSGEnd && (LevelId)li != LevelId::Hub && (LevelId)li != LevelId::TSG2; // the safe levels (the angels are friendly)
+        bool expect = (LevelId)li != LevelId::L37 && (LevelId)li != LevelId::TSGEnd && (LevelId)li != LevelId::TheEnd && (LevelId)li != LevelId::Hub && (LevelId)li != LevelId::TSG2; // the safe levels (the angels are friendly)
         CHECK(!expect || max_ents > 0, "%s: no entities ever spawned", level_info((LevelId)li).code);
         CHECK(expect || max_ents == 0, "%s should be safe", level_info((LevelId)li).code);
         std::printf("  %-9s max entities %d, deaths in 3 min of random walking: %d\n", level_info((LevelId)li).code, max_ents, deaths);
@@ -331,6 +332,205 @@ static void test_network() {
 }
 
 // The host's defences: join handshake, passwords, padded status queries, junk input.
+// 1.3 proximity chat: the codec sounds like the input, and the host only passes voice on to
+// players close enough to hear it (or to radios), at no more than real-time rate.
+static void test_voice() {
+    { // codec: a 440 Hz tone + a little noise, through ADPCM and back
+        int16_t pcm[VOICE_FRAME * 4], out[VOICE_FRAME * 4];
+        Rng rng(3);
+        for (int i = 0; i < VOICE_FRAME * 4; i++) pcm[i] = (int16_t)(std::sin(i * 2 * PI * 440 / VOICE_RATE) * 9000 + rng.range(-300, 300));
+        AdpcmState enc;
+        double sig = 0, err = 0;
+        for (int f = 0; f < 4; f++) {
+            AdpcmState start = enc;
+            uint8_t bytes[VOICE_BYTES];
+            adpcm_encode(pcm + f * VOICE_FRAME, VOICE_FRAME, enc, bytes);
+            adpcm_decode(bytes, VOICE_FRAME, start, out + f * VOICE_FRAME); // each frame decodes on its own
+        }
+        for (int i = 40; i < VOICE_FRAME * 4; i++) { sig += (double)pcm[i] * pcm[i]; err += (double)(pcm[i] - out[i]) * (pcm[i] - out[i]); }
+        double snr = 10 * std::log10(sig / std::max(1.0, err));
+        CHECK(snr > 18, "ADPCM round trip only %.1f dB", snr);
+        AdpcmState junk;
+        junk.index = 200;
+        uint8_t noise[VOICE_BYTES];
+        for (auto& b : noise) b = (uint8_t)rng.range(0, 255);
+        adpcm_decode(noise, VOICE_FRAME, junk, out); // bad state from the wire must not crash
+        std::printf("  voice codec: %.1f dB, %d bytes per 20 ms\n", snr, VOICE_BYTES);
+    }
+    Server srv;
+    ServerConfig cfg;
+    cfg.port = 27397;
+    cfg.level = LevelId::L11;
+    cfg.seed = 3;
+    std::string err;
+    CHECK(srv.start(cfg, &err), "server start: %s", err.c_str());
+    auto t0 = std::chrono::steady_clock::now();
+    auto now = [&] { return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(); };
+    NetClient a, b, c;
+    a.connect("127.0.0.1", 27397, "TALKER", "", now());
+    b.connect("127.0.0.1", 27397, "NEAR", "", now());
+    c.connect("127.0.0.1", 27397, "FAR", "", now());
+    auto pump = [&](double secs) {
+        double until = now() + secs;
+        while (now() < until) { srv.poll(); a.poll(now()); b.poll(now()); c.poll(now()); std::this_thread::sleep_for(std::chrono::milliseconds(5)); }
+    };
+    pump(1.0);
+    CHECK(a.state == NetClient::State::Connected && b.state == NetClient::State::Connected && c.state == NetClient::State::Connected, "voice: clients didn't connect");
+    if (a.my_id < 0 || b.my_id < 0 || c.my_id < 0) { srv.stop(); return; }
+    Vec3 sp = srv.sim.world.spawn_point();
+    srv.sim.players[a.my_id].st.pos = sp;
+    srv.sim.players[b.my_id].st.pos = sp + Vec3{3, 0, 0};
+    srv.sim.players[c.my_id].st.pos = sp + Vec3{200, 0, 0};
+    int16_t pcm[VOICE_FRAME];
+    for (int i = 0; i < VOICE_FRAME; i++) pcm[i] = (int16_t)(std::sin(i * 0.3) * 8000);
+    AdpcmState st;
+    uint8_t bytes[VOICE_BYTES];
+    AdpcmState start = st;
+    adpcm_encode(pcm, VOICE_FRAME, st, bytes);
+    b.voice_in.clear(); c.voice_in.clear();
+    for (int k = 0; k < 5; k++) { a.send_voice((uint16_t)k, start, bytes); pump(0.03); }
+    pump(0.2);
+    CHECK(!b.voice_in.empty() && b.voice_in[0].speaker == a.my_id, "voice didn't reach the player next to the speaker");
+    CHECK(c.voice_in.empty(), "voice reached a player 200 m away");
+    CHECK(a.voice_in.empty(), "the speaker heard themselves");
+    if (!b.voice_in.empty()) {
+        int diff = 0;
+        for (int i = 80; i < VOICE_FRAME; i++) diff = std::max(diff, std::abs(b.voice_in[0].pcm[i] - pcm[i])); // (after the codec settles in)
+        CHECK(diff < 4000, "voice came out wrong (max error %d)", diff);
+    }
+    // radios carry it
+    srv.sim.players[a.my_id].st.inv[(int)ItemType::Radio] = 1;
+    srv.sim.players[c.my_id].st.inv[(int)ItemType::Radio] = 1;
+    c.voice_in.clear();
+    for (int k = 0; k < 3; k++) { a.send_voice((uint16_t)(10 + k), start, bytes); pump(0.03); }
+    pump(0.2);
+    CHECK(!c.voice_in.empty() && c.voice_in[0].radio, "a radio didn't carry the voice");
+    // flooding: way more than real time gets dropped
+    b.voice_in.clear();
+    for (int k = 0; k < 200; k++) a.send_voice((uint16_t)(100 + k), start, bytes);
+    pump(0.3);
+    size_t got = b.voice_in.size();
+    CHECK(got < 60, "voice flood: %zu frames passed on", got);
+    std::printf("  voice relay: near hears, far doesn't, radios carry it, flood capped (%zu of 200)\n", got);
+    a.disconnect(); b.disconnect(); c.disconnect();
+    srv.stop();
+}
+
+// 1.3: doors open and shut (jammed ones need a crowbar), drawers give up their item once,
+// notes lie around, THE END comes after TH3 3ND, and the Liminal Hotel has walls around it.
+static void test_13() {
+    { // a door in the hotel (Level 5)
+        GameSim sim(21);
+        sim.start_level(LevelId::L5, 21);
+        int p = sim.add_player("A");
+        bool tested = false, jam_tested = false;
+        Vec3 sp = sim.world.spawn_point();
+        int scx = floor_to_int(sp.x / CELL), scz = floor_to_int(sp.z / CELL);
+        for (int cz = scz - 30; cz <= scz + 30 && !(tested && jam_tested); cz++)
+            for (int cx = scx - 30; cx <= scx + 30 && !(tested && jam_tested); cx++) {
+                Furn fs[MAX_FURN];
+                int n = sim.world.furniture(cx, cz, fs);
+                for (int k = 0; k < n; k++) {
+                    const Furn& d = fs[k];
+                    if (d.kind != FurnKind::DoorLeaf || d.width <= 0) continue;
+                    uint32_t id = World::door_id(d);
+                    bool jam = sim.world.door_jammed(id) && !sim.world.door_open(id);
+                    if (jam ? jam_tested : tested) continue;
+                    // stand in front of the middle of the shut leaf, facing it
+                    Vec2 mid = d.hinge + d.shut_dir * (d.width * 0.5f);
+                    Vec2 nrm{-d.shut_dir.z, d.shut_dir.x};
+                    for (float sgn : {1.0f, -1.0f}) {
+                        Vec2 at = mid + nrm * (0.75f * sgn);
+                        if (sim.world.solid(floor_to_int(at.x / CELL), floor_to_int(at.z / CELL))) continue;
+                        PlayerState& st = sim.players[p].st;
+                        st.pos = {at.x, 0, at.z};
+                        Vec2 to = mid - at;
+                        st.yaw = std::atan2(-to.x, -to.z);
+                        Furn f;
+                        if (!furniture_in_front(sim.world, st, true, f, 1.7f) || World::door_id(f) != id) continue;
+                        bool before = sim.world.door_open(id);
+                        st.inv[(int)ItemType::Crowbar] = 0;
+                        InputCmd cmd;
+                        cmd.yaw = st.yaw;
+                        cmd.pickup_ctr = 0;
+                        sim.apply_input(p, cmd); // (the first command only sets the counters)
+                        sim.tick(1.0f / 60);
+                        cmd.pickup_ctr = 1;
+                        sim.apply_input(p, cmd);
+                        sim.tick(1.0f / 60);
+                        if (jam) {
+                            CHECK(!sim.world.door_open(id), "a jammed door opened without a crowbar");
+                            sim.players[p].st.inv[(int)ItemType::Crowbar] = 1;
+                            cmd.pickup_ctr = 2;
+                            sim.apply_input(p, cmd);
+                            sim.tick(1.0f / 60);
+                            CHECK(sim.world.door_open(id), "the crowbar didn't pry the jammed door open");
+                            jam_tested = true;
+                        } else {
+                            CHECK(sim.world.door_open(id) != before, "using a door didn't open / close it");
+                            tested = true;
+                        }
+                        break;
+                    }
+                    break;
+                }
+            }
+        CHECK(tested, "no door found to try in the hotel");
+        std::printf("  doors: open / close ok%s\n", jam_tested ? ", jammed door needs the crowbar" : "");
+    }
+    { // drawers: search once, then it's empty
+        GameSim sim(22);
+        sim.start_level(LevelId::L5, 22);
+        int p = sim.add_player("A");
+        Vec3 sp = sim.world.spawn_point();
+        int scx = floor_to_int(sp.x / CELL), scz = floor_to_int(sp.z / CELL);
+        int searched = 0, found = 0;
+        for (int cz = scz - 25; cz <= scz + 25 && searched < 40; cz++)
+            for (int cx = scx - 25; cx <= scx + 25 && searched < 40; cx++) {
+                Furn fs[MAX_FURN];
+                int n = sim.world.furniture(cx, cz, fs);
+                for (int k = 0; k < n; k++) {
+                    if (!World::searchable(fs[k].kind)) continue;
+                    ItemType t = sim.world.container_item(fs[k]);
+                    found += t != ItemType::None;
+                    uint32_t id = World::furn_id(fs[k]);
+                    CHECK(id == World::furn_id(fs[k]) && sim.world.container_item(fs[k]) == t, "container contents aren't stable");
+                    searched++;
+                    break;
+                }
+            }
+        (void)p;
+        CHECK(searched >= 20, "only %d searchable things near the hotel spawn", searched);
+        CHECK(found > 0 && found < searched, "drawers: %d of %d had something (want some, not all)", found, searched);
+        std::printf("  containers: %d of %d hold something\n", found, searched);
+    }
+    { // notes
+        int notes = 0;
+        World w(LevelId::L0, 5);
+        for (int z = -60; z < 60; z++)
+            for (int x = -60; x < 60; x++) {
+                int n = w.note(x, z);
+                if (!n) continue;
+                notes++;
+                CHECK(n >= 1 && n <= note_count(), "bad note number");
+                CHECK(w.item(x, z) == ItemType::None, "a note and an item in one cell");
+                CHECK(!w.solid(x, z), "a note in a wall");
+            }
+        CHECK(notes >= 10, "only %d notes in a 120-cell square of Level 0", notes);
+        for (int n = 1; n <= note_count(); n++) CHECK(std::strlen(note_text(n)) > 10, "note %d is empty", n);
+        std::printf("  notes: %d lying around the middle of Level 0 (%d different ones)\n", notes, note_count());
+    }
+    { // the Liminal Hotel is finite: nothing reachable outside it
+        World w(LevelId::L188, 9);
+        int open_out = 0;
+        for (int z = -40; z < 40; z++)
+            for (int x = -40; x < 40; x++)
+                if ((std::abs(x) > 13 || std::abs(z) > 13) && w.open(x, z)) open_out++;
+        CHECK(open_out == 0, "Level 188 has %d open cells outside the hotel", open_out);
+        CHECK(level_info(LevelId::TSGEnd).next == LevelId::TheEnd, "TH3 3ND should lead to THE END");
+    }
+}
+
 static void test_host_security() {
     Server srv;
     ServerConfig cfg;
@@ -467,7 +667,9 @@ static void test_difficulty_exits() {
                         CHECK(door.side == -1 && std::fabs(door.pos.x - (x + 0.5f) * CELL) < 0.01f, "%s: free-standing exit misplaced", level_info((LevelId)li).code);
                     CHECK(!L.solid(x, z), "exit opens into a solid cell");
                 }
-            CHECK(n >= ((LevelId)li == LevelId::LRun ? 1 : 3) || (LevelId)li == LevelId::Hub, "%s %s: only %d exits in a 400 m square", level_info((LevelId)li).code, diff_info((Difficulty)d).name, n);
+            // (Level 188 is one finite hotel: 3 ways out, 2 on Hard and up)
+            int need = (LevelId)li == LevelId::LRun ? 1 : (LevelId)li == LevelId::L188 ? (d >= (int)Difficulty::Hard ? 2 : 3) : 3;
+            CHECK(n >= need || (LevelId)li == LevelId::Hub, "%s %s: only %d exits in a 400 m square", level_info((LevelId)li).code, diff_info((Difficulty)d).name, n);
             CHECK(n <= prev + 2 || (LevelId)li == LevelId::TSGEnd, "%s: %s has more exits (%d) than an easier difficulty (%d)", level_info((LevelId)li).code,
                   diff_info((Difficulty)d).name, n, prev);
             prev = n;
@@ -537,7 +739,7 @@ static void test_objectives() {
         sim.add_player("A");
         const Objective& o = sim.objective;
         types[(int)o.type]++;
-        if (sim.world.id() == LevelId::LRun || sim.world.id() == LevelId::TSGEnd || sim.world.id() == LevelId::Hub) continue; // no objective on Level !, at the end or in the lobby
+        if (sim.world.id() == LevelId::LRun || sim.world.id() == LevelId::TSGEnd || sim.world.id() == LevelId::TheEnd || sim.world.id() == LevelId::Hub) continue; // no objective on Level !, at the end or in the lobby
         CHECK(o.type != ObjType::None && o.need > 0, "seed %u: no objective", seed);
         int things = 0;
         for (const Prop& p : sim.props) things += p.kind == PropKind::Tape || p.kind == PropKind::Breaker || p.kind == PropKind::Key;
@@ -854,7 +1056,7 @@ static void test_12() {
         sim.sandbox_cmd(p, GameSim::SB_SPAWN_ENTITY, 250, 0);
         CHECK(sim.ents.size() == n + 1, "bad entity type spawned something");
     }
-    // walking out of TH3 3ND wins
+    // 1.3: TH3 3ND leads to THE END, and walking out of THE END wins
     {
         GameSim sim(16);
         sim.start_level(LevelId::TSGEnd, 16);
@@ -863,9 +1065,16 @@ static void test_12() {
         ExitDoor door;
         if (sim.nearest_exit({sim.players[p].st.pos.x, sim.players[p].st.pos.z}, ex, &door)) {
             sim.players[p].st.pos = {door.pos.x, 0, door.pos.z};
-            sim.tick(1.0f / 60);
-            CHECK(sim.escaped && sim.world.id() == LevelId::TSGEnd, "walking out of TH3 3ND should win (and stay there)");
+            for (int t = 0; t < 5; t++) sim.tick(1.0f / 60);
+            CHECK(!sim.escaped && sim.world.id() == LevelId::TheEnd, "TH3 3ND's door should lead to THE END");
         } else CHECK(false, "no door in TH3 3ND");
+        p = 0;
+        for (int i = 0; i < IRIS_MAX_PLAYERS; i++) if (sim.players[i].active) p = i;
+        if (sim.world.id() == LevelId::TheEnd && sim.nearest_exit({sim.players[p].st.pos.x, sim.players[p].st.pos.z}, ex, &door)) {
+            sim.players[p].st.pos = {door.pos.x, 0, door.pos.z};
+            for (int t = 0; t < 5; t++) sim.tick(1.0f / 60);
+            CHECK(sim.escaped && sim.world.id() == LevelId::TheEnd, "walking out of THE END should win (and stay there)");
+        } else CHECK(false, "no door in THE END");
     }
     // terrain: pools have depth, Motion has hills, the player follows the ground
     {
@@ -904,8 +1113,10 @@ int main() {
     test_props();
     test_sim_soak();
     test_network();
+    test_voice();
     test_host_security();
     test_12();
+    test_13();
     if (g_fail) { std::printf("%d check(s) failed\n", g_fail); return 1; }
     std::printf("all core tests passed\n");
     return 0;

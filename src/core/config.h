@@ -2,8 +2,8 @@
 // together with IRIS_PROTOCOL_VERSION).
 #pragma once
 
-#define IRIS_VERSION "1.2"
-#define IRIS_PROTOCOL_VERSION 9
+#define IRIS_VERSION "1.3"
+#define IRIS_PROTOCOL_VERSION 10
 #define IRIS_DEFAULT_PORT 27315
 #define IRIS_MAX_PLAYERS 4
 
@@ -14,6 +14,10 @@
 #else
 #define IRIS_MULTIPLAYER 1
 #endif
+#endif
+// 1.3: proximity voice chat rides on the multiplayer code (PC only)
+#ifndef IRIS_VOICE
+#define IRIS_VOICE IRIS_MULTIPLAYER
 #endif
 
 namespace iris {

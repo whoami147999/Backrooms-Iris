@@ -35,6 +35,7 @@ struct RenderSettings {
     bool retro = true;            // PS1 look: crisp texels, wobbly vertices + affine textures (PC), pixels + dither (PC)
     bool shadows = false;         // 1.2: soft shadows under furniture (Vita: enhanced graphics)
     bool reflections = false;     // 1.2: lamps reflected in shiny floors and pools
+    bool calm = false;            // 1.3 accessibility: no strobing or stuttering lights
 };
 
 // Parameters for the film post-process (PC).
@@ -58,6 +59,7 @@ struct ViewModel {
     float light = 1;
     float use = 0;                        // 0..1 through drinking / eating / throwing something
     ItemType use_item = ItemType::None;
+    float reach = 0;                      // 1.3: 0..1 through reaching out to grab / open something
 };
 
 struct Camera {
@@ -81,6 +83,9 @@ struct DrawPlayer {
     bool alive;
     std::string name;
     bool light_on = false;
+    uint8_t held = 0, emote = 0;   // 1.3: what's in their hand, what they're doing
+    float emote_t = 99, use_t = 99, speed = 0;
+    bool talking = false;          // 1.3: proximity chat
 };
 
 struct DrawProp {
@@ -134,10 +139,15 @@ public:
     // graphics preset changes: view distance and detail now; textures / lighting grids rebuild
     void set_quality(float view_dist, int texture_size, int mesh_detail, float particles, float entity_detail);
     void set_effects(bool shadows, bool reflections) { s_.shadows = shadows; s_.reflections = reflections; }
-    void set_darkness(float d) { darkness_ = d; }  // night on the levels with a day/night cycle (0..1)
+    void set_darkness(float d) { darkness_ = d; }
+    // 1.3: what's been searched (drawers drawn open), and the doors that started moving last frame (for the sounds)
+    void set_searched(const std::unordered_set<uint32_t>* s) { searched_ = s; }
+    struct DoorEvent { Vec2 pos; bool opening; };
+    const std::vector<DoorEvent>& door_events() const { return door_events_; }  // night on the levels with a day/night cycle (0..1)
     void night_dim(float amount);                  // after the world: darken the whole picture
     // How much a nearby flickering light is darkening the view right now (0..1), set by draw_world.
     float flicker_dim() const { return flicker_dim_; }
+    void set_calm(bool c) { s_.calm = c; }
 
     // ---- 2D (pixel coordinates, origin top-left). Colours are 0xRRGGBBAA.
     void begin_2d();
@@ -161,6 +171,8 @@ private:
         std::vector<ChunkMesh::LightMark> lights;
         std::vector<ChunkMesh::Water> water;
         std::vector<ChunkMesh::Shadow> shadows;
+        std::vector<Furn> doors, containers;
+        std::vector<uint32_t> notes;
     };
     // background chunk building: the worker thread turns (world, chunk) into a ChunkMesh,
     // the main thread uploads it to the GPU
@@ -170,6 +182,10 @@ private:
     // entity poses ease from state to state instead of snapping (keyed by entity id)
     struct PoseSmooth { float lean = 0, arms = 0, head = 0, stride = 0, alpha = 1, seen = 0; bool init = false; };
     std::unordered_map<uint16_t, PoseSmooth> pose_;
+    struct DoorAnim { float t = 0; bool target = false; float seen = 0; };
+    std::unordered_map<uint32_t, DoorAnim> door_anim_;
+    std::vector<DoorEvent> door_events_;
+    const std::unordered_set<uint32_t>* searched_ = nullptr;
     float pose_dt_ = 0.016f, last_world_time_ = 0;
     float ease(float& v, float target, float rate) const { v += (target - v) * (1.0f - std::exp(-pose_dt_ * rate)); return v; }
     bool in_2d_ = false, batch_add_ = false;  // 2D batching state
@@ -224,6 +240,7 @@ private:
     void billboard(Vec3 center, float w, float h, uint32_t rgba, float u0 = 0, float v0 = 0, float u1 = 1, float v1 = 1);
     void draw_entity(const World& w, const DrawEntity& e, float time);
     void draw_player(const World& w, const DrawPlayer& p, float time);
+    void hazmat_suit(class ModelBuilder& m, struct Humanoid& h, struct Rgb accent, float wear);
 };
 
 uint32_t rgba(float r, float g, float b, float a = 1);

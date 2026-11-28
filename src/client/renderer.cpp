@@ -197,6 +197,9 @@ void Renderer::upload(GpuChunk& g, const ChunkMesh& m) {
     g.lights = m.lights;
     g.water = m.water;
     g.shadows = m.shadows;
+    g.doors = m.doors;
+    g.containers = m.containers;
+    g.notes = m.notes;
 }
 
 void Renderer::update_chunks(const World& w, Vec3 eye, int budget) {
@@ -230,7 +233,9 @@ void Renderer::update_chunks(const World& w, Vec3 eye, int budget) {
         int n = 0;
         for (const Want& wn : want) {
             if (budget >= 0 && n++ >= std::max(1, budget)) break;
-            build_chunk_mesh(w, wn.kx, wn.kz, scratch_, s_.mesh_detail);
+            World wc = w;
+            wc.door_flip = nullptr; // (meshes never depend on doors: they're drawn live)
+            build_chunk_mesh(wc, wn.kx, wn.kz, scratch_, s_.mesh_detail);
             GpuChunk g;
             g.kx = wn.kx;
             g.kz = wn.kz;
@@ -248,7 +253,9 @@ void Renderer::update_chunks(const World& w, Vec3 eye, int budget) {
             uint64_t k = key(wn.kx, wn.kz);
             if (inflight_.count(k)) continue;
             inflight_[k] = true;
-            jobs_.push_back({wn.kx, wn.kz, gen_, w});
+            World wc = w;
+            wc.door_flip = nullptr; // the worker must not read the game's door set
+            jobs_.push_back({wn.kx, wn.kz, gen_, wc});
         }
     }
     cv_.notify_one();
@@ -578,39 +585,38 @@ void Renderer::draw_entity(const World& w, const DrawEntity& e, float time) {
             break;
         }
         case EntityType::MegMedic: case EntityType::MegScout: {
-            // M.E.G. field staff: navy coveralls, an olive vest, a helmet with a lamp; the medic has a red
-            // cross on the arm and a bag, the scout carries a rifle
+            // M.E.G. staff wear the same yellow hazmat suit as everyone else down here. The medic has a red
+            // cross on a white armband and a bag; the scout carries a rifle (shouldered, or low-ready)
             const bool scout = e.type == EntityType::MegScout;
+            const bool ready = scout && e.state == EntState::Chase;
             Humanoid h;
-            h.top = {0.12f, 0.15f, 0.24f}; h.legs = {0.11f, 0.13f, 0.21f}; h.feet = {0.06f, 0.05f, 0.05f};
-            h.hands = {0.1f, 0.1f, 0.1f}; h.skin = {0.78f, 0.6f, 0.5f}; h.has_hair = false;
-            h.phase = e.anim; h.stride = stride; h.lean = 0.05f + breathe;
-            bool ready = scout && e.state == EntState::Chase;
-            h.arm_forward = ease(ps.arms, ready ? 0.9f : (scout ? 0.35f : 0.0f), 6.0f);
+            h.phase = e.anim; h.stride = stride; h.lean = 0.04f + breathe;
             h.head_tilt = ease(ps.head, 0.05f, 4.0f);
-            h.build(m);
-            const Rgb olive{0.3f, 0.32f, 0.22f}, dark{0.08f, 0.08f, 0.09f}, white{0.9f, 0.9f, 0.88f}, red{0.75f, 0.08f, 0.06f};
-            m.push_pose(h.chest_c, h.lean);
-            m.box(h.chest_c + Vec3{0, -0.02f, 0.0f}, {0.2f, 0.22f, 0.135f}, olive);        // vest
-            for (int k = 0; k < 3; k++) m.box(h.chest_c + Vec3{-0.11f + k * 0.11f, -0.12f, 0.14f}, {0.045f, 0.05f, 0.02f}, {0.26f, 0.28f, 0.19f}); // pouches
-            m.box(h.chest_c + Vec3{0, 0.05f, -0.17f}, {0.15f, 0.18f, 0.07f}, olive);        // pack
-            m.pop_pose();
-            m.ellipsoid(h.head_c + Vec3{0, 0.06f, -0.01f}, {0.135f, 0.09f, 0.145f}, dark);   // helmet
-            m.ellipsoid(h.head_c + Vec3{0, -0.03f, 0.09f}, {0.085f, 0.06f, 0.05f}, dark, 0.7f); // respirator
-            m.tube(h.head_c + Vec3{0, 0.08f, 0.13f}, h.head_c + Vec3{0, 0.08f, 0.17f}, 0.025f, {0.9f, 0.85f, 0.6f});
-            m.box(h.shoulder[0] + Vec3{0, -0.1f, 0}, {0.052f, 0.045f, 0.052f}, white);     // armband
+            if (scout) { // both hands on the rifle
+                float up = ease(ps.arms, ready ? 1.0f : 0.0f, 6.0f);
+                h.arm_a[1] = 0.75f + up * 0.6f; h.arm_eb[1] = 0.9f - up * 0.35f;
+                h.arm_a[0] = 0.95f + up * 0.5f; h.arm_eb[0] = 0.55f - up * 0.25f;
+            }
+            hazmat_suit(m, h, scout ? Rgb{0.15f, 0.25f, 0.6f} : Rgb{0.85f, 0.1f, 0.08f}, (e.id % 3) * 0.3f);
+            const Rgb dark{0.06f, 0.06f, 0.07f}, white{0.92f, 0.92f, 0.9f}, red{0.78f, 0.08f, 0.06f}, wood{0.25f, 0.18f, 0.1f};
+            m.box(h.shoulder[0] + Vec3{-0.01f, -0.12f, 0}, {0.055f, 0.045f, 0.055f}, white); // armband
             if (!scout) {
-                m.box(h.shoulder[0] + Vec3{-0.053f, -0.1f, 0}, {0.003f, 0.03f, 0.008f}, red);
-                m.box(h.shoulder[0] + Vec3{-0.053f, -0.1f, 0}, {0.003f, 0.008f, 0.03f}, red);
-                m.box(h.hand[1] + Vec3{0, -0.12f, 0}, {0.12f, 0.09f, 0.07f}, white);       // the med bag
+                m.box(h.shoulder[0] + Vec3{-0.067f, -0.12f, 0}, {0.003f, 0.03f, 0.008f}, red);
+                m.box(h.shoulder[0] + Vec3{-0.067f, -0.12f, 0}, {0.003f, 0.008f, 0.03f}, red);
+                m.box(h.hand[1] + Vec3{0, -0.12f, 0}, {0.12f, 0.09f, 0.07f}, white); // the med bag
                 m.box(h.hand[1] + Vec3{0, -0.12f, 0.072f}, {0.03f, 0.008f, 0.002f}, red);
-            } else { // the rifle, held across the body or up at the ready
-                Vec3 a = (h.hand[0] + h.hand[1]) * 0.5f;
-                Vec3 fwd{0, ready ? 0.0f : -0.15f, 1};
-                fwd = fwd * (1.0f / fwd.len());
-                m.box(a, {0.025f, 0.05f, 0.18f}, dark);
-                m.tube(a + fwd * 0.15f, a + fwd * 0.55f, 0.012f, dark);
-                m.box(a - fwd * 0.22f + Vec3{0, -0.02f, 0}, {0.022f, 0.045f, 0.1f}, {0.2f, 0.16f, 0.1f});
+                m.box(h.hand[1] + Vec3{0, -0.12f, 0.072f}, {0.008f, 0.03f, 0.002f}, red);
+            } else { // the rifle: its stock at the right shoulder, barrel forward, the left hand under the handguard
+                float up = ps.arms;
+                Vec3 sh = h.shoulder[1] + Vec3{-0.05f, -0.06f, 0.06f};
+                m.push_pose(sh, 0.62f * (1.0f - up));
+                m.box(sh + Vec3{0, -0.01f, 0.08f}, {0.025f, 0.045f, 0.1f}, wood);            // stock
+                m.box(sh + Vec3{0, 0.0f, 0.3f}, {0.028f, 0.05f, 0.14f}, dark);               // receiver
+                m.box(sh + Vec3{0, -0.07f, 0.3f}, {0.015f, 0.05f, 0.025f}, dark);            // magazine
+                m.box(sh + Vec3{0, -0.005f, 0.52f}, {0.03f, 0.035f, 0.1f}, wood);            // handguard
+                m.tube(sh + Vec3{0, 0.0f, 0.6f}, sh + Vec3{0, 0.0f, 0.86f}, 0.011f, dark);  // barrel
+                m.box(sh + Vec3{0, 0.06f, 0.3f}, {0.01f, 0.015f, 0.05f}, dark);              // sight
+                m.pop_pose();
             }
             break;
         }
@@ -667,8 +673,39 @@ void Renderer::draw_entity(const World& w, const DrawEntity& e, float time) {
     }
 }
 
+// Everyone down here wears the same yellow hazmat suit: hood, respirator, visor, black gloves and
+// boots, an air tank. `accent` marks who's who (a stripe on the tank and the arm); `wear` adds grime.
+void Renderer::hazmat_suit(ModelBuilder& m, Humanoid& h, Rgb accent, float wear) {
+    const float g = 1.0f - wear * 0.25f;
+    const Rgb suit{0.86f * g, 0.72f * g, 0.12f * g}, suit2{0.76f * g, 0.62f * g, 0.1f * g}, rubber{0.07f, 0.07f, 0.075f};
+    h.top = suit; h.legs = suit2; h.feet = rubber; h.hands = rubber; h.skin = suit; h.has_hair = false;
+    h.head = {0.125f, 0.145f, 0.13f};
+    h.chest = {0.21f, 0.21f, 0.135f}; h.belly = {0.18f, 0.18f, 0.125f};
+    h.limb_r = 0.07f; h.arm_r = 0.05f;
+    h.build(m);
+    // boots: heavy, up to the shin; gloves up the wrist
+    for (int s2 = 0; s2 < 2; s2++) {
+        m.capsule(h.foot[s2] + Vec3{0, 0.03f, -0.11f}, h.foot[s2] + Vec3{0, 0.22f, -0.13f}, 0.075f, 0.07f, rubber);
+        m.ellipsoid(h.hand[s2], {0.05f, 0.06f, 0.05f}, rubber, 0.6f);
+    }
+    m.push_pose(h.chest_c, h.lean);
+    m.box(h.chest_c + Vec3{0, -0.03f, -0.2f}, {0.12f, 0.2f, 0.07f}, {0.2f, 0.2f, 0.18f});          // the tank's harness plate
+    m.tube(h.chest_c + Vec3{0, -0.2f, -0.27f}, h.chest_c + Vec3{0, 0.16f, -0.27f}, 0.075f, {0.82f * g, 0.8f * g, 0.76f * g}); // air tank
+    m.box(h.chest_c + Vec3{0, 0.02f, -0.35f}, {0.08f, 0.02f, 0.004f}, accent);                       // stripe
+    m.ellipsoid(h.chest_c + Vec3{0.0f, 0.02f, 0.13f}, {0.05f, 0.05f, 0.012f}, rubber, 0.6f);        // the biohazard patch
+    m.ellipsoid(h.chest_c + Vec3{0.0f, 0.02f, 0.138f}, {0.03f, 0.03f, 0.01f}, suit, 0.5f);
+    m.pop_pose();
+    m.box(h.hip_c + Vec3{0, 0.06f, 0}, {0.2f, 0.035f, 0.14f}, rubber);                               // belt
+    // the hood, the visor, the respirator and its two filters
+    m.ellipsoid(h.head_c + Vec3{0, 0.02f, -0.02f}, {0.15f, 0.17f, 0.16f}, suit);
+    m.ellipsoid(h.head_c + Vec3{0, 0.03f, 0.1f}, {0.105f, 0.075f, 0.05f}, {0.05f, 0.06f, 0.07f}, 0.8f);  // visor
+    m.ellipsoid(h.head_c + Vec3{0, -0.06f, 0.12f}, {0.065f, 0.055f, 0.06f}, rubber, 0.7f);           // respirator
+    for (int s2 = -1; s2 <= 1; s2 += 2) m.tube(h.head_c + Vec3{s2 * 0.06f, -0.08f, 0.13f}, h.head_c + Vec3{s2 * 0.1f, -0.1f, 0.17f}, 0.032f, rubber);
+    m.box(h.shoulder[1] + Vec3{0.012f, -0.13f, 0}, {0.053f, 0.03f, 0.053f}, accent);                 // arm band (who's who)
+}
+
 void Renderer::draw_player(const World& w, const DrawPlayer& p, float time) {
-    static const float COLORS[4][3] = {{0.95f, 0.55f, 0.15f}, {0.2f, 0.75f, 0.7f}, {0.65f, 0.35f, 0.85f}, {0.45f, 0.8f, 0.3f}};
+    static const float COLORS[4][3] = {{0.95f, 0.45f, 0.1f}, {0.15f, 0.7f, 0.75f}, {0.6f, 0.3f, 0.85f}, {0.35f, 0.8f, 0.25f}};
     const float* c = COLORS[p.id & 3];
     float light = clampf(w.light_level(p.pos + Vec3{0, 1.2f, 0}) * 0.75f + 0.15f, 0.12f, 0.95f);
     if (!p.alive) light *= 0.5f;
@@ -678,18 +715,39 @@ void Renderer::draw_player(const World& w, const DrawPlayer& p, float time) {
     m.set_light(light, {0.35f, 0.85f, 0.45f});
     if (!p.alive) m.push_pose({0, 0.15f, 0}, -1.5f); // lying on the floor
     Humanoid h;
-    h.top = {c[0], c[1], c[2]};
-    h.legs = {0.18f, 0.22f, 0.32f};
     h.phase = p.anim;
-    h.stride = p.alive ? 0.8f : 0.0f;
+    h.stride = p.alive ? std::min(1.0f, p.speed / 2.2f) * 0.9f : 0.0f;
     h.crouch = p.crouch;
-    h.arm_forward = p.light_on ? 0.35f : 0.0f;
-    h.build(m);
-    // a backpack, and the flashlight in the right hand
-    m.push_pose(h.chest_c, h.lean);
-    m.box(h.chest_c + Vec3{0, -0.02f, -0.19f}, {0.15f, 0.2f, 0.08f}, {0.25f, 0.22f, 0.18f});
-    m.pop_pose();
-    if (p.light_on) m.tube(h.hand[1], h.hand[1] + Vec3{0, 0.02f, 0.2f}, 0.025f, {0.2f, 0.2f, 0.22f});
+    const ItemType held = (ItemType)p.held;
+    const bool holding = held != ItemType::None;
+    if (holding) { h.arm_a[1] = 0.7f; h.arm_eb[1] = 0.8f; } // the right hand held out in front
+    if (p.light_on) { h.arm_a[1] = 1.2f; h.arm_eb[1] = 0.25f; }
+    if (is_gun(held)) { h.arm_a[1] = 1.25f; h.arm_eb[1] = 0.4f; h.arm_a[0] = 1.35f; h.arm_eb[0] = 0.25f; }
+    if (p.use_t < 0.9f) { float u = std::sin(p.use_t / 0.9f * PI); h.arm_a[1] = 0.7f + u * 1.6f; h.arm_eb[1] = 0.8f + u * 1.2f; } // drinking / throwing
+    // emotes: a wave, a point, sitting down, a dance
+    float et = p.emote_t;
+    switch (p.emote) {
+        case 1: h.arm_a[0] = 2.7f; h.arm_eb[0] = 0.5f + std::sin(et * 9.0f) * 0.45f; break;
+        case 2: h.arm_a[0] = 1.5f; h.arm_eb[0] = 0.0f; break;
+        case 3: h.crouch = 1.0f; h.arm_a[0] = h.arm_a[1] = 0.5f; break;
+        case 4: h.arm_a[0] = 1.6f + std::sin(et * 7.0f) * 1.0f; h.arm_a[1] = 1.6f - std::sin(et * 7.0f) * 1.0f; h.phase = et * 7.0f; h.stride = 0.35f;
+                m.push_pose({0, 0, 0}, 0, std::sin(et * 3.5f) * 0.6f); break;
+        default: break;
+    }
+    hazmat_suit(m, h, {c[0], c[1], c[2]}, (float)(p.id & 1) * 0.4f);
+    if (p.emote == 4) m.pop_pose();
+    // what's in the right hand
+    Vec3 hd = h.hand[1];
+    const Rgb dark{0.12f, 0.12f, 0.13f}, steel{0.45f, 0.46f, 0.5f};
+    if (p.light_on || held == ItemType::Flashlight) m.tube(hd, hd + Vec3{0, 0.02f, 0.22f}, 0.025f, dark);
+    else if (held == ItemType::Crowbar) m.tube(hd + Vec3{0, -0.25f, 0.05f}, hd + Vec3{0, 0.35f, 0.12f}, 0.014f, {0.6f, 0.08f, 0.06f});
+    else if (is_gun(held)) { m.box(hd + Vec3{0, 0.03f, 0.18f}, {0.025f, 0.04f, 0.17f}, dark); m.tube(hd + Vec3{0, 0.04f, 0.33f}, hd + Vec3{0, 0.04f, held == ItemType::Pistol ? 0.4f : 0.62f}, 0.012f, steel); }
+    else if (holding) { // a bottle, a can, a box: something small
+        bool drink = held == ItemType::AlmondWater || held == ItemType::EnergyDrink || held == ItemType::MemoryJuice || held == ItemType::SuperAlmond ||
+                     held == ItemType::LiquidPain || held == ItemType::CashewWater || held == ItemType::LuckyMilk || held == ItemType::LiquidSilence;
+        if (drink) m.tube(hd + Vec3{0, -0.03f, 0.02f}, hd + Vec3{0, 0.14f, 0.02f}, 0.03f, {0.7f, 0.82f, 0.92f});
+        else m.box(hd + Vec3{0, 0.02f, 0.04f}, {0.04f, 0.035f, 0.05f}, {0.8f, 0.78f, 0.7f});
+    }
     if (!p.alive) m.pop_pose();
     flush_dyn(spr_[SPR_GRIT]);
     (void)time;
@@ -699,13 +757,15 @@ void Renderer::draw_player(const World& w, const DrawPlayer& p, float time) {
 // Drawn in camera space after the world (own depth, own projection), lit by the light where you stand.
 void Renderer::draw_viewmodel(const ViewModel& vm_in) {
     ViewModel vm = vm_in;
+    const bool reaching = vm.reach > 0 && vm.reach < 1 && !(vm.use > 0 && vm.use < 1);
     if (vm.use > 0 && vm.use < 1) { // drinking, eating, throwing: the item comes up into view (other hands put away)
         vm.item = vm.use_item;
         vm.light_on = false;
-    } else if (vm.item == ItemType::None) return;
+    } else if (vm.item == ItemType::None && !reaching) return;
     bool gun = is_gun(vm.item);
     const bool using_item = vm.use > 0 && vm.use < 1;
-    if (!using_item && !gun && vm.item != ItemType::Crowbar && !(vm.item == ItemType::Flashlight || vm.light_on)) return;
+    const bool holding = using_item || gun || vm.item == ItemType::Crowbar || vm.item == ItemType::Flashlight || vm.light_on;
+    if (!holding && !reaching) return;
     glClear(GL_DEPTH_BUFFER_BIT);
     Mat4 proj = Mat4::perspective(54.0f * PI / 180.0f, (float)width / (float)height, 0.01f, 6.0f);
     glMatrixMode(GL_PROJECTION);
@@ -724,11 +784,20 @@ void Renderer::draw_viewmodel(const ViewModel& vm_in) {
     m.place_camera();
     m.set_light(clampf(vm.light, 0.25f, 1.1f), {-0.35f, 0.8f, 0.5f});
     const Rgb gunmetal{0.16f, 0.16f, 0.18f}, steel{0.42f, 0.43f, 0.46f}, wood{0.42f, 0.26f, 0.14f}, polymer{0.11f, 0.11f, 0.11f};
-    const Rgb skin{0.85f, 0.67f, 0.55f}, sleeve{0.24f, 0.26f, 0.3f}, red{0.6f, 0.08f, 0.07f}, olive{0.28f, 0.3f, 0.22f};
+    // your hands: black hazmat gloves, yellow suit sleeves
+    const Rgb skin{0.08f, 0.08f, 0.085f}, sleeve{0.8f, 0.66f, 0.12f}, red{0.6f, 0.08f, 0.07f}, olive{0.28f, 0.3f, 0.22f};
+    if (reaching) { // the left hand reaches out to grab, open, pull: a door handle, a drawer, something on a table
+        float u = std::sin(vm.reach * PI);
+        Vec3 hand{-0.16f + u * 0.08f, -0.3f + u * 0.2f, -0.32f - u * 0.3f};
+        m.capsule(hand + Vec3{-0.05f, -0.14f, 0.28f}, hand + Vec3{0, -0.02f, 0.06f}, 0.045f, 0.04f, sleeve);
+        m.ellipsoid(hand, {0.045f, 0.04f, 0.055f}, skin);
+        for (int k = 0; k < 4; k++) m.capsule(hand + Vec3{-0.03f + k * 0.02f, 0.0f, -0.04f}, hand + Vec3{-0.03f + k * 0.02f, -0.02f + u * 0.02f, -0.09f}, 0.011f, 0.009f, skin);
+    }
     // hand position: lower right, bobbing with your steps, kicking back when you fire
     float bx = 0.17f + vm.sway_x, by = -0.17f + std::sin(vm.bob) * 0.008f + vm.sway_y, bz = -0.42f + vm.kick * 0.06f;
     Vec3 grip{bx, by, bz};
     float pitch_kick = vm.kick * 0.18f;
+    if (holding) {
     if (using_item) {
         // up toward your mouth and back down (drinks tip back), or a throw that leaves the hand
         ItemType it = vm.use_item;
@@ -814,6 +883,7 @@ void Renderer::draw_viewmodel(const ViewModel& vm_in) {
         m.ellipsoid(g + Vec3{0, -0.01f, 0}, {0.03f, 0.035f, 0.05f}, skin, 0.8f);
         m.capsule(g + Vec3{0, -0.02f, 0.03f}, g + Vec3{0.06f, -0.2f, 0.25f}, 0.03f, 0.042f, sleeve);
     }
+    } // (holding)
     flush_dyn(spr_[SPR_GRIT]);
     if (gun && vm.kick > 0.6f) { // muzzle flash
         float z = vm.item == ItemType::Pistol ? -0.63f : (vm.item == ItemType::Shotgun ? -1.05f : -0.98f);
@@ -1010,6 +1080,59 @@ void Renderer::draw_world(const World& w, const Camera& cam, float time, float f
         } else draw_entity(w, e, time);
     }
     for (const DrawPlayer& p : players) draw_player(w, p, time);
+    { // 1.3: doors swing on their hinges (eased toward open or shut); drawers people went through hang open
+        door_events_.clear();
+        ModelBuilder m(dyn_, 6);
+        m.set_light(1.0f, {0.35f, 0.85f, 0.45f});
+        int nd = 0;
+        for (const GpuChunk* g : visible)
+            for (const Furn& d : g->doors) {
+                uint32_t id = World::door_id(d);
+                bool open = w.door_open(id);
+                auto it = door_anim_.find(id);
+                if (it == door_anim_.end()) it = door_anim_.emplace(id, DoorAnim{open ? 1.0f : 0.0f, open}).first;
+                DoorAnim& da = it->second;
+                if (da.target != open) { da.target = open; door_events_.push_back({d.hinge + d.shut_dir * 0.55f, open}); }
+                da.t = open ? std::min(1.0f, da.t + pose_dt_ * 2.2f) : std::max(0.0f, da.t - pose_dt_ * 3.0f);
+                da.seen = time;
+                float ang = da.t * da.t * (3 - 2 * da.t) * PI * 0.5f;
+                Vec2 dir = d.shut_dir * std::cos(ang) + d.open_dir * std::sin(ang);
+                float l = clampf(w.light_level({d.hinge.x, 1.2f, d.hinge.z}) * 0.75f + 0.15f, 0.1f, 1.0f);
+                m.set_light(l, {0.35f, 0.85f, 0.45f});
+                m.place(d.hinge, std::atan2(-dir.z, dir.x)); // local +x runs along the door
+                const Rgb wood{0.42f, 0.29f, 0.17f}, frame{0.36f, 0.25f, 0.15f}, brass{0.75f, 0.6f, 0.3f};
+                const float W = d.width;
+                // (local frame: x along the leaf, z across it)
+                m.box({W * 0.5f, 1.075f, 0}, {W * 0.5f - 0.005f, 1.075f, 0.022f}, wood);
+                m.box({W * 0.5f, 1.6f, 0}, {W * 0.36f, 0.36f, 0.026f}, frame);   // panels
+                m.box({W * 0.5f, 0.55f, 0}, {W * 0.36f, 0.36f, 0.026f}, frame);
+                for (int s2 = -1; s2 <= 1; s2 += 2) { // a handle on both sides
+                    m.tube({W - 0.1f, 1.0f, s2 * 0.03f}, {W - 0.1f, 1.0f, s2 * 0.07f}, 0.012f, brass);
+                    m.tube({W - 0.1f, 1.0f, s2 * 0.07f}, {W - 0.2f, 1.0f, s2 * 0.07f}, 0.01f, brass);
+                }
+                if (++nd % 24 == 0) flush_dyn(spr_[SPR_GRIT]);
+            }
+        if (!dyn_.empty()) flush_dyn(spr_[SPR_GRIT]);
+        if (door_anim_.size() > 400)
+            for (auto it = door_anim_.begin(); it != door_anim_.end();) it = time - it->second.seen > 10.0f ? door_anim_.erase(it) : std::next(it);
+        if (searched_) { // drawers pulled out of everything somebody searched
+            for (const GpuChunk* g : visible)
+                for (const Furn& f : g->containers) {
+                    if (!searched_->count(World::furn_id(f))) continue;
+                    float mx = (f.x0 + f.x1) * 0.5f, mz = (f.z0 + f.z1) * 0.5f, hx = (f.x1 - f.x0) * 0.5f, hz = (f.z1 - f.z0) * 0.5f;
+                    Vec2 fd = f.face;
+                    float fw = std::fabs(fd.x) > 0.5f ? hz : hx, fdp = std::fabs(fd.x) > 0.5f ? hx : hz;
+                    float y = std::min(0.7f, f.y1 * 0.55f);
+                    float l = clampf(w.light_level({mx, 1.0f, mz}) * 0.75f + 0.15f, 0.1f, 1.0f);
+                    m.set_light(l, {0.35f, 0.85f, 0.45f});
+                    m.place({mx + fd.x * (fdp + 0.18f), mz + fd.z * (fdp + 0.18f)}, std::atan2(fd.x, fd.z) + PI, w.floor_y(mx, mz));
+                    const Rgb wood{0.4f, 0.28f, 0.17f}, inside{0.08f, 0.07f, 0.06f};
+                    m.box({0, y, 0}, {fw * 0.8f, 0.1f, 0.2f}, wood);
+                    m.box({0, y + 0.1f, 0}, {fw * 0.7f, 0.005f, 0.17f}, inside);
+                }
+            if (!dyn_.empty()) flush_dyn(spr_[SPR_GRIT]);
+        }
+    }
     glEnable(GL_CULL_FACE);
     glEnable(GL_BLEND);
     for (const DrawPlayer& p : players) {
@@ -1046,30 +1169,6 @@ void Renderer::draw_world(const World& w, const Camera& cam, float time, float f
             }
     }
     if (!dyn_.empty()) flush_dyn(spr_[SPR_GLOW], false, true);
-    // enhanced graphics: the lamps reflected in shiny floors and in the pools, smeared toward you
-    const bool glossy = w.id() == LevelId::L37 || w.id() == LevelId::L33 || w.id() == LevelId::L36 || w.id() == LevelId::L5 ||
-                        w.id() == LevelId::TSG1 || w.id() == LevelId::L13 || w.id() == LevelId::L1 || w.id() == LevelId::Hub || w.id() == LevelId::L22;
-    if (s_.reflections && glossy) {
-        const float* lc = w.info().light_color;
-        for (const GpuChunk* g : visible)
-            for (const ChunkMesh::LightMark& l : g->lights) {
-                if (l.sx < 0 || l.state == LightState::Dead || l.pos.y < 1.5f) continue;
-                Vec2 lp{l.pos.x, l.pos.z}, eye{cam.eye.x, cam.eye.z};
-                Vec2 to = lp - eye;
-                float d = to.len();
-                if (d > 20.0f || d < 0.3f) continue;
-                Vec2 dir = to * (1.0f / d), side{-dir.z, dir.x};
-                float fy = w.floor_y(l.pos.x, l.pos.z), wy = w.water_y(l.pos.x, l.pos.z);
-                float y = (wy > -1e8f ? wy : fy) + 0.02f;
-                float len = 0.8f + std::min(2.0f, d * 0.12f), wid = std::max(l.sx, l.sz) * 1.4f + 0.25f;
-                float a = 0.22f * fog_factor(d) * (l.state == LightState::Flicker ? 0.6f : 1.0f);
-                Vec2 c = lp - dir * (len * 0.35f);
-                Vec3 p0{c.x - dir.x * len - side.x * wid, y, c.z - dir.z * len - side.z * wid}, p1{c.x - dir.x * len + side.x * wid, y, c.z - dir.z * len + side.z * wid};
-                Vec3 p2{c.x + dir.x * len + side.x * wid, y, c.z + dir.z * len + side.z * wid}, p3{c.x + dir.x * len - side.x * wid, y, c.z + dir.z * len - side.z * wid};
-                push_quad(p0, p1, p2, p3, rgba(lc[0], lc[1], lc[2], a));
-            }
-        if (!dyn_.empty()) flush_dyn(spr_[SPR_GLOW], true, false);
-    }
     glDepthMask(GL_TRUE);
 
     // items: little bobbing billboards with a faint glow so you can spot them nearby
@@ -1094,12 +1193,40 @@ void Renderer::draw_world(const World& w, const Camera& cam, float time, float f
             w.item_spot(cx, cz, ip, iy);
             item_billboard(w.item(cx, cz), ip, id, iy);
         }
+        for (uint32_t id : g->notes) { // 1.3: a note lying on the floor, a little crooked
+            int cx, cz;
+            World::item_cell(id, cx, cz);
+            Vec2 np = w.note_pos(cx, cz);
+            float a = (float)(id % 628) * 0.01f, y = w.floor_y(np.x, np.z) + 0.008f;
+            float l = clampf(w.light_level({np.x, 0.5f, np.z}) * 0.85f + 0.25f, 0.2f, 1.2f);
+            Vec3 u{std::cos(a) * 0.11f, 0, std::sin(a) * 0.11f}, v{-std::sin(a) * 0.15f, 0, std::cos(a) * 0.15f}, c{np.x, y, np.z};
+            push_quad(c - u + v, c + u + v, c + u - v, c - u - v, rgba(l, l, l * 0.95f));
+            flush_dyn(spr_[SPR_NOTE]);
+        }
         for (const Vec3& b : g->balloons) { // Level Fun: balloons drifting under the ceiling
             static const float BC[5][3] = {{0.95f, 0.2f, 0.3f}, {0.2f, 0.55f, 0.95f}, {0.98f, 0.8f, 0.1f}, {0.3f, 0.85f, 0.4f}, {0.8f, 0.3f, 0.9f}};
             int k = (int)(std::fabs(b.x * 7 + b.z * 13)) % 5;
             float sway = std::sin(time * 0.8f + b.x) * 0.05f;
             billboard({b.x + sway, b.y + std::sin(time * 1.1f + b.z) * 0.06f, b.z}, 0.38f, 0.46f, rgba(BC[k][0], BC[k][1], BC[k][2]));
             flush_dyn(spr_[SPR_BALLOON]);
+        }
+    }
+    { // 1.3: objective things show a faint column of light, so they can be found from across a room
+        bool any = false;
+        for (const DrawProp& p : props) {
+            if (p.kind != PropKind::Tape && p.kind != PropKind::Key && !(p.kind == PropKind::Breaker && p.life < 0.5f)) continue;
+            float d = (Vec2{cam.eye.x, cam.eye.z} - p.pos).len();
+            if (d > 45.0f || d < 1.2f) continue;
+            float a = 0.16f * clampf((45.0f - d) / 15.0f, 0, 1) * (0.8f + 0.2f * std::sin(time * 2.0f + p.id));
+            bool br = p.kind == PropKind::Breaker;
+            Vec3 c{p.pos.x, br ? 2.0f : 1.4f, p.pos.z};
+            billboard(c, 0.5f, br ? 1.4f : 2.8f, br ? rgba(1, 0.25f, 0.15f, a) : rgba(0.55f, 0.8f, 1.0f, a));
+            any = true;
+        }
+        if (any) {
+            glDepthMask(GL_FALSE);
+            flush_dyn(spr_[SPR_GLOW], true, false);
+            glDepthMask(GL_TRUE);
         }
     }
     // props: dropped items and burning firesalt
@@ -1308,6 +1435,43 @@ void Renderer::draw_world(const World& w, const Camera& cam, float time, float f
             glDisable(GL_BLEND);
         }
     }
+    { // 1.3: lamps mirrored in the pools and in shiny floors, where a mirror would put them
+        const bool glossy = w.id() == LevelId::L33 || w.id() == LevelId::L36 || w.id() == LevelId::L5 || w.id() == LevelId::TSG1 ||
+                            w.id() == LevelId::L13 || w.id() == LevelId::L1 || w.id() == LevelId::Hub || w.id() == LevelId::L22 || w.id() == LevelId::L188;
+        const bool wet = w.id() == LevelId::L37 || w.id() == LevelId::L7;
+        if ((s_.reflections || wet) && (glossy || wet)) {
+            const float* lc = w.info().light_color;
+            Vec3 E = cam.eye;
+            for (const GpuChunk* g : visible)
+                for (const ChunkMesh::LightMark& l : g->lights) {
+                    if (l.sx < 0 || l.state == LightState::Dead) continue;
+                    float py = w.water_y(l.pos.x, l.pos.z);
+                    bool water = py > -1e8f;
+                    if (!water) { if (!glossy) continue; py = w.floor_y(l.pos.x, l.pos.z); }
+                    if (l.pos.y < py + 0.8f || E.y <= py + 0.05f) continue;
+                    Vec3 M{l.pos.x, 2 * py - l.pos.y, l.pos.z};
+                    float t = (E.y - py) / (E.y - M.y);
+                    Vec3 P = E + (M - E) * t;
+                    float d = (Vec2{P.x, P.z} - Vec2{E.x, E.z}).len();
+                    if (d > 26.0f) continue;
+                    if (water ? w.water_y(P.x, P.z) < -1e8f : std::fabs(w.floor_y(P.x, P.z) - py) > 0.05f) continue; // the mirror point must be on the same surface
+                    float sc = t; // the reflection shrinks with the extra distance under the surface
+                    float rip = water ? std::sin(time * 2.3f + P.x * 1.7f) * 0.04f : 0.0f;
+                    // (big skylights and window panels would make huge quads: a reflection is a lamp-sized glint)
+                    float hx = std::min(l.sx + 0.25f, 1.1f) * sc * 1.3f + rip, hz = std::min(l.sz + 0.25f, 1.1f) * sc * 1.3f - rip;
+                    float a = (water ? 0.5f : 0.26f) * fog_factor(d) * (l.state == LightState::Flicker ? 0.6f : 1.0f);
+                    float y = py + 0.012f;
+                    push_quad({P.x - hx, y, P.z + hz}, {P.x + hx, y, P.z + hz}, {P.x + hx, y, P.z - hz}, {P.x - hx, y, P.z - hz}, rgba(lc[0], lc[1], lc[2], a));
+                }
+            if (!dyn_.empty()) {
+                glEnable(GL_BLEND);
+                glDepthMask(GL_FALSE);
+                flush_dyn(spr_[SPR_GLOW], true, false);
+                glDepthMask(GL_TRUE);
+                glDisable(GL_BLEND);
+            }
+        }
+    }
     if (s_.atmosphere) draw_atmosphere(w, visible, time);
     // smilers last: their faces float in the dark
     for (const DrawEntity& e : ents)
@@ -1434,14 +1598,16 @@ void Renderer::blob_shadow(Vec2 p, float r, float a, float y) { // (batched: the
 void Renderer::draw_atmosphere(const World& w, const std::vector<const GpuChunk*>& visible, float time) {
     const LevelInfo& li = w.info();
     const float* lc = li.light_color;
-    const float bright_level = li.ambient[0] > 0.4f ? 0.25f : 1.0f; // daylight-ish levels: halos would wash out
+    const float bright_level = li.ambient[0] > 0.4f ? 0.25f : (w.id() == LevelId::L37 ? 0.4f : 1.0f); // daylight-ish levels (and the bright poolrooms): halos would wash out
     Vec2 eye{cam_.eye.x, cam_.eye.z};
     Vec2 fwd = yaw_forward(cam_.yaw);
     glDisable(GL_ALPHA_TEST);
+    glEnable(GL_BLEND); // (the passes before may have left blending off: halos and shafts must blend)
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     flicker_dim_ = 0;
     // flicker: mostly on, now and then a stutter of dark frames
     const bool alarm = w.id() == LevelId::LRun; // Level !: everything strobes red
-    const float strobe = std::sin(time * 6.0f) > 0 ? 1.0f : 0.2f;
+    const float strobe = s_.calm ? 0.75f + 0.25f * std::sin(time * 2.0f) : (std::sin(time * 6.0f) > 0 ? 1.0f : 0.2f);
     if (alarm) flicker_dim_ = (1.0f - strobe) * 0.35f;
     auto flicker = [&](const ChunkMesh::LightMark& l) {
         if (alarm) return strobe;
@@ -1449,6 +1615,7 @@ void Renderer::draw_atmosphere(const World& w, const std::vector<const GpuChunk*
         int seed = (int)(l.pos.x * 7.0f) * 131 + (int)(l.pos.z * 7.0f);
         float slow = std::sin(time * 0.9f + seed) * 0.5f + 0.5f;           // when it's having a bad moment
         if (slow < 0.65f) return 1.0f;
+        if (s_.calm) return 0.7f; // (reduce flashing: just dim)
         return hash01((uint32_t)seed, (int)(time * 18), 0, 7) < 0.45f ? 0.08f : 1.0f;
     };
     // batched: one draw for every halo, one for every shaft, one for tubes that are out

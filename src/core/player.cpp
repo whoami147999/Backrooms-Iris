@@ -86,8 +86,8 @@ void player_tick(PlayerState& p, const InputCmd& cmd, const World& world, float 
     Vec2 fwd = yaw_forward(p.yaw), right = yaw_right(p.yaw);
     Vec2 target = (fwd * mz + right * mx) * speed;
 
-    // snappy but not instant: accelerate fast, decelerate a little faster
-    float accel = (mag > 0.01f ? 14.0f : 18.0f) * dt;
+    // snappy but not instant: accelerate fast, decelerate a little faster (on the moon: floaty)
+    float accel = (mag > 0.01f ? 14.0f : 18.0f) * dt * (world.id() == LevelId::L24 ? 0.3f : 1.0f);
     p.vel.x = approach(p.vel.x, target.x, accel * std::max(speed, 2.0f));
     p.vel.z = approach(p.vel.z, target.z, accel * std::max(speed, 2.0f));
 

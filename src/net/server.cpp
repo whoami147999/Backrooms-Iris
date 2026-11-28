@@ -1,5 +1,8 @@
 #include "server.h"
 
+#include <algorithm>
+#include <vector>
+
 #include <cstdarg>
 #include <cstdio>
 #include <ctime>
@@ -166,6 +169,42 @@ void Server::handle(const NetAddr& from, const uint8_t* data, int len) {
             while (it != cl->queue.end() && it->seq < seq) ++it;
             cl->queue.insert(it, {seq, cmd});
         }
+    } else if (type == PKT_VOICE) {
+        // 1.3 proximity chat: pass the frame on to whoever is close enough to hear it. Frames are
+        // checked for size and rate (50 a second is real time) and never stored.
+        double t = now();
+        cl->voice_tokens = std::min(10.0f, cl->voice_tokens + (float)(t - cl->voice_t) * 60.0f);
+        cl->voice_t = t;
+        if (cl->voice_tokens < 1) return;
+        cl->voice_tokens -= 1;
+        uint16_t seq = r.u16();
+        int16_t pred = (int16_t)r.u16();
+        uint8_t index = r.u8();
+        if (r.bad || index > 88 || !r.need(VOICE_BYTES)) return;
+        const uint8_t* payload = r.p + r.i;
+        const SimPlayer& sp = sim.players[cl->pid];
+        if (!sp.active) return;
+        Vec2 from{sp.st.pos.x, sp.st.pos.z};
+        bool radio = sp.st.alive && sp.st.has(ItemType::Radio);
+        for (auto& c : clients_) {
+            if (!c.used || &c == cl || c.pid < 0) continue;
+            const SimPlayer& lp = sim.players[c.pid];
+            if (!lp.active) continue;
+            // the dead hear each other (and nobody else hears them); the living hear the living near them
+            if (sp.st.alive != lp.st.alive) continue;
+            float d = (Vec2{lp.st.pos.x, lp.st.pos.z} - from).len();
+            bool by_radio = radio && lp.st.has(ItemType::Radio) && d > VOICE_RANGE * 0.5f;
+            if (d > VOICE_RANGE && !by_radio && sp.st.alive) continue;
+            Writer w;
+            w.header(PKT_VOICE);
+            w.u8((uint8_t)cl->pid);
+            w.u8(by_radio ? 1 : 0);
+            w.u16(seq);
+            w.u16((uint16_t)pred);
+            w.u8(index);
+            w.bytes(payload, VOICE_BYTES);
+            sock_.send(c.addr, w.buf, w.n);
+        }
     } else if (type == PKT_SANDBOX) {
         uint8_t action = r.u8(), arg = r.u8();
         float yaw = finite_or(r.f32());
@@ -187,7 +226,7 @@ void Server::handle(const NetAddr& from, const uint8_t* data, int len) {
 
 void Server::send_snapshot(Client& c) {
     // full detail first; if that doesn't fit in one packet, again with fewer entities/props
-    if (!send_snapshot_sized(c, 16, 16, 3)) send_snapshot_sized(c, 8, 8, 1);
+    if (!send_snapshot_sized(c, 16, 24, 3)) send_snapshot_sized(c, 8, 10, 1);
 }
 
 bool Server::send_snapshot_sized(Client& c, int max_ents, int max_props, int max_events) {
@@ -241,12 +280,20 @@ bool Server::send_snapshot_sized(Client& c, int max_ents, int max_props, int max
         w.f32(e.anim);
         w.u8((uint8_t)std::min(255.0f, e.speed * 20.0f));
     }
-    // props near this player (dropped items, burning firesalt)
+    // props near this player: the ones that matter first (items, objective things, fire), then the
+    // nearest of the rest (chalk marks), so the set doesn't flicker from one snapshot to the next
     int np2 = 0;
-    const Prop* pr[16];
-    for (const Prop& p : s.props) {
-        if ((p.pos - me).len() > 50.0f || np2 >= max_props) continue;
-        pr[np2++] = &p;
+    const Prop* pr[24];
+    {
+        std::vector<std::pair<float, const Prop*>> cand;
+        for (const Prop& p : s.props) {
+            float d = (p.pos - me).len();
+            if (d > 50.0f) continue;
+            float pri = p.kind == PropKind::Mark ? 1000.0f : 0.0f;
+            cand.push_back({pri + d, &p});
+        }
+        std::sort(cand.begin(), cand.end(), [](const std::pair<float, const Prop*>& a, const std::pair<float, const Prop*>& b) { return a.first < b.first; });
+        for (auto& c : cand) { if (np2 >= max_props) break; pr[np2++] = c.second; }
     }
     w.u8((uint8_t)np2);
     for (int k = 0; k < np2; k++) {
@@ -267,6 +314,31 @@ bool Server::send_snapshot_sized(Client& c, int max_ents, int max_props, int max
     uint32_t older = total - newest;
     for (uint32_t j = 0; j < window; j++) w.u32(s.picked_order[(c.picked_cursor + j) % older]);
     if (older) c.picked_cursor = (c.picked_cursor + window) % older;
+    // 1.3: doors that aren't the way they started, and furniture already searched, near this player
+    {
+        std::vector<uint32_t> near_doors, near_searched;
+        int pcx = floor_to_int(me.x / CELL), pcz = floor_to_int(me.z / CELL);
+        for (int cz = pcz - 10; cz <= pcz + 10 && near_doors.size() < 24; cz++)
+            for (int cx = pcx - 10; cx <= pcx + 10 && near_doors.size() < 24; cx++) {
+                Furn fs[MAX_FURN];
+                bool owner = false;
+                int n = s.world.furniture(cx, cz, fs, &owner);
+                if (!owner) continue;
+                for (int k = 0; k < n; k++) {
+                    if (fs[k].kind == FurnKind::DoorLeaf && fs[k].width > 0) {
+                        uint32_t id = World::door_id(fs[k]);
+                        if (s.door_flip.count(id) && near_doors.size() < 24) near_doors.push_back(id);
+                    } else if (World::searchable(fs[k].kind)) {
+                        uint32_t id = World::furn_id(fs[k]);
+                        if (s.searched.count(id) && near_searched.size() < 24) near_searched.push_back(id);
+                    }
+                }
+            }
+        w.u8((uint8_t)near_doors.size());
+        for (uint32_t id : near_doors) w.u32(id);
+        w.u8((uint8_t)near_searched.size());
+        for (uint32_t id : near_searched) w.u32(id);
+    }
     // this player's own message
     w.u32(s.players[c.pid].toast_seq);
     w.str(s.players[c.pid].toast);

@@ -68,6 +68,8 @@ struct Humanoid {
     float arm_forward = 0;      // both arms raised forward (radians)
     float arm_swing = 0.6f;
     float head_tilt = 0;
+    float arm_a[2] = {1e9f, 1e9f};   // 1.3: override one arm's angle (forward/up from hanging down) and elbow bend
+    float arm_eb[2] = {1e9f, 1e9f};
     // outputs: joint positions (local) for extras
     Vec3 head_c, chest_c, hand[2], foot[2], shoulder[2], hip_c;
     void build(ModelBuilder& m);

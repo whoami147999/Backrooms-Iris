@@ -64,7 +64,7 @@ void gamepad_event(const SDL_Event& e, InputState& in) {
                 case SDL_CONTROLLER_BUTTON_BACK: in.sandbox_menu = true; break;                     // Select
                 case SDL_CONTROLLER_BUTTON_LEFTSHOULDER: in.use_item = true; break;                 // L
                 case SDL_CONTROLLER_BUTTON_DPAD_UP: in.up = true; in.use_item = true; break;
-                case SDL_CONTROLLER_BUTTON_DPAD_DOWN: in.down = true; break;
+                case SDL_CONTROLLER_BUTTON_DPAD_DOWN: in.down = true; in.emote = 1; break;
                 case SDL_CONTROLLER_BUTTON_DPAD_LEFT: in.left = true; in.slot_prev = true; break;
                 case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: in.right = true; in.slot_next = true; break;
                 default: break;

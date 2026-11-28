@@ -181,8 +181,10 @@ void Humanoid::build(ModelBuilder& m) {
         Vec3 sh = neck_base + Vec3{side * shoulder_w, -0.05f, 0};
         shoulder[s] = sh;
         float a = std::sin(ph) * arm_swing * stride + arm_forward + lean * 0.5f;
+        if (arm_a[s] < 1e8f) a = arm_a[s];
         Vec3 elbow = sh + swing_down(upper_arm, a) + Vec3{side * 0.02f, 0, 0};
         float eb = 0.25f + std::max(0.0f, std::sin(ph)) * 0.6f * stride + arm_forward * 0.2f;
+        if (arm_eb[s] < 1e8f) eb = arm_eb[s];
         Vec3 wrist = elbow + swing_down(forearm, a + eb);
         m.ellipsoid(sh, {arm_r * 1.6f, arm_r * 1.5f, arm_r * 1.6f}, top, 0.6f);
         m.capsule(sh, elbow, arm_r * 1.2f, arm_r, top);

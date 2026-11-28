@@ -50,6 +50,8 @@ private:
         std::deque<PendingCmd> queue;
         InputCmd held;             // repeated when the client's packets are late
         uint32_t picked_cursor = 0;
+        double voice_t = 0;        // 1.3: voice rate limit (a token bucket, in frames)
+        float voice_tokens = 10;
     };
     using clock = std::chrono::steady_clock;
     ServerConfig cfg_;

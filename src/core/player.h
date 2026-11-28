@@ -25,6 +25,9 @@ struct InputCmd {
     uint8_t light_ctr = 0;  // flashlight toggle
     uint8_t attack_ctr = 0; // crowbar swing / gun shot
     uint8_t attack_item = 0; // ItemType of the weapon in hand (crowbar or gun)
+    uint8_t held = 0;       // 1.3: the item in your hand (what the others see you holding)
+    uint8_t emote_ctr = 0;  // 1.3: wave / point / sit / dance
+    uint8_t emote = 0;
 };
 
 // Rewards for objectives: they last the whole run (and stack up to PERK_MAX).
@@ -69,6 +72,10 @@ struct PlayerState {
     uint8_t perks[PERK_COUNT] = {};
     bool alive = true;
     DeathCause cause = DeathCause::None;
+    uint8_t held = 0;      // 1.3: what's in your hand (others draw it)
+    uint8_t emote = 0;     // 1.3: 0 none, 1 wave, 2 point, 3 sit, 4 dance
+    float emote_t = 99;    // seconds since it started
+    float use_t = 99;      // seconds since you last used / drank / threw something (others see it)
 
     float eye_height() const;
     float noise() const;   // how far away hounds can hear you, metres

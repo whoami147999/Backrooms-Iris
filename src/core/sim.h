@@ -74,6 +74,7 @@ struct Objective {
     bool required = false;        // 1.2: the exits stay locked until it's done
 };
 std::string objective_text(const Objective& o); // "FIND THE LOST TAPES 1/3"
+bool furniture_in_front(const World& w, const PlayerState& p, bool doors, Furn& out, float reach); // 1.3: doors / drawers
 constexpr float FLARE_TIME = 40.0f;
 constexpr float FLARE_RADIUS = 6.5f;
 constexpr float GLOW_TIME = 180.0f, GLOW_RADIUS = 5.0f;  // glow stick
@@ -115,6 +116,9 @@ public:
     bool escaped = false;                 // 1.2: someone walked out through TH3 3ND: you won
     float won_t = 0;                      // seconds since (multiplayer: back to the lobby after a while)
     std::unordered_set<int> outposts_up;  // outposts whose officials have been sent out (packed centre cell)
+    // 1.3: doors someone has swung away from how they started, jammed doors pried open, furniture
+    // already gone through
+    std::unordered_set<uint32_t> door_flip, pried, searched;
 
     // sandbox / dev switches
     bool sandbox = false;
@@ -158,6 +162,9 @@ private:
 
     void setup_objective();
     void spawn_outposts();
+    bool use_door(int i, bool quiet);    // open / close the door in front of player i
+    bool search_furniture(int i);        // go through the drawer / cabinet / locker in front of player i
+    void entity_doors(Entity& e);        // things push doors open when they walk into them
     bool keep_out(Entity& e);           // hostile things stay away from the spawn and the outposts
     void meg_talk(int i, Entity& e);
     void update_meg(Entity& e, float dt);

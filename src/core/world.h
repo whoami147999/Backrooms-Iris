@@ -8,6 +8,7 @@
 // Thin walls live on cell edges, posts/pillars on grid points, solid blocks fill a cell.
 #pragma once
 #include <cstdint>
+#include <unordered_set>
 
 #include "config.h"
 #include "math.h"
@@ -19,6 +20,7 @@ enum class LevelId : uint8_t {
     LRun,                                     // Level ! - Run For Your Life
     // TH3 SH4DY GR3Y: the wiki's layers 0Zero .. 4Four, then L0ST H0P3, 2 F4R and TH3 3ND
     TSG0, TSG1, TSG2, TSG3, TSG4, TSGHope, TSGFar, TSGEnd,
+    TheEnd,                                   // 1.3: THE END - the last level. Its door is the way out
     Hub,                                      // 1.2: the M.E.G. base - the multiplayer lobby
     COUNT
 };
@@ -116,16 +118,36 @@ enum class FurnKind : uint8_t {
     Lounger, Float, Slide, LifeguardChair, Palm, Ladder,              // the poolrooms
     Tent, Sandbags, Crate, Banner, Radio2, Floodlight, Cot,           // M.E.G. outposts
     Window, Desk, Escalator, Shutter, Planter, KioskSign, Rack,       // hotel / city / mall
+    // 1.3
+    DoorFrame, Elevator, Toilet, Bathtub, Mirror, Reception, Mailboxes, Sofa,   // buildings
+    Boulder, Lander, Antenna, Flag,                                             // the moon
+    Pine, Fence, WaterTower, PowerPole,                                         // outdoors
+    SpiralStair, Bookshelf, SignBoard, Note,                                    // poolrooms, THE END, lore
+    Cottage, GlassLift, Arch,                                                   // Motion's hills, the mall's lift, poolroom niches
 };
 struct Furn {
     FurnKind kind;
     float x0, z0, x1, z1, y0, y1;
     bool solid;
     Vec2 face;           // which way the piece faces (into the room): drawers, paintings
+    // 1.3 doors (DoorLeaf): the hinge, the width, and which way the leaf points shut / open
+    Vec2 hinge;
+    Vec2 shut_dir, open_dir;
+    float width = 0;
 };
-constexpr int MAX_FURN = 24;
+// 1.3: a building you can walk into (Level 11, 4Four, Froidetown's towers): its footprint, what
+// it is, its front door
+struct Bldg {
+    int x0 = 0, z0 = 0, w = 0, d = 0;  // corner cell and size in cells
+    int kind = 0;                      // 0 shop, 1 flat, 2 office, 3 diner, 4 tower lobby
+    int door_side = 0;                 // 0 west, 1 east, 2 north, 3 south
+    int dcx = 0, dcz = 0;              // the cell the front door opens into
+};
+constexpr int MAX_FURN = 40;
 
 const LevelInfo& level_info(LevelId id);
+int note_count();
+const char* note_text(int n);                // lines separated by '|'
 const char* level_label(LevelId id);         // "LEVEL 9 - THE SUBURBS"
 bool level_from_number(const char* s, LevelId& out); // "9", "37", "fun"
 
@@ -156,7 +178,7 @@ public:
     bool guest_room(int cx, int cz) const;   // inside an enterable room (hotel, apartment, mansion or house)
     bool hotel() const { return id_ == LevelId::L5 || id_ == LevelId::TSG1 || id_ == LevelId::L13; } // levels with rooms off the corridors
     bool court() const { return id_ == LevelId::L188; }   // 1.2: the hotel ring around the courtyards
-    bool city() const { return id_ == LevelId::L11 || id_ == LevelId::TSG4; } // 1.2: buildings you can walk into
+    bool city() const { return id_ == LevelId::L11 || id_ == LevelId::TSG4 || id_ == LevelId::L70; } // buildings you can walk into
     bool houses() const { return id_ == LevelId::L9 || id_ == LevelId::L70 || id_ == LevelId::L94; } // enterable, furnished houses
     bool house(int cx, int cz) const;        // inside a house: indoors on an outdoor level (ceiling, warm)
     float house_h() const { return 2.9f; }   // house walls; the roof sits on top
@@ -180,19 +202,36 @@ public:
 
     // 1.2: ground height (round pools you can walk into, Motion's big hills). 0 almost everywhere.
     float floor_y(float x, float z) const;
-    bool terrain() const { return id_ == LevelId::L37 || id_ == LevelId::L94; }
+    bool terrain() const { return id_ == LevelId::L37 || id_ == LevelId::L94 || id_ == LevelId::L24; }
     float water_y(float x, float z) const;    // pool water surface (or -1e9 where there is none)
     bool pool(int cx, int cz) const;          // Level 37: this cell holds part of a pool
     // M.E.G. outposts: a tent, sandbags, crates and two officials, one per region on some levels
     bool outpost(int cx, int cz, int& ocx, int& ocz) const;
     bool outpost_region(int rx, int rz, int& ocx, int& ocz) const;
     bool has_outposts() const;
-    // a building you can walk into on a city level (Level 11, 4Four): 3x3 cells, a door on the street
+    // a building you can walk into (Level 11, 4Four, Froidetown): rooms inside, a real front door
+    bool building(int cx, int cz, Bldg& b) const;
     bool city_room(int cx, int cz, int& qx, int& qz, int& kind, int& door_side) const; // (qx, qz: the room's corner cell)
     static int city_quarter(int c) { int b = c >= 0 ? c / 10 : -((-c + 9) / 10); int m = c - b * 10; return b * 2 + (m >= 6 ? 1 : 0); } // one building per quarter of a city block
     bool indoors(int cx, int cz) const;       // under a roof on an outdoor level (houses, shops, the hotel ring)
     float indoor_h(int cx, int cz) const;     // ceiling height there
     bool window_edge(int line, int along, bool vertical) const; // Level 188: this thin wall has a window in it
+    int court_cell(int cx, int cz) const;     // Level 188: 0 atrium, 1 corridor, 2 room, 3 passage, 4 solid core / locked room / outside
+
+    // 1.3: doors swing on hinges. Each has a default (most are shut) and the game keeps the set of
+    // doors someone has changed; furniture() and collision see that set through this pointer.
+    const std::unordered_set<uint32_t>* door_flip = nullptr;
+    static uint32_t door_id(const Furn& f);
+    bool door_default_open(uint32_t id) const;
+    bool door_jammed(uint32_t id) const;     // stuck: needs a crowbar
+    bool door_open(uint32_t id) const { return door_default_open(id) != (door_flip && door_flip->count(id) > 0); }
+    // searchable furniture (drawers, cabinets, lockers, crates, fridges): what's inside
+    static bool searchable(FurnKind k);
+    static uint32_t furn_id(const Furn& f);
+    ItemType container_item(const Furn& f) const;
+    // notes left lying around (pure: like items). 0 = none, else 1 + which note
+    int note(int cx, int cz) const;
+    Vec2 note_pos(int cx, int cz) const;
 
     bool exit_door(int cx, int cz, ExitDoor* out = nullptr) const; // an exit door opens into this cell
     bool exit_cell(int cx, int cz) const { return exit_door(cx, cz); }
@@ -227,6 +266,7 @@ private:
     bool office_wall(int line, int along, bool vertical) const;
     bool exit_for_region(int rx, int rz, ExitDoor& out) const;
     float hill_h(float x, float z) const;     // Level 94: the hills' height field
+    float moon_h(float x, float z) const;     // Level 24: craters
     float pool_depth(float x, float z) const; // Level 37: 0 on the deck .. ~2 m in the deep end
     float exit_chance() const;
     struct Room { int bx, bz, qx, qz; float x0, z0, x1, z1; int door_side; int dcx, dcz; };
@@ -234,12 +274,12 @@ private:
     bool house_room(int cx, int cz, Room& r) const; // Levels 9, 70, 94: 2x2 houses with a front door
     bool court_room(int cx, int cz, Room& r) const; // Level 188: rooms between the corridor and a courtyard
     bool room_at(int cx, int cz, Room& r) const { return hotel_room(cx, cz, r) || house_room(cx, cz, r) || court_room(cx, cz, r); }
-    int court_cell(int cx, int cz) const;     // Level 188: 0 courtyard, 1 corridor, 2 room, 3 passage, 4 solid core / locked room
     bool city_wall(int line, int along, bool vertical) const;
     bool run_block(int cx, int cz) const;     // Level !: an obstacle in the corridor
     int hotel_block(int bx, int bz) const;   // 0 solid, 1 ballroom, 2 guest rooms
     bool hotel_wall(int line, int along, bool vertical) const;
     int cell_props(int cx, int cz, Furn* out) const;
+    int furniture_raw(int cx, int cz, Furn* out, bool* owner) const;
     bool door_room(int cx, int cz, int& bx, int& bz, bool& north) const; // Level 21: this cell is inside a room behind a door
     bool door_room_block(int bx, int bz, bool& north) const;
     bool door_room_wall(int line, int along, bool vertical) const;

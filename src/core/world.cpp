@@ -38,11 +38,11 @@ const LevelInfo LEVELS[(int)LevelId::COUNT] = {
     {"LEVEL 24",        "THE MOON",          "24",      60.0f, 60.0f, true,  false, {0.00f, 0.00f, 0.00f},   0.022f, 0.035f, {0.72f, 0.72f, 0.76f},   {1.00f, 1.00f, 1.00f},  0.00f, 1.0f, 3.00f, 0.6f, 0.15f, 0.008f, LevelId::L11},
     {"LEVEL 33",        "THE INFINITE MALL", "33",      11.0f, 11.0f, false, false, {0.30f, 0.31f, 0.30f},   0.040f, 0.055f, {0.30f, 0.31f, 0.30f},   {1.00f, 0.92f, 0.80f},  1.30f, 9.0f, 7.40f, 0.8f, 0.10f, 0.012f, LevelId::L36},
     {"LEVEL 36",        "AIRPORT",           "36",      4.5f,  4.5f,  false, false, {0.14f, 0.15f, 0.17f},   0.045f, 0.060f, {0.17f, 0.18f, 0.20f},   {0.92f, 0.96f, 1.00f},  1.40f, 9.0f, 4.40f, 0.9f, 0.08f, 0.012f, LevelId::L37},
-    {"LEVEL 37",        "SUBLIMITY",         "37",      4.0f,  4.0f,  false, false, {0.70f, 0.82f, 0.86f},   0.035f, 0.050f, {0.55f, 0.62f, 0.66f},   {0.90f, 1.00f, 1.00f},  0.80f, 8.0f, 3.95f, 0.7f, -0.05f, 0.009f, LevelId::LFun},
+    {"LEVEL 37",        "SUBLIMITY",         "37",      4.2f,  4.2f,  false, false, {0.42f, 0.55f, 0.55f},   0.030f, 0.050f, {0.34f, 0.42f, 0.42f},   {0.96f, 1.00f, 0.94f},  0.90f, 8.5f, 4.15f, 1.6f, -0.05f, 0.009f, LevelId::LFun},
     {"LEVEL 51",        "THE FORGOTTEN CITY","51",      8.0f,  8.0f,  false, true,  {0.02f, 0.015f, 0.01f},  0.110f, 0.130f, {0.45f, 0.38f, 0.30f},   {1.00f, 0.60f, 0.25f},  1.30f, 8.0f, 1.70f, 0.7f, 0.25f, 0.012f, LevelId::L70},
     {"LEVEL 70",        "FROIDETOWN",        "70",      60.0f, 60.0f, true,  false, {0.74f, 0.77f, 0.82f},   0.032f, 0.048f, {0.80f, 0.82f, 0.88f},   {1.00f, 0.86f, 0.62f},  1.50f, 10.f, 5.00f, 0.6f, 0.10f, 0.009f, LevelId::L94},
     {"LEVEL 94",        "MOTION",            "94",      60.0f, 60.0f, true,  false, {0.70f, 0.78f, 0.88f},   0.024f, 0.040f, {0.88f, 0.86f, 0.80f},   {1.00f, 0.88f, 0.62f},  1.50f, 10.f, 4.20f, 0.6f, 0.04f, 0.010f, LevelId::L188},
-    {"LEVEL 188",       "COURTYARD OF WINDOWS","188",   16.0f, 16.0f, true,  false, {0.66f, 0.67f, 0.68f},   0.028f, 0.042f, {0.62f, 0.63f, 0.65f},   {1.00f, 0.90f, 0.72f},  1.20f, 7.0f, 3.20f, 0.6f, 0.32f, 0.012f, LevelId::L24},
+    {"LEVEL 188",       "COURTYARD OF WINDOWS","188",   24.0f, 24.0f, true,  false, {0.70f, 0.70f, 0.72f},   0.022f, 0.036f, {0.64f, 0.64f, 0.67f},   {1.00f, 0.92f, 0.76f},  1.20f, 7.0f, 3.20f, 0.6f, 0.32f, 0.012f, LevelId::L24},
     {"LEVEL FUN",       "=)",                "FUN",     2.7f,  2.7f,  false, false, {0.30f, 0.20f, 0.24f},   0.060f, 0.075f, {0.22f, 0.18f, 0.19f},   {1.00f, 0.90f, 0.85f},  1.40f, 7.5f, 2.65f, 0.6f, 0.30f, 0.012f, LevelId::LRun},
     {"LEVEL !",         "RUN FOR YOUR LIFE", "!",       2.7f,  2.7f,  false, false, {0.15f, 0.01f, 0.01f},   0.045f, 0.060f, {0.16f, 0.04f, 0.04f},   {1.00f, 0.15f, 0.10f},  1.50f, 7.0f, 2.65f, 0.6f, 0.60f, 0.040f, LevelId::L51},
     {"TSG - 0Z3R0",     "TH3 GR3Y JUNGL3",   "0ZERO",   60.0f, 60.0f, true,  false, {0.30f, 0.31f, 0.30f},   0.048f, 0.064f, {0.44f, 0.44f, 0.44f},   {1.00f, 1.00f, 1.00f},  0.00f, 1.0f, 3.00f, 0.6f, 0.15f, 0.011f, LevelId::TSG1},
@@ -52,7 +52,8 @@ const LevelInfo LEVELS[(int)LevelId::COUNT] = {
     {"TSG - 4F0UR",     "TH3 BR0K3N C1TY",   "4FOUR",   60.0f, 60.0f, true,  false, {0.17f, 0.17f, 0.18f},   0.046f, 0.060f, {0.30f, 0.30f, 0.31f},   {1.00f, 1.00f, 1.00f},  1.40f, 9.0f, 5.00f, 0.6f, 0.25f, 0.009f, LevelId::TSGHope},
     {"TSG - L0ST H0P3", "TH3 W0BBLY M4Z3",   "HOPE",    2.7f,  2.7f,  false, true,  {0.00f, 0.00f, 0.00f},   0.220f, 0.240f, {0.25f, 0.25f, 0.25f},   {1.00f, 1.00f, 1.00f},  0.00f, 1.0f, 2.65f, 0.6f, 0.50f, 0.012f, LevelId::TSGFar},
     {"TSG - 2 F4R",     "TURN B4CK",         "2FAR",    2.7f,  2.7f,  false, true,  {0.00f, 0.00f, 0.00f},   0.200f, 0.220f, {0.30f, 0.30f, 0.30f},   {1.00f, 0.18f, 0.12f},  0.90f, 4.5f, 2.65f, 0.6f, 0.45f, 0.010f, LevelId::TSGEnd},
-    {"TH3 3ND",         "W3LC0M3 T0 TH3 3ND","END",     60.0f, 60.0f, true,  false, {0.52f, 0.52f, 0.53f},   0.050f, 0.065f, {0.66f, 0.66f, 0.66f},   {1.00f, 1.00f, 1.00f},  0.00f, 1.0f, 3.00f, 0.6f, 0.35f, 0.000f, LevelId::L0},
+    {"TH3 3ND",         "W3LC0M3 T0 TH3 3ND","END",     60.0f, 60.0f, true,  false, {0.52f, 0.52f, 0.53f},   0.050f, 0.065f, {0.66f, 0.66f, 0.66f},   {1.00f, 1.00f, 1.00f},  0.00f, 1.0f, 3.00f, 0.6f, 0.35f, 0.000f, LevelId::TheEnd},
+    {"THE END",         "THE LAST LEVEL",    "FINAL",   3.6f,  3.6f,  false, false, {0.40f, 0.40f, 0.38f},   0.032f, 0.046f, {0.34f, 0.33f, 0.30f},   {1.00f, 0.97f, 0.88f},  1.60f, 9.0f, 3.55f, 0.9f, 0.05f, 0.006f, LevelId::L0},
     {"M.E.G. BASE",     "THE LOBBY",         "HUB",     4.2f,  4.2f,  false, false, {0.14f, 0.15f, 0.15f},   0.045f, 0.060f, {0.20f, 0.20f, 0.19f},   {1.00f, 0.93f, 0.80f},  1.40f, 9.0f, 4.00f, 1.0f, -0.40f, 0.000f, LevelId::L0},
 };
 
@@ -140,9 +141,8 @@ constexpr int FROST_GRID = 10;   // Level 70: roads, towers, houses with igloos 
 constexpr int FROST_RIVER = 50;  // Level 70: the frozen river crosses every 50 cells
 constexpr int TOWN_GRID = 8;     // Level 94: the town (same lots as the suburbs)
 constexpr int TOWN_REGION = 32;  // Level 94: a town here and there among the hills
-constexpr int COURT_GRID = 14;   // Level 188: a ring of hotel rooms around every courtyard
-constexpr int COURT_OFF = 9;     // (spawn stands in the middle of a courtyard)
 constexpr int RIVER_GRID = 40;   // 4Four: the river runs along z every 40 cells
+constexpr int HOTEL_HALF = 12;   // Level 188: one hotel, 24x24 cells, centred on its atrium
 
 // Level 4: each 6x6 block holds four 2x2 cubicles separated by aisles. Every cubicle
 // has one opening (side + which of its two cells) and a desk in the opposite corner.
@@ -189,6 +189,42 @@ struct RoomFrame {
         return p - o;
     }
 };
+// a building's own frame: u along the front wall, v from the back wall (row 0) to the front (row S-1)
+void bldg_local(const Bldg& b, int cx, int cz, int& u, int& v) {
+    const int S = b.w;
+    switch (b.door_side) {
+        case 3: u = cx - b.x0; v = cz - b.z0; break;
+        case 2: u = b.x0 + S - 1 - cx; v = b.z0 + S - 1 - cz; break;
+        case 1: u = b.z0 + S - 1 - cz; v = cx - b.x0; break;
+        default: u = cz - b.z0; v = b.x0 + S - 1 - cx; break;
+    }
+}
+// Inside walls, between two neighbouring cells of one building (local coords): 0 none, 1 a wall,
+// 2 a doorway (a gap with a door hung in it).
+int bldg_partition(const Bldg& b, int ua, int va, int ub, int vb) {
+    if (va > vb || ua > ub) { std::swap(ua, ub); std::swap(va, vb); }
+    const bool across_v = ua == ub; // the cells are one behind the other: the wall runs along u
+    switch (b.kind) {
+        case 0: // shop: a storeroom along the back
+            if (across_v && va == 0) return ua == 2 ? 2 : 1;
+            return 0;
+        case 1: // flat: a bedroom and a bathroom along the back
+            if (across_v && va == 0) return (ua == 0 || ua == 2) ? 2 : 1;
+            if (!across_v && va == 0 && ua == 1) return 1;
+            return 0;
+        case 2: // office: a manager's office in the back corner
+            if (across_v && va == 0 && ua == 0) return 2;
+            if (!across_v && va == 0 && ua == 0) return 1;
+            return 0;
+        case 3: // diner: the kitchen along the back
+            if (across_v && va == 0) return ua == 1 ? 2 : 1;
+            return 0;
+        default: // tower: the lobby at the front, two flats behind it
+            if (across_v && va == 2) return (ua == 1 || ua == 4) ? 2 : 1;
+            if (!across_v && va <= 2 && ua == 2) return 1;
+            return 0;
+    }
+}
 } // namespace
 
 const LevelInfo& level_info(LevelId id) { return LEVELS[(int)id < (int)LevelId::COUNT ? (int)id : 0]; }
@@ -231,7 +267,8 @@ bool level_from_number(const char* s, LevelId& out) {
     if (v == "TSG4" || v == "FOUR") { out = LevelId::TSG4; return true; }
     if (v == "LOSTHOPE" || v == "L0STH0P3") { out = LevelId::TSGHope; return true; }
     if (v == "TOOFAR" || v == "2F4R") { out = LevelId::TSGFar; return true; }
-    if (v == "THEEND" || v == "TH33ND") { out = LevelId::TSGEnd; return true; }
+    if (v == "TH33ND") { out = LevelId::TSGEnd; return true; }
+    if (v == "THEEND" || v == "LAST" || v == "FINAL" || v == "BOOKSHOP") { out = LevelId::TheEnd; return true; }
     if (v == "LOBBY" || v == "MEG" || v == "BASE") { out = LevelId::Hub; return true; }
     return false;
 }
@@ -344,12 +381,25 @@ bool World::solid(int cx, int cz) const {
                 int mx = pmod(cx, FROST_GRID), mz = pmod(cz, FROST_GRID);
                 if (mx < 2 || mz < 2) return false; // roads
                 bx = floor_div(cx, FROST_GRID); bz = floor_div(cz, FROST_GRID);
-                if (!(bx == 0 && bz == 0) && hash01(seed_, bx, bz, S_LOT) < 0.42f) return mx >= 3 && mx <= 8 && mz >= 3 && mz <= 8; // a tower
+                if (!(bx == 0 && bz == 0) && hash01(seed_, bx, bz, S_LOT) < 0.42f) { // a tower (some have a lobby you can walk into)
+                    Bldg tb;
+                    if (building(cx, cz, tb)) return false;
+                    return mx >= 3 && mx <= 8 && mz >= 3 && mz <= 8;
+                }
                 return mx == 8 && mz == 7 && hash01(seed_, bx, bz, S_LOT + 3) < 0.6f; // an igloo in the yard
             }
             return false; // (Motion's hills are ground you walk over)
         }
         case LevelId::L188: return court_cell(cx, cz) == 4; // stairwell cores and locked rooms
+        case LevelId::TheEnd: { // THE END: an endless, emptied bookshop. Rows of shelves, wide aisles
+            if (near_spawn(cx, cz, 2)) return false;
+            int mz = pmod(cz, 4);
+            if (mz != 1 && mz != 2) return false;
+            int seg = floor_div(cx, 6);
+            if (pmod(cx, 6) == 0) return false;                                  // gaps between the runs
+            if (hash01(seed_, seg, floor_div(cz, 4), S_SOLID + 5) > 0.62f) return false; // open floor here
+            return mz == 1 || hash01(seed_, seg, floor_div(cz, 4), S_SOLID + 6) < 0.5f;   // single or double rows
+        }
         case LevelId::Hub: { // the base: one big concrete hall with a few columns of crates
             if (std::abs(cx) > 7 || std::abs(cz) > 7) return true;
             return (std::abs(cx) == 5 && std::abs(cz) == 5);
@@ -419,9 +469,9 @@ bool World::solid(int cx, int cz) const {
             if (mz == 1 || mz == 2) return hash01(seed_, cx, cz, S_SOLID) < 0.5f && pmod(cx, 3) != 0; // a car in the bay
             return false;
         }
-        case LevelId::L24: { // boulders and the odd towering rock
-            if (near_spawn(cx, cz, 2)) return false;
-            return hash01(seed_, cx, cz, S_SOLID) < 0.055f;
+        case LevelId::L24: { // the odd great boulder (the rest are props: rounded rocks of every size)
+            if (near_spawn(cx, cz, 3)) return false;
+            return hash01(seed_, cx, cz, S_SOLID) < 0.012f;
         }
         case LevelId::L33: { // shop blocks between wide galleries
             int mx = pmod(cx, MALL_GRID), mz = pmod(cz, MALL_GRID);
@@ -478,6 +528,7 @@ float World::block_h(int cx, int cz) const {
         }
         case LevelId::L188: return info().ceil_h;
         case LevelId::Hub: return info().ceil_h;
+        case LevelId::TheEnd: return 1.9f; // bookshelves
         case LevelId::TSG0: case LevelId::TSG2: return 9.0f;  // a trunk: blocks the view
         case LevelId::TSG3: return 1.4f + hash01(seed_, cx, cz, S_HEIGHT) * 1.4f;
         case LevelId::TSG4: {
@@ -503,10 +554,7 @@ float World::block_h(int cx, int cz) const {
             int mz = pmod(cz, 4);
             return (mz == 1 || mz == 2) && !(pmod(cx, 8) >= 5 && pmod(cx, 8) <= 6 && pmod(cz, 8) >= 5 && pmod(cz, 8) <= 6) ? 1.35f : info().ceil_h;
         }
-        case LevelId::L24: {
-            float r = hash01(seed_, cx, cz, S_HEIGHT);
-            return r < 0.3f ? 3.0f + r * 8.0f : 0.5f + r * 1.2f; // spires among boulders
-        }
+        case LevelId::L24: return 1.8f + hash01(seed_, cx, cz, S_HEIGHT) * 2.2f; // a boulder
         case LevelId::L33: {
             int mx = pmod(cx, MALL_GRID), mz = pmod(cz, MALL_GRID);
             bool open = hash01(seed_, floor_div(cx, MALL_GRID), floor_div(cz, MALL_GRID), S_LOT) < 0.65f;
@@ -551,12 +599,13 @@ bool World::wall_x(int gx, int cz) const {
             return edge_wall_l1(gx, cz, true);
         case LevelId::L36: // walls between the gate lounges
             return pmod(gx, AIR_GRID) == 0 && pmod(cz, AIR_GRID) >= 4 && pmod(cz, AIR_GRID) <= 8 && pmod(cz, AIR_GRID) != 6;
-        case LevelId::L1:
+        case LevelId::L1: case LevelId::TheEnd:
             if (near_spawn(gx, cz, 2)) return false;
             return edge_wall_l1(gx, cz, true);
         case LevelId::L4: return office_wall(gx, cz, true);
         case LevelId::L21: return door_room_wall(gx, cz, true);
-        case LevelId::L5: case LevelId::TSG1: case LevelId::L13: case LevelId::L9: case LevelId::L70: case LevelId::L94: case LevelId::L188: return hotel_wall(gx, cz, true);
+        case LevelId::L5: case LevelId::TSG1: case LevelId::L13: case LevelId::L9: case LevelId::L94: case LevelId::L188: return hotel_wall(gx, cz, true);
+        case LevelId::L70: return hotel_wall(gx, cz, true) || city_wall(gx, cz, true);
         case LevelId::L11: case LevelId::TSG4: return city_wall(gx, cz, true);
         case LevelId::TSG0: case LevelId::TSG2: // the shack / outpost around spawn (west and east walls)
             return (gx == -1 || gx == 2) && cz >= -1 && cz <= 1 && !(gx == -1 && cz == 0 && id_ == LevelId::TSG0);
@@ -579,12 +628,13 @@ bool World::wall_z(int cx, int gz) const {
         case LevelId::L22:
             if (near_spawn(cx, gz, 2)) return false;
             return edge_wall_l1(gz, cx, false);
-        case LevelId::L1:
+        case LevelId::L1: case LevelId::TheEnd:
             if (near_spawn(cx, gz, 2)) return false;
             return edge_wall_l1(gz, cx, false);
         case LevelId::L4: return office_wall(gz, cx, false);
         case LevelId::L21: return door_room_wall(gz, cx, false);
-        case LevelId::L5: case LevelId::TSG1: case LevelId::L13: case LevelId::L9: case LevelId::L70: case LevelId::L94: case LevelId::L188: return hotel_wall(gz, cx, false);
+        case LevelId::L5: case LevelId::TSG1: case LevelId::L13: case LevelId::L9: case LevelId::L94: case LevelId::L188: return hotel_wall(gz, cx, false);
+        case LevelId::L70: return hotel_wall(gz, cx, false) || city_wall(gz, cx, false);
         case LevelId::L11: case LevelId::TSG4: return city_wall(gz, cx, false);
         case LevelId::TSG0: case LevelId::TSG2: // north and south walls, the doorway (its door is gone) facing south
             return (gz == -1 || gz == 2) && cx >= -1 && cx <= 1 && !(gz == 2 && cx == 0);
@@ -597,7 +647,7 @@ bool World::wall_z(int cx, int gz) const {
 
 bool World::post(int gx, int gz) const {
     switch (id_) {
-        case LevelId::L0: case LevelId::L1: case LevelId::L4: case LevelId::L5: case LevelId::L6: case LevelId::L37: case LevelId::LFun:
+        case LevelId::L0: case LevelId::L1: case LevelId::L4: case LevelId::L5: case LevelId::L6: case LevelId::L37: case LevelId::LFun: case LevelId::TheEnd:
         case LevelId::L7: case LevelId::L13: case LevelId::L21: case LevelId::L22: case LevelId::L36: case LevelId::TSGFar: case LevelId::TSG1: case LevelId::TSGHope:
         case LevelId::L9: case LevelId::L70: case LevelId::L94: case LevelId::TSG0: case LevelId::TSG2: case LevelId::L188:
         case LevelId::L11: case LevelId::TSG4:
@@ -625,6 +675,11 @@ bool World::pillar(int gx, int gz) const {
             return !post(gx, gz);
         }
         case LevelId::Hub: return (gx == -3 || gx == 3) && (gz == -3 || gz == 3);
+        case LevelId::TheEnd: { // big square yellow pillars, now and then
+            if (pmod(gx, 6) != 3 || pmod(gz, 8) != 0 || near_spawn(gx, gz, 1)) return false;
+            for (int a = -1; a <= 0; a++) for (int b = -1; b <= 0; b++) if (solid(gx + a, gz + b)) return false;
+            return !post(gx, gz) && hash01(seed_, gx, gz, S_PILLAR) < 0.7f;
+        }
         case LevelId::L51: { // colonnades along the streets
             int mx = pmod(gx, RUIN_GRID), mz = pmod(gz, RUIN_GRID);
             if (near_spawn(gx, gz, 1)) return false;
@@ -649,11 +704,9 @@ bool World::pillar(int gx, int gz) const {
             if (mx == 0 || mz == 0) return false;
             return hotel_block(floor_div(gx, HOTEL_GRID), floor_div(gz, HOTEL_GRID)) == 1 && ((mx + mz) % 2 == 0);
         }
-        case LevelId::L37: { // rows of tiled columns
-            if (pmod(gx, 2) != 0 || pmod(gz, 2) != 0 || near_spawn(gx, gz, 2)) return false;
-            if (pmod(gx, 4) == 0 || pmod(gz, 4) == 0) return false;
-            if (pool_depth(gx * CELL, gz * CELL) > 0.0f || pool_depth(gx * CELL + 0.4f, gz * CELL + 0.4f) > 0.0f ||
-                pool_depth(gx * CELL - 0.4f, gz * CELL - 0.4f) > 0.0f) return false; // not in the water
+        case LevelId::L37: { // great round tiled columns standing in the water, one in the middle of most halls
+            if (pmod(gx, 4) != 2 || pmod(gz, 4) != 2 || near_spawn(gx, gz, 2)) return false;
+            if (pool_depth(gx * CELL, gz * CELL) > 0.5f) return false; // (not in a deep pool)
             return !post(gx, gz) && hash01(seed_, gx, gz, S_PILLAR) < 0.7f;
         }
         default: return false;
@@ -661,7 +714,8 @@ bool World::pillar(int gx, int gz) const {
 }
 
 bool World::pole(int cx, int cz) const {
-    bool street = id_ == LevelId::L9 || id_ == LevelId::L7 || id_ == LevelId::L51 || id_ == LevelId::L70 || id_ == LevelId::L94 || id_ == LevelId::TSG4;
+    bool street = id_ == LevelId::L9 || id_ == LevelId::L7 || id_ == LevelId::L51 || id_ == LevelId::L70 || id_ == LevelId::L94 || id_ == LevelId::TSG4 ||
+                  (id_ == LevelId::L188 && court_cell(cx, cz) == 0);
     if (street && houses() && house(cx, cz)) return false; // a lamp indoors hangs from the ceiling
     return street && light(cx, cz) != LightState::None &&
            !(id_ == LevelId::L7 && std::abs(cx) <= 4 && std::abs(cz) <= 4); // the drowned house has ceiling lamps
@@ -778,9 +832,13 @@ LightState World::light(int cx, int cz) const {
             return LightState::On;
         }
         case LevelId::L70: case LevelId::L94: case LevelId::TSG4: case LevelId::L11: {
-            int cqx, cqz, ck, cd;
-            if (city_room(cx, cz, cqx, cqz, ck, cd)) { // one light in the middle of each shop / flat
-                if (cx != cqx + 1 || cz != cqz + 1) return LightState::None;
+            Bldg lb;
+            if (building(cx, cz, lb)) { // lamps in every room of a building
+                int lu, lv;
+                bldg_local(lb, cx, cz, lu, lv);
+                bool lit = lb.w == 3 ? (lv == 0 ? (lu == 0 || lu == 2 || lb.kind == 0 || lb.kind == 3) && lu != 1 : (lv == 1 && lu == 1))
+                                     : ((lv == 1 && (lu == 1 || lu == 4)) || (lv == 4 && (lu % 2 == 1)));
+                if (!lit) return LightState::None;
                 if (id_ == LevelId::TSG4) return r < 0.4f ? LightState::Dead : (r < 0.7f ? LightState::Flicker : LightState::On);
                 return r < 0.15f ? LightState::Dead : (r < 0.25f ? LightState::Flicker : LightState::On);
             }
@@ -803,7 +861,12 @@ LightState World::light(int cx, int cz) const {
         }
         case LevelId::L188: { // the hotel ring: lamps down the corridors, one in each room; the courtyards are lit by the sky
             int c = court_cell(cx, cz);
-            if (c == 0 || c == 4) return LightState::None;
+            if (c == 0) { // lamp posts round the atrium's square and paths
+                int u = cx + HOTEL_HALF - 5, v = cz + HOTEL_HALF - 5;
+                bool post = ((u == 4 || u == 9) && (v == 4 || v == 9)) || ((u == 0 || u == 13) && (v == 3 || v == 10)) || ((v == 0 || v == 13) && (u == 3 || u == 10));
+                return post ? (r < 0.15f ? LightState::Flicker : LightState::On) : LightState::None;
+            }
+            if (c == 4) return LightState::None;
             Room room;
             if (court_room(cx, cz, room)) {
                 RoomFrame f(room);
@@ -816,6 +879,9 @@ LightState World::light(int cx, int cz) const {
         }
         case LevelId::Hub:
             return ((cx & 1) == 0 && (cz & 1) == 0) ? LightState::On : LightState::None;
+        case LevelId::TheEnd: // square panels in a grid, nearly all of them on
+            if ((cx & 1) || (cz & 1)) return LightState::None;
+            return r < 0.04f ? LightState::Dead : (r < 0.08f ? LightState::Flicker : LightState::On);
         case LevelId::L5: case LevelId::TSG1: case LevelId::L13: {
             int mx = pmod(cx, HOTEL_GRID), mz = pmod(cz, HOTEL_GRID);
             bool corridor = mx == 0 || mz == 0;
@@ -906,11 +972,14 @@ int World::floor_mat(int cx, int cz) const {
             if (!town(cx, cz)) return 0;
             return (pmod(cx, TOWN_GRID) < 2 || pmod(cz, TOWN_GRID) < 2) ? 1 : 0;
         }
-        case LevelId::L188: { // stone courtyards with a patch of boards in the middle; carpet indoors
+        case LevelId::L188: { // the atrium: four lawns cut by diagonal paths, a paved square in the middle; carpet indoors
             int c = court_cell(cx, cz);
             if (c != 0) return 2;
-            int mx = pmod(cx + COURT_OFF, COURT_GRID), mz = pmod(cz + COURT_OFF, COURT_GRID);
-            return (mx >= 8 && mx <= 10 && mz >= 8 && mz <= 10) ? 1 : 0;
+            int u = cx + HOTEL_HALF - 5, v = cz + HOTEL_HALF - 5; // 0..13
+            if (u <= 0 || u >= 13 || v <= 0 || v >= 13) return 0;  // the path round the edge
+            if (std::abs(u - v) <= 0 || std::abs(u + v - 13) <= 0) return 0; // the diagonals
+            if (u >= 5 && u <= 8 && v >= 5 && v <= 8) return 0;     // the square
+            return 1;
         }
         case LevelId::TSG0: case LevelId::TSG2: {
             if (cx >= -1 && cx <= 1 && cz >= -1 && cz <= 1) return 2; // the shack's boards
@@ -938,6 +1007,7 @@ int World::floor_mat(int cx, int cz) const {
             return (mx < 2 || mz < 2) ? 1 : 2;
         }
         case LevelId::L37: return pool(cx, cz) ? 1 : 0; // the pools' tiles
+        case LevelId::TheEnd: return fbm2(seed_, cx / 6.0f, cz / 6.0f, S_NOISE + 80) > 0.66f ? 1 : 0; // patches of patterned blue carpet
         default: return 0;
     }
 }
@@ -1082,27 +1152,51 @@ float World::hill_h(float x, float z) const {
 float World::pool_depth(float x, float z) const {
     if (id_ != LevelId::L37) return 0;
     float gx = x / CELL, gz = z / CELL;
-    if (std::fabs(gx - 0.5f) < 3.5f && std::fabs(gz - 0.5f) < 3.5f) return 0; // the spawn room
-    float n = fbm2(seed_, gx / 4.0f, gz / 4.0f, S_NOISE + 30);
-    float d = clampf((n - 0.58f) / 0.10f, 0, 1);
-    if (d <= 0) return 0;
-    // keep clear of the partition walls on every 4th line
+    // 1.3: most halls are flooded a hand's depth, with a dry tiled ledge along every wall line and
+    // the deep pools sunk into the flood
     auto line_dist = [](float g) { float m = g - std::floor(g / 4.0f) * 4.0f; return std::min(m, 4.0f - m); };
     float wl = std::min(line_dist(gx), line_dist(gz));
-    d *= smooth(clampf((wl - 0.35f) / 0.6f, 0, 1));
-    return smooth(d) * 2.1f;
+    float wet = smooth(clampf((fbm2(seed_, gx / 9.0f, gz / 9.0f, S_NOISE + 31) - 0.36f) / 0.12f, 0, 1));
+    float ledge = smooth(clampf((wl - 0.32f) / 0.22f, 0, 1));
+    float flood = 0.34f * wet * ledge;
+    float n = fbm2(seed_, gx / 4.0f, gz / 4.0f, S_NOISE + 30);
+    float d = clampf((n - 0.58f) / 0.10f, 0, 1) * smooth(clampf((wl - 0.35f) / 0.6f, 0, 1));
+    float spawn = smooth(clampf((std::max(std::fabs(gx - 0.5f), std::fabs(gz - 0.5f)) - 2.6f) / 1.2f, 0, 1)); // the spawn room is dry
+    return (flood + smooth(d) * 1.85f) * spawn;
+}
+
+// The moon: soft rolling regolith pocked with craters (bowls with a raised rim), flat where you land.
+float World::moon_h(float x, float z) const {
+    const float RG = 8 * CELL; // one crater chance per 8x8 cells
+    float h = (fbm2(seed_, x / (12 * CELL), z / (12 * CELL), S_NOISE + 90) - 0.5f) * 2.4f;
+    int rx = floor_to_int(x / RG), rz = floor_to_int(z / RG);
+    for (int b = -1; b <= 1; b++)
+        for (int a = -1; a <= 1; a++) {
+            int qx = rx + a, qz = rz + b;
+            if (hash01(seed_, qx, qz, S_NOISE + 91) > 0.6f) continue;
+            float ccx = (qx + 0.2f + 0.6f * hash01(seed_, qx, qz, S_NOISE + 92)) * RG, ccz = (qz + 0.2f + 0.6f * hash01(seed_, qx, qz, S_NOISE + 93)) * RG;
+            float R = (0.18f + 0.3f * hash01(seed_, qx, qz, S_NOISE + 94)) * RG, D = R * 0.28f;
+            float d = std::sqrt((x - ccx) * (x - ccx) + (z - ccz) * (z - ccz)) / R;
+            if (d > 2.0f) continue;
+            float bowl = d < 1.0f ? -D * (1.0f - d * d) : 0.0f;
+            float rim = D * 0.4f * std::exp(-((d - 1.0f) / 0.22f) * ((d - 1.0f) / 0.22f));
+            h += bowl + rim;
+        }
+    float spawn = smooth(clampf((std::sqrt(x * x + z * z) - 6.0f) / 10.0f, 0, 1));
+    return h * spawn;
 }
 
 float World::floor_y(float x, float z) const {
     switch (id_) {
         case LevelId::L37: return -pool_depth(x, z);
         case LevelId::L94: return hill_h(x, z);
+        case LevelId::L24: return moon_h(x, z);
         default: return 0;
     }
 }
 
 float World::water_y(float x, float z) const {
-    if (id_ == LevelId::L37 && pool_depth(x, z) > 0.0f) return -0.14f;
+    if (id_ == LevelId::L37 && pool_depth(x, z) > 0.07f) return -0.06f;
     return -1e9f;
 }
 
@@ -1110,7 +1204,7 @@ bool World::pool(int cx, int cz) const {
     if (id_ != LevelId::L37) return false;
     for (int k = 0; k < 5; k++) { // the middle and the four corners
         float fx = k == 0 ? 0.5f : (k & 1 ? 0.02f : 0.98f), fz = k == 0 ? 0.5f : (k & 2 ? 0.02f : 0.98f);
-        if (pool_depth((cx + fx) * CELL, (cz + fz) * CELL) > 0.0f) return true;
+        if (pool_depth((cx + fx) * CELL, (cz + fz) * CELL) > 0.07f) return true;
     }
     return false;
 }
@@ -1191,44 +1285,53 @@ bool World::house(int cx, int cz) const {
 // Level 188: around every courtyard a ring of hotel: a corridor down the middle of a five-cell
 // band, two-cell rooms on both sides of it with their windows on the courtyards, a passage
 // through to the courtyard halfway along, stairwell cores where the bands cross.
+// 1.3: Level 188 is one hotel now, not an endless grid of them: a great atrium (a lawn, paths,
+// a fountain, a glass roof 24 m up, windows on every side) ringed by five cells of hotel - rooms
+// facing the atrium, a corridor, rooms facing outward - and nothing beyond its outer walls.
 int World::court_cell(int cx, int cz) const {
     if (id_ != LevelId::L188) return 0;
-    int ux = pmod(cx + COURT_OFF, COURT_GRID), uz = pmod(cz + COURT_OFF, COURT_GRID);
-    bool bx = ux <= 4, bz = uz <= 4;
+    int lx = cx + HOTEL_HALF, lz = cz + HOTEL_HALF;
+    if (lx < 0 || lx > 23 || lz < 0 || lz > 23) return 4; // outside the hotel: solid
+    bool bx = lx <= 4 || lx >= 19, bz = lz <= 4 || lz >= 19;
     if (!bx && !bz) return 0;
-    if (bx && bz) return (ux == 2 || uz == 2) ? 1 : 4;
-    int a = bx ? ux : uz, b = bx ? uz : ux;
+    int ax = lx <= 4 ? lx : 23 - lx, az = lz <= 4 ? lz : 23 - lz;
+    if (bx && bz) return (ax == 2 || az == 2) ? 1 : 4; // the corners: the corridors meet, stairwells fill the rest
+    int a = bx ? ax : az, b = bx ? lz : lx;
     if (a == 2) return 1;
-    int band = bx ? floor_div(cx + COURT_OFF, COURT_GRID) : floor_div(cz + COURT_OFF, COURT_GRID);
-    int blk = bx ? floor_div(cz + COURT_OFF, COURT_GRID) : floor_div(cx + COURT_OFF, COURT_GRID);
-    int side = a < 2 ? 0 : 1;
-    uint32_t salt = bx ? 0u : 500u;
-    if (b == 9) return hash01(seed_, band * 2 + side, blk, S_DOOR + salt) < 0.75f ? 3 : 4; // the way through (most of them)
-    int room = b < 9 ? (b - 5) / 2 : 2 + (b - 10) / 2;
-    if (hash01(seed_, band * 2 + side, blk * 4 + room, S_ROOM + 20 + salt) < 0.18f) return 4; // a locked room
+    if (a >= 3 && (b == 8 || b == 15)) return 3;      // the ways through to the atrium
+    if (b == 7 || b == 18) return 4;                  // linen cupboards (locked)
+    int side = bx ? (lx <= 4 ? 0 : 1) : (lz <= 4 ? 2 : 3);
+    int pair = b < 7 ? 0 : (b < 11 ? 1 : (b < 13 ? 2 : (b < 15 ? 3 : 4)));
+    if (hash01(seed_, side * 8 + (a >= 3 ? 4 : 0) + pair, 188, S_ROOM + 20) < 0.15f) return 4; // a locked room
     return 2;
 }
 
 bool World::court_room(int cx, int cz, Room& r) const {
     if (court_cell(cx, cz) != 2) return false;
-    int ux = pmod(cx + COURT_OFF, COURT_GRID), uz = pmod(cz + COURT_OFF, COURT_GRID);
-    bool bx = ux <= 4;
-    int a = bx ? ux : uz, b = bx ? uz : ux;
+    int lx = cx + HOTEL_HALF, lz = cz + HOTEL_HALF;
+    bool bx = lx <= 4 || lx >= 19;
+    bool low = bx ? lx <= 4 : lz <= 4;                // the west / north band
+    int a = bx ? (low ? lx : 23 - lx) : (low ? lz : 23 - lz);
+    int b = bx ? lz : lx;
     int a0 = a < 2 ? 0 : 3;
-    int b0 = b < 7 ? 5 : (b < 9 ? 7 : (b < 12 ? 10 : 12));
-    int c0x = bx ? cx - (a - a0) : cx - (b - b0);
-    int c0z = bx ? cz - (b - b0) : cz - (a - a0);
+    int b0 = b < 7 ? 5 : (b < 11 ? 9 : (b < 13 ? 11 : (b < 15 ? 13 : 16)));
+    // the two local band rows a0, a0+1 as cells; the room spans b0, b0+1 along the band
+    int ra = low ? a0 : 23 - (a0 + 1);                // the lower of the two cells across the band
+    int c0x = bx ? ra - HOTEL_HALF : b0 - HOTEL_HALF;
+    int c0z = bx ? b0 - HOTEL_HALF : ra - HOTEL_HALF;
     r.bx = c0x; r.bz = c0z; r.qx = 0; r.qz = 0;
     r.x0 = c0x * CELL; r.x1 = r.x0 + 2 * CELL;
     r.z0 = c0z * CELL; r.z1 = r.z0 + 2 * CELL;
     int idx = (int)(hash3(seed_, c0x, c0z, S_ROOM + 21) & 1u);
-    if (bx) { // the corridor runs along z: the door is on the corridor side (east for the low rooms)
-        r.door_side = a0 == 0 ? 1 : 0;
-        r.dcx = a0 == 0 ? c0x + 1 : c0x;
+    // the door faces the corridor (band row 2)
+    bool corridor_up = low ? (a0 == 0) : (a0 == 3);   // is the corridor on the + side of the room?
+    if (bx) {
+        r.door_side = corridor_up ? 1 : 0;
+        r.dcx = corridor_up ? c0x + 1 : c0x;
         r.dcz = c0z + idx;
     } else {
-        r.door_side = a0 == 0 ? 3 : 2;
-        r.dcz = a0 == 0 ? c0z + 1 : c0z;
+        r.door_side = corridor_up ? 3 : 2;
+        r.dcz = corridor_up ? c0z + 1 : c0z;
         r.dcx = c0x + idx;
     }
     return true;
@@ -1242,59 +1345,84 @@ bool World::window_edge(int line, int along, bool vertical) const {
     return (ca == 2 && cb == 0) || (ca == 0 && cb == 2);
 }
 
-// Level 11 / 4Four: some of the buildings (one per 3x3 quarter of a block) are open: a shop,
-// a flat, an office or a diner on the ground floor, its door on one of the streets.
-bool World::city_room(int cx, int cz, int& qx, int& qz, int& kind, int& door_side) const {
+// Buildings you can walk into. Level 11 / 4Four: one per 3x3 quarter of a block (a shop, a flat,
+// an office, a diner). Froidetown: some of the downtown towers, a 6x6 lobby with two flats behind
+// it. Each has a real front door on a street and rooms inside, with doorways between them.
+bool World::building(int cx, int cz, Bldg& b) const {
     if (!city()) return false;
     int mx = pmod(cx, CITY_GRID), mz = pmod(cz, CITY_GRID);
     if (mx < 3 || mx > 8 || mz < 3 || mz > 8) return false;
-    if (id_ == LevelId::L11 && hash01(seed_, floor_div(cx, CITY_GRID), floor_div(cz, CITY_GRID), S_LOT) < 0.10f) return false; // a park
-    if (id_ == LevelId::TSG4) {
-        if (!city4_building(cx, cz)) return false;
-        float lift, tilt;
-        if (glitch(cx, cz, lift, tilt)) return false; // (nobody goes into the floating ones)
+    if (id_ == LevelId::L70) { // Froidetown's towers (FROST_GRID is the same 10)
+        int bx = floor_div(cx, FROST_GRID), bz = floor_div(cz, FROST_GRID);
+        if ((bx == 0 && bz == 0) || hash01(seed_, bx, bz, S_LOT) >= 0.42f) return false; // not a tower block
+        if (ice(cx, cz) || hash01(seed_, bx, bz, S_LOT + 22) >= 0.55f) return false;
+        b.x0 = bx * FROST_GRID + 3; b.z0 = bz * FROST_GRID + 3; b.w = b.d = 6;
+        b.kind = 4;
+        b.door_side = (int)(hash3(seed_, bx, bz, S_LOT + 23) % 4u);
+    } else {
+        if (id_ == LevelId::L11 && hash01(seed_, floor_div(cx, CITY_GRID), floor_div(cz, CITY_GRID), S_LOT) < 0.10f) return false; // a park
+        if (id_ == LevelId::TSG4) {
+            if (!city4_building(cx, cz)) return false;
+            float lift, tilt;
+            if (glitch(cx, cz, lift, tilt)) return false; // (nobody goes into the floating ones)
+        }
+        int kq = city_quarter(cx), lq = city_quarter(cz);
+        if (hash01(seed_, kq, lq, S_LOT + 20) >= (id_ == LevelId::L11 ? 0.55f : 0.4f)) return false;
+        b.x0 = floor_div(cx, CITY_GRID) * CITY_GRID + 3 + (mx >= 6 ? 3 : 0);
+        b.z0 = floor_div(cz, CITY_GRID) * CITY_GRID + 3 + (mz >= 6 ? 3 : 0);
+        b.w = b.d = 3;
+        int qlx = (mx - 3) / 3, qlz = (mz - 3) / 3;
+        uint32_t h = hash3(seed_, kq, lq, S_LOT + 21);
+        b.door_side = (h & 1) ? (qlx == 0 ? 0 : 1) : (qlz == 0 ? 2 : 3); // always onto a street
+        b.kind = (int)((h >> 1) % 4u);
     }
-    // (qx, qz come back as the room's corner cell)
-    int kq = city_quarter(cx), lq = city_quarter(cz);
-    if (hash01(seed_, kq, lq, S_LOT + 20) >= (id_ == LevelId::L11 ? 0.5f : 0.4f)) return false;
-    qx = floor_div(cx, CITY_GRID) * CITY_GRID + 3 + (mx >= 6 ? 3 : 0);
-    qz = floor_div(cz, CITY_GRID) * CITY_GRID + 3 + (mz >= 6 ? 3 : 0);
-    int qlx = (mx - 3) / 3, qlz = (mz - 3) / 3;
-    uint32_t h = hash3(seed_, kq, lq, S_LOT + 21);
-    door_side = (h & 1) ? (qlx == 0 ? 0 : 1) : (qlz == 0 ? 2 : 3);
-    kind = (int)((h >> 1) % 4u);
+    int mid = b.w / 2 - (b.w == 6 ? 1 : 0) + (int)(hash3(seed_, b.x0, b.z0, S_LOT + 24) % (b.w == 6 ? 3u : 1u));
+    switch (b.door_side) {
+        case 0: b.dcx = b.x0; b.dcz = b.z0 + mid; break;
+        case 1: b.dcx = b.x0 + b.w - 1; b.dcz = b.z0 + mid; break;
+        case 2: b.dcx = b.x0 + mid; b.dcz = b.z0; break;
+        default: b.dcx = b.x0 + mid; b.dcz = b.z0 + b.d - 1; break;
+    }
     return true;
 }
+
+bool World::city_room(int cx, int cz, int& qx, int& qz, int& kind, int& door_side) const {
+    Bldg b;
+    if (!building(cx, cz, b)) return false;
+    qx = b.x0; qz = b.z0; kind = b.kind; door_side = b.door_side;
+    return true;
+}
+
 
 bool World::city_wall(int line, int along, bool vertical) const {
     int ax = vertical ? line - 1 : along, az = vertical ? along : line - 1;
     int bx = vertical ? line : along, bz = vertical ? along : line;
-    int qa[2], qb[2], ka, kb, da, db;
-    bool ina = city_room(ax, az, qa[0], qa[1], ka, da), inb = city_room(bx, bz, qb[0], qb[1], kb, db);
+    Bldg ba, bb;
+    bool ina = building(ax, az, ba), inb = building(bx, bz, bb);
     if (!ina && !inb) return false;
-    if (ina && inb && qa[0] == qb[0] && qa[1] == qb[1]) return false;
-    // the front door: the middle cell of the door side
-    for (int k = 0; k < 2; k++) {
-        bool in = k == 0 ? ina : inb;
-        if (!in) continue;
-        const int* q = k == 0 ? qa : qb;
-        int ds = k == 0 ? da : db;
-        int c0x = q[0], c0z = q[1];
-        int dcx = ds == 0 ? c0x : ds == 1 ? c0x + 2 : c0x + 1;
-        int dcz = ds == 2 ? c0z : ds == 3 ? c0z + 2 : c0z + 1;
-        if (vertical && ds == 0 && line == dcx && along == dcz) return false;
-        if (vertical && ds == 1 && line == dcx + 1 && along == dcz) return false;
-        if (!vertical && ds == 2 && line == dcz && along == dcx) return false;
-        if (!vertical && ds == 3 && line == dcz + 1 && along == dcx) return false;
+    if (ina && inb && ba.x0 == bb.x0 && ba.z0 == bb.z0) { // inside one building
+        int ua, va, ub, vb;
+        bldg_local(ba, ax, az, ua, va);
+        bldg_local(ba, bx, bz, ub, vb);
+        return bldg_partition(ba, ua, va, ub, vb) == 1;
+    }
+    for (int k = 0; k < 2; k++) { // the front door: a gap (its frame and door are furniture)
+        if (!(k == 0 ? ina : inb)) continue;
+        const Bldg& b = k == 0 ? ba : bb;
+        if (vertical && b.door_side == 0 && line == b.dcx && along == b.dcz) return false;
+        if (vertical && b.door_side == 1 && line == b.dcx + 1 && along == b.dcz) return false;
+        if (!vertical && b.door_side == 2 && line == b.dcz && along == b.dcx) return false;
+        if (!vertical && b.door_side == 3 && line == b.dcz + 1 && along == b.dcx) return false;
     }
     return true;
 }
 
 bool World::indoors(int cx, int cz) const {
     switch (id_) {
-        case LevelId::L9: case LevelId::L70: case LevelId::L94: return house(cx, cz);
+        case LevelId::L9: case LevelId::L94: return house(cx, cz);
+        case LevelId::L70: { Bldg b; return house(cx, cz) || building(cx, cz, b); }
         case LevelId::L188: { int c = court_cell(cx, cz); return c == 1 || c == 2 || c == 3; }
-        case LevelId::L11: case LevelId::TSG4: { int a, b, k, d; return city_room(cx, cz, a, b, k, d); }
+        case LevelId::L11: case LevelId::TSG4: { Bldg b; return building(cx, cz, b); }
         case LevelId::L33: { // inside a shop: a normal ceiling, not the gallery's glass roof
             int mx = pmod(cx, MALL_GRID), mz = pmod(cz, MALL_GRID);
             return mx >= 3 && mz >= 3;
@@ -1305,7 +1433,8 @@ bool World::indoors(int cx, int cz) const {
 
 float World::indoor_h(int cx, int cz) const {
     switch (id_) {
-        case LevelId::L9: case LevelId::L70: case LevelId::L94: return house_h();
+        case LevelId::L9: case LevelId::L94: return house_h();
+        case LevelId::L70: return house(cx, cz) ? house_h() : 3.2f;
         case LevelId::L188: return 3.4f;
         case LevelId::L33: return 3.8f;
         default: (void)cx; (void)cz; return 3.2f;
@@ -1329,7 +1458,7 @@ bool World::has_outposts() const {
     switch (id_) {
         case LevelId::L0: case LevelId::L1: case LevelId::L2: case LevelId::L3: case LevelId::L4: case LevelId::L9: case LevelId::L11:
         case LevelId::L13: case LevelId::L21: case LevelId::L22: case LevelId::L33: case LevelId::L36: case LevelId::L51: case LevelId::L70:
-        case LevelId::L188: case LevelId::Hub: return true;
+        case LevelId::L188: case LevelId::Hub: case LevelId::L24: return true;
         default: return false;
     }
 }
@@ -1428,80 +1557,188 @@ bool World::hotel_wall(int line, int along, bool vertical) const {
     return true;
 }
 
+// Doors are part of the furniture, swung open or shut according to the game's state.
 int World::furniture(int cx, int cz, Furn* out, bool* owner) const {
+    int n = furniture_raw(cx, cz, out, owner);
+    for (int k = 0; k < n; k++) {
+        Furn& d = out[k];
+        if (d.kind != FurnKind::DoorLeaf || d.width <= 0) continue;
+        Vec2 dir = door_open(door_id(d)) ? d.open_dir : d.shut_dir;
+        Vec2 tip = d.hinge + dir * d.width, side{-dir.z * 0.025f, dir.x * 0.025f};
+        d.x0 = std::min(d.hinge.x, tip.x) - std::fabs(side.x) - 0.005f; d.x1 = std::max(d.hinge.x, tip.x) + std::fabs(side.x) + 0.005f;
+        d.z0 = std::min(d.hinge.z, tip.z) - std::fabs(side.z) - 0.005f; d.z1 = std::max(d.hinge.z, tip.z) + std::fabs(side.z) + 0.005f;
+    }
+    return n;
+}
+
+uint32_t World::door_id(const Furn& f) {
+    return mix32((uint32_t)(int)std::lround(f.hinge.x * 20.0f) * 0x9e3779b1u ^ (uint32_t)(int)std::lround(f.hinge.z * 20.0f) * 0x85ebca77u) | 1u;
+}
+bool World::door_default_open(uint32_t id) const { return hash01(seed_, (int)(id & 0xffff), (int)(id >> 16), S_DOOR + 77) < 0.28f; }
+bool World::door_jammed(uint32_t id) const {
+    return !door_default_open(id) && hash01(seed_, (int)(id & 0xffff), (int)(id >> 16), S_DOOR + 78) < 0.12f;
+}
+
+bool World::searchable(FurnKind k) {
+    switch (k) {
+        case FurnKind::Cabinet: case FurnKind::Dresser: case FurnKind::Nightstand: case FurnKind::Wardrobe: case FurnKind::Locker:
+        case FurnKind::Crate: case FurnKind::Fridge: case FurnKind::Desk: case FurnKind::Boxes: case FurnKind::Reception: return true;
+        default: return false;
+    }
+}
+uint32_t World::furn_id(const Furn& f) {
+    return mix32((uint32_t)(int)std::lround((f.x0 + f.x1) * 10.0f) * 0x27d4eb2fu ^ (uint32_t)(int)std::lround((f.z0 + f.z1) * 10.0f) * 0x165667b1u ^ (uint32_t)f.kind) | 1u;
+}
+// What you find when you go through a drawer, a cabinet, a locker or a crate (pure, like items).
+ItemType World::container_item(const Furn& f) const {
+    uint32_t id = furn_id(f);
+    float r = hash01(seed_, (int)(id & 0xffff), (int)(id >> 16), S_ITEM + 40);
+    float chance = (f.kind == FurnKind::Crate || f.kind == FurnKind::Locker) ? 0.5f : (f.kind == FurnKind::Boxes ? 0.3f : 0.36f);
+    if (r >= chance * diff().items) return ItemType::None;
+    float t = hash01(seed_, (int)(id & 0xffff), (int)(id >> 16), S_ITEM + 41);
+    switch (f.kind) {
+        case FurnKind::Fridge: return t < 0.45f ? ItemType::AlmondWater : (t < 0.7f ? ItemType::EnergyDrink : (t < 0.85f ? ItemType::RoyalRation : ItemType::LuckyMilk));
+        case FurnKind::Locker: case FurnKind::Crate:
+            return t < 0.2f ? ItemType::Batteries : t < 0.35f ? ItemType::Shells : t < 0.45f ? ItemType::Crowbar : t < 0.6f ? ItemType::MedKit :
+                   t < 0.7f ? ItemType::FlashBulb : t < 0.8f ? ItemType::GlowStick : t < 0.9f ? ItemType::Firesalt : (t < 0.93f ? ItemType::Shotgun : ItemType::Flashlight);
+        case FurnKind::Nightstand: case FurnKind::Dresser: case FurnKind::Wardrobe:
+            return t < 0.25f ? ItemType::Painkillers : t < 0.45f ? ItemType::AlmondWater : t < 0.6f ? ItemType::Batteries : t < 0.7f ? ItemType::RabbitFoot :
+                   t < 0.85f ? ItemType::MothJelly : ItemType::Chalk;
+        default: // desks, cabinets, reception, boxes
+            return t < 0.25f ? ItemType::Batteries : t < 0.4f ? ItemType::Chalk : t < 0.55f ? ItemType::AlmondWater : t < 0.7f ? ItemType::Painkillers :
+                   t < 0.8f ? ItemType::Compass : t < 0.9f ? ItemType::Radio : ItemType::EnergyDrink;
+    }
+}
+
+int World::furniture_raw(int cx, int cz, Furn* out, bool* owner) const {
     Room room;
-    int cqx, cqz, ckind, cds;
-    if (city_room(cx, cz, cqx, cqz, ckind, cds)) { // a shop, a flat, an office or a diner: 3x3 cells
+    Bldg bd;
+    if (building(cx, cz, bd)) { // a building: the front door, the doorways inside, every room furnished
         Room r;
-        int c0x = cqx, c0z = cqz;
-        r.bx = cqx; r.bz = cqz; r.qx = r.qz = 0;
-        r.x0 = c0x * CELL; r.x1 = r.x0 + 3 * CELL; r.z0 = c0z * CELL; r.z1 = r.z0 + 3 * CELL;
-        r.door_side = cds;
-        r.dcx = cds == 0 ? c0x : cds == 1 ? c0x + 2 : c0x + 1;
-        r.dcz = cds == 2 ? c0z : cds == 3 ? c0z + 2 : c0z + 1;
+        const int S = bd.w;
+        const float R = S * CELL, H = indoor_h(cx, cz), hw = WALL_T * 0.5f;
+        r.bx = bd.x0; r.bz = bd.z0; r.qx = r.qz = 0;
+        r.x0 = bd.x0 * CELL; r.x1 = r.x0 + R; r.z0 = bd.z0 * CELL; r.z1 = r.z0 + R;
+        r.door_side = bd.door_side; r.dcx = bd.dcx; r.dcz = bd.dcz;
         RoomFrame f(r);
-        if (owner) *owner = cx == c0x && cz == c0z;
+        if (owner) *owner = cx == bd.x0 && cz == bd.z0;
         int n = 0;
         auto add = [&](FurnKind k, float u0, float v0, float u1, float v1, float y0, float y1, bool solid_, float fu = 0, float fv = 1) {
             if (n >= MAX_FURN) return;
             Vec2 a = f.to_world(u0, v0), b = f.to_world(u1, v1);
             Furn& p = out[n++];
+            p = Furn{};
             p.kind = k;
             p.x0 = std::min(a.x, b.x); p.x1 = std::max(a.x, b.x);
             p.z0 = std::min(a.z, b.z); p.z1 = std::max(a.z, b.z);
             p.y0 = y0; p.y1 = y1; p.solid = solid_;
             p.face = f.dir(fu, fv);
         };
-        const float hw = WALL_T * 0.5f;
-        switch (ckind) {
-            case 0: // a corner shop: rows of shelves, a counter by the door, drinks fridges at the back
-                for (int row = 0; row < 2; row++)
-                    for (int seg = 0; seg < 2; seg++) {
-                        float u = row ? 5.0f : 2.0f, v0 = 1.3f + seg * 2.1f;
-                        add(FurnKind::Rack, u, v0, u + 0.5f, v0 + 1.9f, 0, 1.75f, true, 1, 0);
-                    }
-                add(FurnKind::Counter, 5.9f, 5.6f, 7.2f, 6.2f, 0, 1.0f, true, 0, 1);
-                add(FurnKind::Fridge, 0.25f, hw + 0.03f, 0.95f, 0.75f, 0, 1.9f, true, 0, 1);
-                add(FurnKind::Fridge, 1.0f, hw + 0.03f, 1.7f, 0.75f, 0, 1.9f, true, 0, 1);
-                add(FurnKind::Boxes, 6.6f, 0.2f, 7.3f, 0.9f, 0, 0.9f, true);
-                add(FurnKind::Bin, 0.3f, 6.7f, 0.8f, 7.2f, 0, 0.8f, true);
+        // a doorway in a wall running along u at depth L, centred on U: two wall pieces, a lintel, a door
+        auto doorway = [&](float U, float L, bool front) {
+            FurnKind side = front ? FurnKind::DoorFrame : FurnKind::WallPiece;
+            add(side, U - CELL * 0.5f, L - hw, U - 0.55f, L + hw, 0, front ? 2.45f : H, true);
+            add(side, U + 0.55f, L - hw, U + CELL * 0.5f, L + hw, 0, front ? 2.45f : H, true);
+            add(FurnKind::Lintel, U - 0.55f, L - hw, U + 0.55f, L + hw, 2.2f, front ? 2.45f : H, false);
+            if (n >= MAX_FURN) return;
+            Furn& d = out[n++];
+            d = Furn{};
+            d.kind = FurnKind::DoorLeaf;
+            d.hinge = f.to_world(U - 0.55f, L);
+            d.shut_dir = f.dir(1, 0);
+            d.open_dir = f.dir(0, -1);
+            d.width = 1.1f;
+            d.y0 = 0; d.y1 = 2.15f;
+            d.solid = true;
+            d.face = f.dir(0, 1);
+        };
+        int du, dv;
+        bldg_local(bd, bd.dcx, bd.dcz, du, dv);
+        doorway((du + 0.5f) * CELL, R, true);
+        for (int u = 0; u < S; u++) // the doorways between the rooms
+            for (int v = 0; v + 1 < S; v++)
+                if (bldg_partition(bd, u, v, u, v + 1) == 2) doorway((u + 0.5f) * CELL, (v + 1) * CELL, false);
+        const float C = CELL;
+        switch (bd.kind) {
+            case 0: // a corner shop: shelves out front, the till by the door, fridges, a storeroom behind
+                add(FurnKind::Rack, 1.75f, C + 0.7f, 2.25f, C + 2.6f, 0, 1.75f, true, 1, 0);
+                add(FurnKind::Rack, 4.75f, C + 0.7f, 5.25f, C + 2.6f, 0, 1.75f, true, 1, 0);
+                add(FurnKind::Rack, 1.75f, C + 2.8f, 2.25f, C + 4.0f, 0, 1.75f, true, 1, 0);
+                add(FurnKind::Counter, 5.8f, R - 1.15f, 7.2f, R - 0.55f, 0, 1.0f, true, -1, 0);
+                add(FurnKind::Fridge, 0.2f, C + hw + 0.03f, 0.9f, C + 0.75f, 0, 1.9f, true, 0, 1);
+                add(FurnKind::Fridge, 0.95f, C + hw + 0.03f, 1.65f, C + 0.75f, 0, 1.9f, true, 0, 1);
+                add(FurnKind::Rack, 0.3f, hw + 0.03f, 2.0f, 0.5f, 0, 1.9f, true, 0, 1);
+                add(FurnKind::Boxes, 3.2f, 0.3f, 3.9f, 1.0f, 0, 0.9f, true);
+                add(FurnKind::Crate, 4.3f, 0.3f, 5.1f, 1.1f, 0, 0.8f, true);
                 break;
-            case 1: // a ground-floor flat
-                add(FurnKind::Couch, 1.6f, 0.12f, 3.6f, 0.95f, 0, 0.85f, true, 0, 1);
-                add(FurnKind::Tv, 2.1f, 3.0f, 3.1f, 3.35f, 0, 1.15f, true, 0, -1);
-                add(FurnKind::Table, 2.15f, 1.6f, 3.05f, 2.3f, 0, 0.45f, true);
-                add(FurnKind::Rug, 1.4f, 1.1f, 3.8f, 2.7f, 0, 0.012f, false);
-                add(FurnKind::Bed, 5.6f, 0.14f, 7.2f, 2.2f, 0, 0.55f, true, 0, 1);
-                add(FurnKind::Headboard, 5.55f, hw + 0.01f, 7.25f, 0.14f, 0, 1.15f, true, 0, 1);
-                add(FurnKind::Nightstand, 4.95f, hw + 0.02f, 5.45f, 0.5f, 0, 0.6f, true, 0, 1);
-                add(FurnKind::Lamp, 5.08f, 0.15f, 5.32f, 0.39f, 0.6f, 0.98f, false);
-                add(FurnKind::Table2, 0.5f, 4.6f, 2.0f, 5.5f, 0, 0.76f, true);
-                add(FurnKind::Chair, 0.95f, 4.0f, 1.43f, 4.48f, 0, 0.92f, true, 0, 1);
-                add(FurnKind::Chair, 0.95f, 5.62f, 1.43f, 6.1f, 0, 0.92f, true, 0, -1);
-                add(FurnKind::Fridge, hw + 0.05f, 6.6f, 0.75f, 7.3f, 0, 1.8f, true, 1, 0);
-                add(FurnKind::Bookcase, 7.5f - hw - 0.45f, 3.4f, 7.5f - hw - 0.02f, 4.8f, 0, 1.9f, true, -1, 0);
-                add(FurnKind::Painting, 2.15f, hw + 0.005f, 3.05f, hw + 0.03f, 1.35f, 1.95f, false, 0, 1);
+            case 1: // a flat: a bedroom and a bathroom at the back, the living room at the front
+                add(FurnKind::Bed, 0.6f, 0.14f, 2.2f, 2.2f, 0, 0.55f, true, 0, 1);
+                add(FurnKind::Headboard, 0.55f, hw + 0.01f, 2.25f, 0.14f, 0, 1.15f, true, 0, 1);
+                add(FurnKind::Nightstand, 2.35f, hw + 0.02f, 2.85f, 0.5f, 0, 0.6f, true, 0, 1);
+                add(FurnKind::Lamp, 2.48f, 0.15f, 2.72f, 0.39f, 0.6f, 0.98f, false);
+                add(FurnKind::Wardrobe, 3.9f, hw + 0.02f, 4.9f, 0.62f, 0, 2.0f, true, 0, 1);
+                add(FurnKind::Toilet, 6.7f, 0.2f, 7.2f, 0.85f, 0, 0.8f, true, 0, 1);
+                add(FurnKind::Bathtub, 5.15f, 1.05f, 7.3f, 2.25f, 0, 0.6f, true, 0, -1);
+                add(FurnKind::Sink, 5.2f, hw + 0.02f, 5.9f, 0.55f, 0, 0.9f, true, 0, 1);
+                add(FurnKind::Mirror, 5.25f, hw + 0.005f, 5.85f, hw + 0.03f, 1.2f, 1.9f, false, 0, 1);
+                add(FurnKind::Couch, 1.6f, C + hw + 0.1f, 3.6f, C + 0.95f, 0, 0.85f, true, 0, 1);
+                add(FurnKind::Table, 2.15f, C + 1.5f, 3.05f, C + 2.2f, 0, 0.45f, true);
+                add(FurnKind::Tv, 2.1f, C + 2.9f, 3.1f, C + 3.25f, 0, 1.15f, true, 0, -1);
+                add(FurnKind::Rug, 1.4f, C + 1.1f, 3.8f, C + 2.7f, 0, 0.012f, false);
+                add(FurnKind::Table2, 5.0f, C + 1.2f, 6.6f, C + 2.1f, 0, 0.76f, true);
+                add(FurnKind::Chair, 5.55f, C + 0.6f, 6.03f, C + 1.08f, 0, 0.92f, true, 0, 1);
+                add(FurnKind::Chair, 5.55f, C + 2.22f, 6.03f, C + 2.7f, 0, 0.92f, true, 0, -1);
+                add(FurnKind::Fridge, R - hw - 0.75f, R - 1.6f, R - hw - 0.05f, R - 0.9f, 0, 1.8f, true, -1, 0);
                 break;
-            case 2: // an office: four desks, filing cabinets along the back wall
+            case 2: // an office: the manager's room in the back corner, desks out front
+                add(FurnKind::Desk, 0.5f, 0.3f, 2.0f, 1.0f, 0, 0.76f, true, 0, 1);
+                add(FurnKind::Chair, 1.0f, 1.15f, 1.48f, 1.63f, 0, 0.92f, true, 0, -1);
+                add(FurnKind::Cabinet, hw + 0.02f, 1.7f, 0.62f, 2.2f, 0, 1.32f, true, 1, 0);
                 for (int k = 0; k < 4; k++) {
-                    float u = (k & 1) ? 4.9f : 1.2f, v = (k & 2) ? 3.7f : 1.2f;
+                    float u = (k & 1) ? 4.9f : 1.2f, v = C + ((k & 2) ? 2.6f : 0.6f);
                     add(FurnKind::Desk, u, v, u + 1.4f, v + 0.72f, 0, 0.76f, true, 0, 1);
                     add(FurnKind::Chair, u + 0.46f, v + 0.85f, u + 0.94f, v + 1.33f, 0, 0.92f, true, 0, -1);
                 }
-                for (int k = 0; k < 3; k++) add(FurnKind::Cabinet, 2.9f + k * 0.55f, hw + 0.02f, 3.4f + k * 0.55f, 0.64f, 0, 1.32f, true, 0, 1);
-                add(FurnKind::Plant, 6.7f, 6.6f, 7.25f, 7.15f, 0, 1.4f, true);
-                add(FurnKind::Bin, 0.3f, 6.7f, 0.8f, 7.2f, 0, 0.8f, true);
+                for (int k = 0; k < 3; k++) add(FurnKind::Cabinet, 3.2f + k * 0.55f, hw + 0.02f, 3.7f + k * 0.55f, 0.64f, 0, 1.32f, true, 0, 1);
+                add(FurnKind::Plant, R - 0.8f, R - 0.8f, R - 0.25f, R - 0.25f, 0, 1.4f, true);
                 break;
-            default: // a diner: the counter at the back, a few tables
-                add(FurnKind::Counter, 1.0f, 0.12f, 6.5f, 0.75f, 0, 1.05f, true, 0, 1);
+            case 3: // a diner: tables out front, the kitchen behind the pass
+                add(FurnKind::Stove, 0.3f, hw + 0.02f, 0.95f, 0.65f, 0, 0.92f, true, 0, 1);
+                add(FurnKind::Stove, 1.05f, hw + 0.02f, 1.7f, 0.65f, 0, 0.92f, true, 0, 1);
+                add(FurnKind::Sink, 4.0f, hw + 0.02f, 4.8f, 0.6f, 0, 0.92f, true, 0, 1);
+                add(FurnKind::Fridge, R - hw - 0.8f, 0.2f, R - hw - 0.05f, 0.9f, 0, 1.9f, true, -1, 0);
+                add(FurnKind::Counter, 1.8f, 1.5f, 4.4f, 2.1f, 0, 1.0f, true, 0, -1);
+                add(FurnKind::Counter, 0.4f, C + hw + 0.05f, 1.6f, C + 0.7f, 0, 1.05f, true, 0, 1);
+                add(FurnKind::Counter, 3.4f, C + hw + 0.05f, 7.1f, C + 0.7f, 0, 1.05f, true, 0, 1);
                 for (int k = 0; k < 3; k++) {
-                    float u = k == 0 ? 1.8f : (k == 1 ? 5.6f : 3.7f), v = k == 2 ? 5.0f : 3.0f;
+                    float u = k == 0 ? 1.8f : (k == 1 ? 5.6f : 3.7f), v = C + (k == 2 ? 3.6f : 2.1f);
                     add(FurnKind::RoundTable, u - 0.55f, v - 0.55f, u + 0.55f, v + 0.55f, 0, 0.75f, true);
                     add(FurnKind::Chair, u - 0.24f, v - 1.15f, u + 0.24f, v - 0.67f, 0, 0.92f, true, 0, 1);
                     add(FurnKind::Chair, u - 0.24f, v + 0.67f, u + 0.24f, v + 1.15f, 0, 0.92f, true, 0, -1);
                 }
-                add(FurnKind::Plant, 6.7f, 6.6f, 7.25f, 7.15f, 0, 1.4f, true);
                 break;
+            default: { // a tower lobby: reception, sofas, mailboxes, the lifts; two flats behind
+                const float L = 3 * C; // the lobby starts here
+                add(FurnKind::Reception, 5.5f, L + 2.2f, 9.5f, L + 3.0f, 0, 1.1f, true, 0, 1);
+                add(FurnKind::Sofa, 1.0f, L + 4.6f, 3.2f, L + 5.4f, 0, 0.8f, true, 1, 0);
+                add(FurnKind::Sofa, 11.8f, L + 4.6f, 14.0f, L + 5.4f, 0, 0.8f, true, -1, 0);
+                add(FurnKind::Table, 1.6f, L + 3.4f, 2.6f, L + 4.2f, 0, 0.45f, true);
+                add(FurnKind::Mailboxes, hw + 0.02f, L + 1.0f, 0.4f, L + 2.6f, 0.4f, 1.9f, true, 1, 0);
+                add(FurnKind::Elevator, R - hw - 0.06f, L + 1.0f, R - hw - 0.01f, L + 2.4f, 0, 2.3f, false, -1, 0);
+                add(FurnKind::Elevator, R - hw - 0.06f, L + 3.0f, R - hw - 0.01f, L + 4.4f, 0, 2.3f, false, -1, 0);
+                add(FurnKind::Plant, 4.2f, R - 0.9f, 4.8f, R - 0.3f, 0, 1.4f, true);
+                add(FurnKind::Plant, 10.2f, R - 0.9f, 10.8f, R - 0.3f, 0, 1.4f, true);
+                add(FurnKind::Rug, 5.0f, L + 3.4f, 10.0f, R - 1.2f, 0, 0.012f, false);
+                for (int a2 = 0; a2 < 2; a2++) { // the two flats
+                    float o = a2 * L;
+                    add(FurnKind::Bed, o + 0.6f, 0.14f, o + 2.2f, 2.2f, 0, 0.55f, true, 0, 1);
+                    add(FurnKind::Headboard, o + 0.55f, hw + 0.01f, o + 2.25f, 0.14f, 0, 1.15f, true, 0, 1);
+                    add(FurnKind::Couch, o + 4.3f, 3.6f, o + 6.3f, 4.4f, 0, 0.85f, true, 0, -1);
+                    add(FurnKind::Tv, o + 4.8f, hw + 0.02f, o + 5.8f, 0.4f, 0, 1.15f, true, 0, 1);
+                    add(FurnKind::Fridge, o + 0.3f, 5.5f, o + 1.0f, 6.2f, 0, 1.8f, true, 1, 0);
+                }
+                break;
+            }
         }
         return n;
     }
@@ -1518,6 +1755,7 @@ int World::furniture(int cx, int cz, Furn* out, bool* owner) const {
         if (court() && k == FurnKind::Painting) return; // (that wall is all windows)
         Vec2 a = f.to_world(u0, v0), b = f.to_world(u1, v1);
         Furn& p = out[n++];
+        p = Furn{};
         p.kind = k;
         p.x0 = std::min(a.x, b.x); p.x1 = std::max(a.x, b.x);
         p.z0 = std::min(a.z, b.z); p.z1 = std::max(a.z, b.z);
@@ -1532,6 +1770,12 @@ int World::furniture(int cx, int cz, Furn* out, bool* owner) const {
     add(FurnKind::WallPiece, ud + 0.55f, R - hw, ud + CELL * 0.5f, R + hw, 0, H, true);
     add(FurnKind::Lintel, ud - 0.55f, R - hw, ud + 0.55f, R + hw, 2.2f, H, false);
     add(FurnKind::DoorLeaf, ud - 0.55f, R - 1.0f, ud - 0.50f, R - hw, 0, 2.15f, true);
+    if (n > 0 && out[n - 1].kind == FurnKind::DoorLeaf) { // it swings on a hinge at the doorway's edge
+        out[n - 1].hinge = f.to_world(ud - 0.55f, R);
+        out[n - 1].shut_dir = f.dir(1, 0);
+        out[n - 1].open_dir = f.dir(0, -1);
+        out[n - 1].width = 1.1f;
+    }
     float bc = ud < CELL ? 3.6f : 1.4f;
     if (houses()) { // a home: a living room, a bedroom or a kitchen (Motion's are from the 1930s)
         const bool old = id_ == LevelId::L94;
@@ -1686,6 +1930,7 @@ int World::cell_props(int cx, int cz, Furn* out) const {
     auto put = [&](FurnKind k, float x0, float z0, float x1, float z1, float y0, float y1, bool solid_, Vec2 face) {
         if (n >= MAX_FURN) return;
         Furn& f = out[n++];
+        f = Furn{};
         f.kind = k; f.x0 = x0; f.z0 = z0; f.x1 = x1; f.z1 = z1; f.y0 = y0; f.y1 = y1; f.solid = solid_; f.face = face;
     };
     float x0 = cx * CELL, z0 = cz * CELL;
@@ -1745,6 +1990,10 @@ int World::cell_props(int cx, int cz, Furn* out) const {
                 put(FurnKind::Lintel, xm - 0.55f, zl - hw, xm + 0.55f, zl + hw, 2.0f, H, false, {0, in});
                 float d0 = north ? zl + hw : zl - 0.95f, d1 = north ? zl + 0.95f : zl - hw;
                 put(FurnKind::DoorLeaf, xm - 0.55f, d0, xm - 0.5f, d1, 0, 1.98f, true, {1, 0});
+                out[n - 1].hinge = {xm - 0.55f, zl};
+                out[n - 1].shut_dir = {1, 0};
+                out[n - 1].open_dir = {0, in};
+                out[n - 1].width = 1.1f;
                 return n;
             }
         }
@@ -1763,16 +2012,18 @@ int World::cell_props(int cx, int cz, Furn* out) const {
     }
     if (id_ == LevelId::L188) {
         int c = court_cell(cx, cz);
-        int mx = pmod(cx + COURT_OFF, COURT_GRID), mz = pmod(cz + COURT_OFF, COURT_GRID);
-        if (c == 0) {
-            if (mx == 9 && mz == 9) // a clock in the middle of the boards, just ticking
-                put(FurnKind::Clock, x0 + 0.85f, z0 + 0.85f, x0 + 1.65f, z0 + 1.45f, 0, 2.1f, true, {0, -1});
-            else if (mx == 6 && mz == 6) // a table in the corner, set for nobody
-                put(FurnKind::Table2, x0 + 0.4f, z0 + 0.4f, x0 + 2.0f, z0 + 1.3f, 0, 0.76f, true, {0, 1});
-            else if ((mx == 12 && mz == 7) || (mx == 7 && mz == 12))
+        if (c == 0) { // the atrium
+            int u = cx + HOTEL_HALF - 5, v = cz + HOTEL_HALF - 5;
+            if (u == 6 && v == 6) // the fountain in the square
+                put(FurnKind::Fountain, x0 + 0.3f, z0 + 0.3f, x0 + 2 * CELL - 0.3f, z0 + 2 * CELL - 0.3f, 0, 2.2f, true, {0, 1});
+            else if ((u == 3 || u == 10) && (v == 3 || v == 10)) // a tree in each lawn
+                put(FurnKind::Planter, x0 + 0.3f, z0 + 0.3f, x0 + 2.2f, z0 + 2.2f, 0, 0.6f, true, {0, 1});
+            else if ((u == 5 && (v == 2 || v == 11)) || (v == 5 && (u == 2 || u == 11)))
                 put(FurnKind::Bench, x0 + 0.4f, z0 + 1.0f, x0 + 2.1f, z0 + 1.5f, 0, 0.48f, true, {0, 1});
-            else if ((mx == 6 && mz == 12) || (mx == 12 && mz == 6))
-                put(FurnKind::Planter, x0 + 0.5f, z0 + 0.5f, x0 + 2.0f, z0 + 2.0f, 0, 0.6f, true, {0, 1});
+            else if ((u == 8 && (v == 2 || v == 11)) || (v == 8 && (u == 2 || u == 11)))
+                put(FurnKind::Bench, x0 + 1.0f, z0 + 0.4f, x0 + 1.5f, z0 + 2.1f, 0, 0.48f, true, {1, 0});
+            else if (u == 9 && v == 4) // a table, set for nobody
+                put(FurnKind::Table2, x0 + 0.4f, z0 + 0.4f, x0 + 2.0f, z0 + 1.3f, 0, 0.76f, true, {0, 1});
             return n;
         }
         if (c == 1 && hash01(seed_, cx, cz, S_PROP + 30) < 0.07f) { // a plant or a bin in the corridor, against the wall
@@ -1794,7 +2045,8 @@ int World::cell_props(int cx, int cz, Furn* out) const {
             float r = hash01(seed_, bx, bz, S_PROP + 40);
             bool food = hash01(seed_, bx, bz, S_PROP + 41) < 0.3f && !near_spawn(cx, cz, 2);
             if (mx == 1 && mz == 1 && !near_spawn(cx, cz, 2)) { // the crossing
-                if (r < 0.45f) put(FurnKind::Fountain, x0 + 0.05f, z0 + 0.05f, x0 + CELL - 0.05f, z0 + CELL - 0.05f, 0, 1.9f, true, {0, 1});
+                if (r < 0.3f) put(FurnKind::Fountain, x0 + 0.05f, z0 + 0.05f, x0 + CELL - 0.05f, z0 + CELL - 0.05f, 0, 1.9f, true, {0, 1});
+                else if (r < 0.55f) put(FurnKind::GlassLift, x0 + 0.2f, z0 + 0.2f, x0 + CELL - 0.2f, z0 + CELL - 0.2f, 0, 9.5f, true, {0, 1}); // the glass lift in the rotunda
                 else if (!food) put(FurnKind::Planter, x0 + 0.2f, z0 + 0.2f, x0 + CELL - 0.2f, z0 + CELL - 0.2f, 0, 0.7f, true, {0, 1});
                 return n;
             }
@@ -1834,12 +2086,18 @@ int World::cell_props(int cx, int cz, Furn* out) const {
         float dep = pool_depth(cxm, czm);
         float q = hash01(seed_, cx, cz, S_PROP + 50);
         if (near_spawn(cx, cz, 2)) return n;
+        if (pmod(cx, 4) == 2 && pmod(cz, 4) == 2 && pillar(cx, cz) && hash01(seed_, cx, cz, S_PROP + 51) < 0.3f) { // a spiral stair round the column
+            float gx = cx * CELL, gz = cz * CELL;
+            put(FurnKind::SpiralStair, gx - 1.75f, gz - 1.75f, gx + 1.75f, gz + 1.75f, 0, info().ceil_h, true, {0, 1});
+            return n;
+        }
         if (dep > 0.9f) { // out in the water
             if (q < 0.10f) put(FurnKind::Float, cxm - 0.5f, czm - 0.5f, cxm + 0.5f, czm + 0.5f, -0.18f, -0.02f, false, {0, 1});
             return n;
         }
-        if (pool(cx, cz)) { // the shallow edge: a ladder rail now and then
-            if (q < 0.10f && dep > 0.15f) put(FurnKind::Ladder, cxm - 0.3f, czm - 0.05f, cxm + 0.3f, czm + 0.05f, -dep, 1.0f, false, {0, 1});
+        if (pool(cx, cz)) { // wading: a ladder rail at a deep edge now and then, a ring drifting
+            if (q < 0.08f && dep > 0.6f) put(FurnKind::Ladder, cxm - 0.3f, czm - 0.05f, cxm + 0.3f, czm + 0.05f, -dep, 1.0f, false, {0, 1});
+            else if (q > 0.97f) put(FurnKind::Float, cxm - 0.5f, czm - 0.5f, cxm + 0.5f, czm + 0.5f, -0.1f, 0.02f, false, {0, 1});
             return n;
         }
         // on the deck: is there a pool next door?
@@ -1864,6 +2122,35 @@ int World::cell_props(int cx, int cz, Furn* out) const {
         }
         if (q > 0.93f) { put(FurnKind::Palm, cxm - 0.35f, czm - 0.35f, cxm + 0.35f, czm + 0.35f, 0, 2.6f, true, {0, 1}); return n; }
         if (q > 0.90f) { put(FurnKind::Bench, cxm - 0.85f, czm - 0.25f, cxm + 0.85f, czm + 0.25f, 0, 0.48f, true, {0, 1}); return n; }
+        return n;
+    }
+    if (id_ == LevelId::L24) { // the moon: rounded rocks, the odd lander left behind, an antenna, a flag
+        if (near_spawn(cx, cz, 2) || solid(cx, cz)) return n;
+        float q = hash01(seed_, cx, cz, S_PROP + 70);
+        float cxm = x0 + CELL * 0.5f + (hash01(seed_, cx, cz, S_PROP + 71) - 0.5f) * 1.0f, czm = z0 + CELL * 0.5f + (hash01(seed_, cx, cz, S_PROP + 72) - 0.5f) * 1.0f;
+        if (q < 0.0025f) { put(FurnKind::Lander, x0 + 0.1f, z0 + 0.1f, x0 + CELL - 0.1f, z0 + CELL - 0.1f, 0, 3.0f, true, {0, 1}); return n; }
+        if (q < 0.004f) { put(FurnKind::Antenna, cxm - 0.4f, czm - 0.4f, cxm + 0.4f, czm + 0.4f, 0, 3.5f, true, {0, 1}); return n; }
+        if (q < 0.005f) { put(FurnKind::Flag, cxm - 0.05f, czm - 0.05f, cxm + 0.05f, czm + 0.05f, 0, 2.2f, true, {1, 0}); return n; }
+        if (q < 0.12f) { // a rock, small to big (the big ones are in your way)
+            float r = 0.15f + std::pow(hash01(seed_, cx, cz, S_PROP + 73), 3.0f) * 1.1f;
+            put(FurnKind::Boulder, cxm - r, czm - r, cxm + r, czm + r, 0, r * 1.3f, r > 0.45f, {0, 1});
+        }
+        return n;
+    }
+    if (id_ == LevelId::TheEnd) { // THE END: tipped shelves, reading tables, carts of nothing
+        if (near_spawn(cx, cz, 1) || solid(cx, cz)) return n;
+        float q = hash01(seed_, cx, cz, S_PROP + 80);
+        float cxm = x0 + CELL * 0.5f, czm = z0 + CELL * 0.5f;
+        if (q < 0.035f) { // a free-standing shelf unit, turned at odd angles in the open floor
+            bool ax = hash3(seed_, cx, cz, S_PROP + 81) & 1;
+            if (ax) put(FurnKind::Bookshelf, cxm - 0.9f, czm - 0.3f, cxm + 0.9f, czm + 0.3f, 0, 1.6f, true, {0, 1});
+            else put(FurnKind::Bookshelf, cxm - 0.3f, czm - 0.9f, cxm + 0.3f, czm + 0.9f, 0, 1.6f, true, {1, 0});
+        } else if (q < 0.045f) {
+            put(FurnKind::Table, cxm - 0.65f, czm - 0.38f, cxm + 0.65f, czm + 0.38f, 0, 0.75f, true, {0, 1});
+            put(FurnKind::Chair, cxm - 0.24f, czm + 0.45f, cxm + 0.24f, czm + 0.93f, 0, 0.92f, true, {0, -1});
+        } else if (q < 0.052f) {
+            put(FurnKind::Boxes, cxm - 0.4f, czm - 0.4f, cxm + 0.4f, czm + 0.4f, 0, 0.8f, true, {0, 1});
+        }
         return n;
     }
     if (id_ == LevelId::LRun) { // junk in the way: desks, boxes, chairs, barrels pushed against the walls
@@ -1951,15 +2238,16 @@ int World::cell_props(int cx, int cz, Furn* out) const {
         case LevelId::LFun: USE(PARTY, 0.10f); break;
         case LevelId::TSGFar: case LevelId::TSGHope: USE(GREY, 0.04f); break;
         case LevelId::L70: {
-            static const Pick YARD[] = {{FurnKind::Snowman, 1}, {FurnKind::Bush, 1.5f}, {FurnKind::Tree, 1}, {FurnKind::Mailbox, 0.6f}};
+            static const Pick YARD[] = {{FurnKind::Snowman, 1}, {FurnKind::Pine, 1.5f}, {FurnKind::Mailbox, 0.6f}};
             if (fm == 1) USE(STREET, 0.06f); else if (fm == 0) USE(YARD, 0.10f);
             break;
         }
         case LevelId::L94: {
             static const Pick TOWNROAD[] = {{FurnKind::Car, 2}, {FurnKind::Siren, 1}, {FurnKind::Bin, 1}};
             static const Pick TOWNYARD[] = {{FurnKind::Bush, 2}, {FurnKind::Mailbox, 1}, {FurnKind::Tree, 1}};
-            static const Pick HILLS[] = {{FurnKind::Car, 0.4f}, {FurnKind::Bush, 1}, {FurnKind::Tree, 0.6f}};
-            if (!town(cx, cz)) USE(HILLS, 0.03f); else if (fm == 1) USE(TOWNROAD, 0.05f); else if (fm == 0) USE(TOWNYARD, 0.10f);
+            static const Pick HILLS[] = {{FurnKind::Cottage, 1.2f}, {FurnKind::Fence, 1.4f}, {FurnKind::PowerPole, 0.7f}, {FurnKind::Bush, 0.8f},
+                                         {FurnKind::Tree, 0.5f}, {FurnKind::WaterTower, 0.12f}};
+            if (!town(cx, cz)) USE(HILLS, 0.07f); else if (fm == 1) USE(TOWNROAD, 0.05f); else if (fm == 0) USE(TOWNYARD, 0.10f);
             break;
         }
         case LevelId::TSG0: { static const Pick JUNGLE[] = {{FurnKind::Bush, 4}, {FurnKind::Tree, 1}, {FurnKind::Rubble, 0.4f}}; USE(JUNGLE, 0.24f); break; }
@@ -2024,9 +2312,21 @@ int World::cell_props(int cx, int cz, Furn* out) const {
         case FurnKind::Siren: w = 0.3f; d = 0.3f; h = 3.4f; break;
         case FurnKind::Boat: w = 1.5f; d = 3.0f; h = 1.0f; break;
         case FurnKind::Clock: w = 0.8f; d = 0.7f; h = 1.2f; solid_ = false; break;  // floating in the sea
+        case FurnKind::Pine: w = 0.7f; d = 0.7f; h = 4.0f; break;
+        case FurnKind::Cottage: w = 2.2f; d = 2.2f; h = 3.6f; break;     // a little house up on a hill
+        case FurnKind::Fence: w = 2.4f; d = 0.12f; h = 0.95f; break;     // a run of white picket fence
+        case FurnKind::PowerPole: w = 0.3f; d = 0.3f; h = 7.5f; break;
+        case FurnKind::WaterTower: w = 2.2f; d = 2.2f; h = 9.0f; break;
         default: break;
     }
     if (needs_wall && wall_side < 0) return 0;
+    if (kind == FurnKind::Tree || kind == FurnKind::Pine || kind == FurnKind::Cottage || kind == FurnKind::WaterTower) {
+        // big things need room around them: no poking through a house, a tower or a wall
+        for (int b = -1; b <= 1; b++)
+            for (int a = -1; a <= 1; a++)
+                if (solid(cx + a, cz + b) || indoors(cx + a, cz + b) || exit_cell(cx + a, cz + b) || pole(cx + a, cz + b)) return 0;
+        if (wall_side >= 0) return 0;
+    }
     if (open_ways < 3 && (wall_side < 0 || d > 0.62f)) return 0; // keep narrow halls clear
     float jit = hash01(seed_, cx, cz, S_PROP + 3) - 0.5f;
     float cxm = x0 + CELL * 0.5f, czm = z0 + CELL * 0.5f;
@@ -2079,7 +2379,8 @@ bool World::wall_face(int cx, int cz, int side, float* offset) const {
 // One chance per 12x12-cell region (fewer on harder difficulties). The door is set into a
 // real wall near a random spot in the region, so it has to be found, not spotted.
 float World::exit_chance() const {
-    return id_ == LevelId::TSGEnd ? 0.8f : diff().exits; // the end is full of doors (all of them lead back)
+    if (id_ == LevelId::TheEnd) return diff().exits * 0.45f; // the last door is hard to find
+    return id_ == LevelId::TSGEnd ? 0.8f : diff().exits;   // TH3 3ND is full of doors (all of them lead to THE END)
 }
 
 bool World::exit_for_region(int rx, int rz, ExitDoor& out) const {
@@ -2138,6 +2439,39 @@ bool World::exit_for_region(int rx, int rz, ExitDoor& out) const {
 }
 
 bool World::exit_door(int cx, int cz, ExitDoor* out) const {
+    if (id_ == LevelId::L188) { // the hotel's way out: doors in the outside walls of a few of the outer rooms
+        int lx = cx + HOTEL_HALF, lz = cz + HOTEL_HALF;
+        if (lx < 0 || lx > 23 || lz < 0 || lz > 23) return false;
+        int side = lx == 0 ? 0 : (lx == 23 ? 1 : (lz == 0 ? 2 : (lz == 23 ? 3 : -1)));
+        if (side < 0 || court_cell(cx, cz) != 2) return false;
+        int b = side < 2 ? lz : lx;
+        // one exit on each of 3 sides (2 on Hard and up), in a guest room somewhere along that side
+        int want = diff_ >= Difficulty::Hard ? 2 : 3;
+        int s0 = (int)(hash3(seed_, 0, 188, S_EXIT + 9) % 4u);
+        int k = (side - s0 + 4) % 4;
+        if (k >= want) return false;
+        int start = 2 + (int)(hash3(seed_, k, 188, S_EXIT + 10) % 20u), pick = -1;
+        for (int t = 0; t < 20 && pick < 0; t++) {
+            int bb = 2 + (start - 2 + t) % 20;
+            int ex = side == 0 ? 0 : side == 1 ? 23 : bb, ez = side == 2 ? 0 : side == 3 ? 23 : bb;
+            if (court_cell(ex - HOTEL_HALF, ez - HOTEL_HALF) == 2) pick = bb;
+        }
+        if (pick != b) return false;
+        if (out) {
+            static const float NX[4] = {1, -1, 0, 0}, NZ[4] = {0, 0, 1, -1};
+            out->cx = cx; out->cz = cz; out->side = side;
+            out->normal = {NX[side], NZ[side]};
+            float off = 0;
+            wall_face(cx, cz, side, &off);
+            float x = (cx + 0.5f) * CELL, z = (cz + 0.5f) * CELL;
+            if (side == 0) x = cx * CELL + off;
+            if (side == 1) x = (cx + 1) * CELL - off;
+            if (side == 2) z = cz * CELL + off;
+            if (side == 3) z = (cz + 1) * CELL - off;
+            out->pos = {x, z};
+        }
+        return true;
+    }
     if (id_ == LevelId::LRun) { // one door, at the very end of the corridor
         if (cx != 0 || cz != -RUN_LEN) return false;
         if (out) { out->cx = 0; out->cz = -RUN_LEN; out->side = 2; out->normal = {0, 1}; out->pos = {CELL * 0.5f, -RUN_LEN * CELL}; }
@@ -2188,12 +2522,13 @@ ItemType World::item(int cx, int cz) const {
     // shelves and beds, so rooms and furniture are worth searching and bare halls mostly aren't.
     float rate = info().item_rate * diff().items * 0.8f;
     if (near_spawn(cx, cz, 6)) rate *= 2.0f;
-    if (hash01(seed_, cx, cz, S_ITEM) >= rate * 4.0f) return ItemType::None; // cheap early out (the biggest boost is x4)
+    if (hash01(seed_, cx, cz, S_ITEM) >= rate * (id_ == LevelId::L188 ? 12.0f : 4.0f)) return ItemType::None; // cheap early out (the biggest boost is x4)
     {
         Vec2 ip;
         float iy;
         bool on_furniture = item_spot(cx, cz, ip, iy) && iy > floor_y(ip.x, ip.z) + 0.1f;
         bool l4_desk = id_ == LevelId::L4 && solid(cx, cz);
+        if (id_ == LevelId::L188) rate *= 3.0f; // (one hotel, not an endless one: more to find in it)
         if (on_furniture || l4_desk) rate *= guest_room(cx, cz) ? 4.0f : 3.0f;
         else if (guest_room(cx, cz)) rate *= 1.2f;
         else rate *= info().outdoor ? 0.6f : 0.4f;
@@ -2231,7 +2566,7 @@ bool World::item_spot(int cx, int cz, Vec2& pos, float& y) const {
         return true;
     }
     Furn fs[MAX_FURN];
-    int n = furniture(cx, cz, fs);
+    int n = furniture_raw(cx, cz, fs, nullptr); // (doors don't move items around when they swing)
     // furniture whose middle is in this cell and that has something flat to put things on
     int pick[MAX_FURN], np = 0;
     float top[MAX_FURN];
@@ -2309,6 +2644,71 @@ float World::item_y(int cx, int cz) const {
     float y;
     item_spot(cx, cz, p, y);
     return y;
+}
+
+
+// ------------------------------------------------------------------ 1.3 notes
+// Scraps of paper left by people who came through before you. Reading one is up to each player
+// (nothing in the sim changes), so a note is just a pure function of the cell, like an item.
+static const char* NOTES[] = {
+    "DAY 3. THE LIGHTS HUM IN B FLAT. I CHECKED.|IF YOU CAN HEAR IT TOO, YOU'RE NOT CRAZY.|OR WE BOTH ARE.",
+    "DON'T DRINK FROM THE PUDDLES.|I KNOW THE ALMOND WATER RAN OUT.|DON'T.",
+    "I'VE PASSED THIS CHAIR FOUR TIMES.|IT'S ALWAYS FACING ME.",
+    "M.E.G. NOTICE|OUTPOSTS ARE MARKED WITH A BLUE FLAG.|IF YOU SEE ONE, WALK TOWARD IT. DO NOT RUN.",
+    "THE HOUNDS CAN'T SEE WELL.|THEY HEAR YOU BREATHE.|CROUCH. BREATHE SLOWLY. LOOK AT THEM.",
+    "SMILE BACK AND IT GETS CLOSER.|LOOK AWAY AND IT GETS CLOSER.|JUST KEEP THE LIGHT ON IT.",
+    "FOUND A DOOR THAT WOULDN'T OPEN.|CAME BACK WITH A CROWBAR.|SHOULDN'T HAVE.",
+    "TO WHOEVER FINDS THIS: THE EXIT SIGNS|ARE REAL. THE ARROWS UNDER THEM ARE NOT.",
+    "MY COMPASS POINTS SOMEWHERE NEW|EVERY TIME I STOP WALKING.|MAYBE THAT'S THE POINT.",
+    "THE PARTY PEOPLE SAID I COULD STAY.|THEY SAID IT LIKE A THREAT.",
+    "THINGS I MISS: WINDOWS. RAIN.|THE SOUND OF A CAR.|MY NAME. I'M NOT SURE OF IT ANYMORE.",
+    "IF THE CARPET IS DRY, KEEP GOING.|IF IT'S WET, KEEP GOING FASTER.",
+    "M.E.G. MEMO 14|STAFF ARE REMINDED THAT THE HAZMAT SUITS|ARE NOT OPTIONAL. ASK THE ONES WHO TOOK THEM OFF.",
+    "THE MAN IN THE SUIT ON 1ONE KNOCKS.|HE ALWAYS KNOCKS.|DON'T ANSWER.",
+    "COUNTED 211 CEILING LIGHTS TODAY.|ONE OF THEM COUNTED BACK.",
+    "THE POOLS ARE WARM. THEY SHOULDN'T BE.|NOTHING HEATS THEM.",
+    "I TRIED TO SLEEP UNDER A DESK.|WOKE UP UNDER A DIFFERENT DESK.",
+    "THE CITY IS EMPTY BUT THE COFFEE IS HOT.|WHO KEEPS MAKING THE COFFEE.",
+    "HAVE YOU NOTICED THE WALLPAPER REPEATS|EVERY 1.25 METERS? EXCEPT HERE.|LOOK. IT DOESN'T. WHY HERE.",
+    "IF YOU HEAR FOOTSTEPS MATCHING YOURS,|STOP. IF THEY DON'T STOP, RUN.",
+    "LEFT A CHALK MARK HERE.|THERE ARE TWO NOW. I ONLY MADE ONE.",
+    "MOTION IS NICE BY DAY. THE MUSIC|COMES FROM THE SIRENS ON THE POLES.|AT NIGHT THE MUSIC STOPS. THEN THEY COME.",
+    "THE MOON HAS NO AIR AND I CAN STILL|HEAR SOMETHING WALKING BEHIND ME.",
+    "M.E.G. FIELD GUIDE, PAGE 2|IF A COLLEAGUE STOPS TALKING ON THE RADIO,|DO NOT GO LOOKING FOR THEM ALONE.",
+    "THE HOTEL HAS A COURTYARD.|THE WINDOWS ALL FACE IN.|SOMEONE IS ALWAYS STANDING IN ONE.",
+    "I FOUND THE END. IT'S A BOOKSHOP.|EVERY SHELF IS EMPTY.|SOMEONE TOOK ALL THE ENDINGS.",
+    "THEY SAY THERE'S A DOOR AT THE VERY END|THAT GOES HOME. THEY SAY A LOT OF THINGS.",
+    "HOW TO MAKE ALMOND WATER LAST:|YOU CAN'T. DRINK IT WHEN THE LIGHTS GO.",
+    "THE FACELINGS JUST WANT SOMETHING.|GIVE THEM SOMETHING.",
+    "BIG LUNGS. STEADY NERVES. LIGHT FEET.|THE OBJECTIVES MAKE YOU STRONGER.|SO DO THE THINGS YOU SEE DOING THEM.",
+    "WHOEVER KEEPS CLOSING THE DOORS:|PLEASE STOP.",
+    "I THOUGHT I HEARD MY FRIEND CALLING.|IT WAS MY OWN VOICE, A LITTLE LATE.",
+    "IF YOU'RE READING THIS YOU STILL HAVE|YOUR EYES. GOOD. KEEP THEM ON THE EXIT.",
+    "DON'T TRUST A ROOM WITHOUT A HUM.",
+    "THE MANGLED IS TALLER THAN THE BUILDINGS.|IT DOESN'T LOOK DOWN.|THAT'S THE ONLY GOOD NEWS.",
+    "WROTE THIS IN THE DARK. SORRY ABOUT|THE HANDWRITING. SORRY ABOUT A LOT.",
+};
+constexpr int NOTE_COUNT = (int)(sizeof(NOTES) / sizeof(NOTES[0]));
+int note_count() { return NOTE_COUNT; }
+const char* note_text(int n) { return n >= 1 && n <= NOTE_COUNT ? NOTES[n - 1] : ""; }
+
+int World::note(int cx, int cz) const {
+    if (id_ == LevelId::Hub || greyscale() || near_spawn(cx, cz, 2)) return 0;
+    if (hash01(seed_, cx, cz, S_ITEM + 60) >= (id_ == LevelId::TheEnd ? 0.02f : 0.006f)) return 0;
+    if (solid(cx, cz) || exit_cell(cx, cz) || pole(cx, cz) || water(cx, cz) || pool(cx, cz)) return 0;
+    if (item(cx, cz) != ItemType::None) return 0;
+    return 1 + (int)(hash3(seed_, cx, cz, S_ITEM + 61) % (uint32_t)NOTE_COUNT);
+}
+
+Vec2 World::note_pos(int cx, int cz) const {
+    float a = hash01(seed_, cx, cz, S_ITEM + 62) - 0.5f, b = hash01(seed_, cx, cz, S_ITEM + 63) - 0.5f;
+    Vec2 p{(cx + 0.5f + a * 0.5f) * CELL, (cz + 0.5f + b * 0.5f) * CELL};
+    Furn fs[MAX_FURN];
+    int n = furniture_raw(cx, cz, fs, nullptr);
+    for (int k = 0; k < n; k++) // never inside furniture
+        if (fs[k].solid && p.x > fs[k].x0 - 0.15f && p.x < fs[k].x1 + 0.15f && p.z > fs[k].z0 - 0.15f && p.z < fs[k].z1 + 0.15f)
+            p = {(cx + 0.5f) * CELL + (a > 0 ? -0.9f : 0.9f), (cz + 0.5f) * CELL + (b > 0 ? -0.9f : 0.9f)};
+    return p;
 }
 
 // ------------------------------------------------------------------ navigation

@@ -35,6 +35,7 @@ public:
         sim_.start_level(level, seed);
         sim_.add_player(name);
         v_.picked = &sim_.picked;
+        v_.searched = &sim_.searched;
         refresh();
         v_.me_prev = v_.me;
     }
@@ -126,16 +127,24 @@ public:
     uint32_t host_token = 0;
     void sandbox(uint8_t action, uint8_t arg, float yaw) override { net_.send_sandbox(action, arg, yaw); }
     void host_start(LevelId level, Difficulty d, bool sandbox_mode) override { if (host) net_.send_hostcmd(host_token, level, d, sandbox_mode); }
+    void send_voice(uint16_t seq, AdpcmState st, const uint8_t* payload) override { net_.send_voice(seq, st, payload); }
+    void take_voice(std::vector<VoiceFrame>& out) override {
+        out.swap(net_.voice_in);
+        net_.voice_in.clear();
+        for (const VoiceFrame& f : out) talk_t_[f.speaker] = now_;
+    }
 
     bool connect(const std::string& addr, uint16_t port, const std::string& name, const std::string& password, double now,
                  std::string* err) {
         if (!net_.connect(addr, port, name, password, now)) { if (err) *err = net_.error; return false; }
         v_.multiplayer = true;
         v_.picked = &net_.picked;
+        v_.searched = &searched_;
         return true;
     }
 
     void update(const InputCmd& cmd_in, double now, float frame_dt, bool) override {
+        now_ = now;
         net_.poll(now);
         if (net_.state != NetClient::State::Connected) return;
         const float dt = 1.0f / TICK_RATE;
@@ -179,14 +188,18 @@ public:
         v_.roster.clear();
         for (int i = 0; i < IRIS_MAX_PLAYERS; i++) {
             if (!b.players[i].active) continue;
-            v_.roster.push_back(b.players[i].name);
+            bool talking = now - talk_t_[i] < 0.35;
+            v_.roster.push_back(b.players[i].name + (talking ? "  (TALKING)" : ""));
             if (i == net_.my_id) continue;
             const PlayerState& pb = b.players[i].st;
             const PlayerState& pa = a.players[i].active ? a.players[i].st : pb;
             Vec3 pos = pa.pos + (pb.pos - pa.pos) * t;
             pos.y = world_.floor_y(pos.x, pos.z); // (heights aren't sent: the ground is the same everywhere)
             float yaw = pa.yaw + std::remainder(pb.yaw - pa.yaw, 2 * PI) * t;
-            v_.others.push_back({i, pos, yaw, pb.crouch, lerpf(pa.bob, pb.bob, t), pb.alive, b.players[i].name, pb.light_on});
+            DrawPlayer dp{i, pos, yaw, pb.crouch, lerpf(pa.bob, pb.bob, t), pb.alive, b.players[i].name, pb.light_on};
+            dp.held = pb.held; dp.emote = pb.emote; dp.emote_t = pb.emote_t; dp.use_t = pb.use_t; dp.speed = pb.speed;
+            dp.talking = talking;
+            v_.others.push_back(dp);
         }
         v_.ents.clear();
         for (const EntSnap& eb : b.ents) {
@@ -222,8 +235,11 @@ public:
 private:
     struct Hist { uint32_t seq; InputCmd cmd; };
     NetClient net_;
+    double now_ = 0;
+    double talk_t_[IRIS_MAX_PLAYERS] = {-100, -100, -100, -100};  // when each player last said something
     GameView v_;
     World world_;
+    std::unordered_set<uint32_t> doors_, searched_;
     PlayerState pred_, prev_;
     std::deque<Hist> history_;
     uint32_t seq_ = 0, seen_snaps_ = 0, epoch_ = 0;
@@ -236,9 +252,15 @@ private:
         bool new_level = !have_state_ || s.epoch != epoch_;
         if (new_level) {
             world_ = World(s.level, s.seed, s.difficulty);
+            world_.door_flip = &doors_;
             epoch_ = s.epoch;
             history_.clear();
         }
+        // the doors near us, as the host has them (prediction collides with them too)
+        doors_.clear();
+        doors_.insert(s.doors.begin(), s.doors.end());
+        for (uint32_t id : s.searched) searched_.insert(id);
+        if (new_level) searched_.clear(), searched_.insert(s.searched.begin(), s.searched.end());
         // reconcile: take the server's word for where we were, replay what it hasn't seen yet
         PlayerState server = s.players[net_.my_id].st;
         PlayerState replay = server;

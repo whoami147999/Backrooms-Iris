@@ -2,6 +2,7 @@
 // locally; multiplayer predicts the local player and renders server snapshots. The rest
 // of the client (renderer, HUD, effects) only ever looks at a GameView.
 #pragma once
+#include "../core/voice.h"
 #include <atomic>
 #include <memory>
 #include <string>
@@ -23,6 +24,7 @@ struct GameView {
     std::vector<DrawEntity> ents;
     std::vector<DrawProp> props;
     const std::unordered_set<uint32_t>* picked = nullptr;
+    const std::unordered_set<uint32_t>* searched = nullptr; // 1.3: furniture already gone through (drawers left open)
     float level_time = 0;
     bool escaped = false;
     float won_t = 0;
@@ -54,6 +56,9 @@ public:
     virtual void sandbox(uint8_t action, uint8_t arg, float yaw) { (void)action; (void)arg; (void)yaw; }
     virtual void host_start(LevelId level, Difficulty d, bool sandbox_mode) { (void)level; (void)d; (void)sandbox_mode; }
     virtual void resync() {}                    // after poking the sim directly
+    // 1.3 proximity chat (multiplayer only)
+    virtual void send_voice(uint16_t seq, AdpcmState st, const uint8_t* payload) { (void)seq; (void)st; (void)payload; }
+    virtual void take_voice(std::vector<VoiceFrame>& out) { out.clear(); }
 };
 
 std::unique_ptr<Session> make_single_player(LevelId level, uint32_t seed, const std::string& name, bool sandbox = false,

@@ -19,6 +19,7 @@
 #include "hash.h"
 #include "player.h"
 #include "sim.h"
+#include "voice.h"
 
 namespace iris {
 
@@ -26,6 +27,7 @@ enum PacketType : uint8_t {
     PKT_HELLO = 1, PKT_WELCOME = 2, PKT_REJECT = 3, PKT_INPUT = 4, PKT_SNAPSHOT = 5, PKT_BYE = 6, PKT_CHALLENGE = 7,
     PKT_SANDBOX = 8,   // 1.2: a sandbox action (only while the host has sandbox on)
     PKT_HOSTCMD = 9,   // 1.2: the host starts a run from the lobby (carries the host's secret token)
+    PKT_VOICE = 10,    // 1.3: proximity chat. client -> host: one frame; host -> nearby clients: the frame + who said it
 };
 constexpr int MAX_PACKET = 1400;
 constexpr int QUERY_SIZE = 320;    // "IRIS?" + zero padding
@@ -118,6 +120,9 @@ inline void write_cmd(Writer& w, uint32_t seq, const InputCmd& c) {
     w.u8(c.light_ctr);
     w.u8(c.attack_ctr);
     w.u8(c.attack_item);
+    w.u8(c.held);
+    w.u8(c.emote_ctr);
+    w.u8(c.emote);
 }
 
 inline InputCmd read_cmd(Reader& r, uint32_t& seq) {
@@ -134,6 +139,10 @@ inline InputCmd read_cmd(Reader& r, uint32_t& seq) {
     c.light_ctr = r.u8();
     c.attack_ctr = r.u8();
     c.attack_item = r.u8();
+    c.held = r.u8();
+    if (c.held >= ITEM_COUNT) c.held = 0;
+    c.emote_ctr = r.u8();
+    c.emote = std::min<uint8_t>(r.u8(), 4);
     return c;
 }
 
@@ -152,6 +161,10 @@ inline void write_player(Writer& w, const PlayerState& s) {
     for (int i = 0; i < ITEM_COUNT; i++) w.u8(s.inv[i]);
     for (int i = 0; i < PERK_COUNT; i++) w.u8(s.perks[i]);
     w.u8((uint8_t)s.cause);
+    w.u8(s.held);
+    w.u8(s.emote);
+    w.u8((uint8_t)std::min(255.0f, s.emote_t * 20.0f));
+    w.u8((uint8_t)std::min(255.0f, s.use_t * 40.0f));
 }
 
 inline void read_player(Reader& r, PlayerState& s) {
@@ -168,6 +181,11 @@ inline void read_player(Reader& r, PlayerState& s) {
     for (int i = 0; i < ITEM_COUNT; i++) s.inv[i] = r.u8();
     for (int i = 0; i < PERK_COUNT; i++) s.perks[i] = r.u8();
     s.cause = (DeathCause)std::min<int>(r.u8(), (int)DeathCause::LAST);
+    s.held = r.u8();
+    if (s.held >= ITEM_COUNT) s.held = 0;
+    s.emote = std::min<uint8_t>(r.u8(), 4);
+    s.emote_t = r.u8() / 20.0f;
+    s.use_t = r.u8() / 40.0f;
 }
 
 } // namespace iris

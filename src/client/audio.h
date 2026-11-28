@@ -17,6 +17,7 @@ enum Sfx : int {
     SFX_BREAKER, SFX_TAPE, SFX_OBJECTIVE, SFX_FLASH, SFX_THROW,
     SFX_BACTERIA_CLICK, SFX_BACTERIA_SCREECH, SFX_HOUND_GROWL, SFX_SMILER_WHISPER, SFX_SMILER_CHARGE,
     SFX_PARTY_GIGGLE, SFX_SKIN_GROAN, SFX_STING,
+    SFX_DOOR_OPEN, SFX_DOOR_CLOSE, SFX_DOOR_JAM, SFX_DRAWER, SFX_PAPER, // 1.3
     // loop sources
     SFX_HUM, SFX_DRONE, SFX_WIND, SFX_WATER, SFX_ALARM, SFX_FIRE, SFX_STATIC, SFX_HEART, SFX_MUSICBOX, SFX_WHISPERS,
     SFX_MUSIC_MENU, SFX_MUSIC_RUN, SFX_MUSIC_CALM, // 1.2: music (its own volume)
@@ -37,7 +38,29 @@ public:
     // a looping channel: which sound, how loud (0 = silent), pan; changes are smoothed
     void loop(Loop l, Sfx s, float vol, float pan = 0, float pitch = 1, float muffle = 0);
     void stop_loops();
+    // 1.3 proximity chat. The microphone is only opened in a multiplayer game with voice on.
+    bool mic_open();                         // false: no microphone (or no permission)
+    void mic_close();
+    bool mic_ok() const { return mic_ != 0; }
+    int mic_read(int16_t* out, int max);     // 16 kHz mono samples captured since last time
+    // play what player `speaker` said: 16 kHz mono, placed by vol / pan / muffle; radio = a crackly handset
+    void voice_push(int speaker, const int16_t* pcm, int n, float vol, float pan, float muffle, bool radio);
+    void voice_clear();
 private:
+    struct VoiceOut {
+        std::vector<float> ring;             // 16 kHz samples (a second of them)
+        uint64_t w = 0;                      // samples written
+        double r = 0;                        // read position (samples)
+        bool playing = false;                // false: filling up (a little jitter buffer)
+        float vol = 0, target = 0, pan = 0, muffle = 0, lp = 0, hp = 0;
+        bool radio = false;
+    };
+    VoiceOut vout_[4];
+    uint32_t hiss_ = 1;
+    uint32_t mic_ = 0;
+    std::vector<int16_t> mic_ring_;
+    uint64_t mic_w_ = 0, mic_r_ = 0;
+    static void mic_callback(void* user, uint8_t* stream, int len);
     struct Voice { int sfx = -1; double pos = 0; float vol = 0, target = 0, pan = 0, pitch = 1, muffle = 0, lp = 0; bool looping = false; };
     static void callback(void* user, uint8_t* stream, int len);
     void mix(int16_t* out, int frames);

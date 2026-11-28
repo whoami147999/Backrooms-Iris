@@ -479,6 +479,74 @@ void synth_all(std::vector<float> out[SFX_COUNT]) {
         normalize(b, 0.45f);
         out[SFX_WHISPERS] = b;
     }
+
+    // ----- 1.3: doors, drawers, paper
+    { // a door: the latch clicks, then the hinges creak as it swings
+        auto b = make(1.1f);
+        Rand rnd(1301);
+        BP creak(700, 14);
+        for (size_t i = 0; i < b.size(); i++) {
+            float t = (float)i / R;
+            float latch = t < 0.03f ? rnd.f() * env(t, 0.001f, 0.008f) : 0.0f;
+            creak.tune(500 + 380 * std::sin(TAU * 1.3f * t) + 120 * std::sin(TAU * 7.0f * t));
+            float scrape = t > 0.08f ? creak(rnd.f()) * env(t - 0.08f, 0.15f, 0.35f) * 2.5f : 0.0f;
+            float grain = (std::sin(TAU * 31.0f * t) > 0.6f ? 1.0f : 0.4f); // the creak stutters
+            b[i] = latch * 0.8f + scrape * grain;
+        }
+        normalize(b, 0.55f);
+        out[SFX_DOOR_OPEN] = b;
+    }
+    { // a door shutting: a wooden thud and the latch catching
+        auto b = make(0.6f);
+        Rand rnd(1302);
+        LP lp(300);
+        for (size_t i = 0; i < b.size(); i++) {
+            float t = (float)i / R;
+            float thud = lp(rnd.f()) * env(t, 0.002f, 0.08f) * 3.0f + std::sin(TAU * 85 * t) * env(t, 0.002f, 0.1f);
+            float latch = t > 0.06f && t < 0.09f ? rnd.f() * env(t - 0.06f, 0.001f, 0.01f) : 0.0f;
+            b[i] = thud + latch * 0.6f;
+        }
+        normalize(b, 0.7f);
+        out[SFX_DOOR_CLOSE] = b;
+    }
+    { // a jammed door: the handle rattles, the door thumps against its frame
+        auto b = make(0.7f);
+        Rand rnd(1303);
+        BP r1(2400, 6);
+        for (size_t i = 0; i < b.size(); i++) {
+            float t = (float)i / R;
+            float x = 0;
+            for (int k = 0; k < 3; k++) { float tt = t - k * 0.18f; if (tt > 0) x += r1(rnd.f()) * env(tt, 0.002f, 0.04f) * 2.0f + std::sin(TAU * 70 * tt) * env(tt, 0.002f, 0.05f) * 0.6f; }
+            b[i] = x;
+        }
+        normalize(b, 0.6f);
+        out[SFX_DOOR_JAM] = b;
+    }
+    { // a drawer sliding out on dry runners
+        auto b = make(0.55f);
+        Rand rnd(1304);
+        BP slide(900, 3);
+        for (size_t i = 0; i < b.size(); i++) {
+            float t = (float)i / R;
+            slide.tune(700 + 500 * t);
+            b[i] = slide(rnd.f()) * env(t, 0.05f, 0.25f) * 2.0f + (t > 0.42f ? std::sin(TAU * 140 * (t - 0.42f)) * env(t - 0.42f, 0.002f, 0.04f) : 0.0f);
+        }
+        normalize(b, 0.5f);
+        out[SFX_DRAWER] = b;
+    }
+    { // paper: picked up, unfolded
+        auto b = make(0.5f);
+        Rand rnd(1305);
+        HP hp(2500);
+        for (size_t i = 0; i < b.size(); i++) {
+            float t = (float)i / R;
+            float crinkle = (rnd.f() > 0.85f ? 1.0f : 0.15f);
+            b[i] = hp(rnd.f()) * crinkle * env(t, 0.02f, 0.18f);
+        }
+        normalize(b, 0.45f);
+        out[SFX_PAPER] = b;
+    }
+
     // ----- 1.2: music. All of it is generated here too: a slow, sad theme for the menus, something
     // calmer and emptier for the safe places, and a pulse that won't let up for Level !.
     {
@@ -616,6 +684,7 @@ bool Audio::init() {
 }
 
 void Audio::shutdown() {
+    mic_close();
     if (synth_.joinable()) synth_.join();
     if (dev_) SDL_CloseAudioDevice(dev_);
     dev_ = 0;
@@ -657,6 +726,73 @@ void Audio::stop_loops() {
     SDL_UnlockAudioDevice(dev_);
 }
 
+// ----- 1.3 proximity chat
+bool Audio::mic_open() {
+    if (mic_) return true;
+    if (!dev_) return false;
+    SDL_AudioSpec want{}, have{};
+    want.freq = 16000;
+    want.format = AUDIO_S16SYS;
+    want.channels = 1;
+    want.samples = 320;
+    want.callback = mic_callback;
+    want.userdata = this;
+    mic_ring_.assign(16000, 0);
+    mic_w_ = mic_r_ = 0;
+    mic_ = SDL_OpenAudioDevice(nullptr, 1, &want, &have, 0); // SDL converts to 16 kHz mono for us
+    if (!mic_) { std::printf("[iris] voice: no microphone (%s)\n", SDL_GetError()); return false; }
+    SDL_PauseAudioDevice(mic_, 0);
+    std::printf("[iris] voice: microphone open\n");
+    return true;
+}
+
+void Audio::mic_close() {
+    if (!mic_) return;
+    SDL_CloseAudioDevice(mic_);
+    mic_ = 0;
+}
+
+void Audio::mic_callback(void* user, uint8_t* stream, int len) {
+    Audio* a = (Audio*)user;
+    const int16_t* in = (const int16_t*)stream;
+    int n = len / 2;
+    size_t cap = a->mic_ring_.size();
+    for (int i = 0; i < n; i++) a->mic_ring_[(size_t)(a->mic_w_++ % cap)] = in[i];
+}
+
+int Audio::mic_read(int16_t* out, int max) {
+    if (!mic_) return 0;
+    SDL_LockAudioDevice(mic_);
+    size_t cap = mic_ring_.size();
+    if (mic_w_ - mic_r_ > cap) mic_r_ = mic_w_ - cap; // (fell behind: drop the oldest)
+    int n = 0;
+    while (mic_r_ < mic_w_ && n < max) out[n++] = mic_ring_[(size_t)(mic_r_++ % cap)];
+    SDL_UnlockAudioDevice(mic_);
+    return n;
+}
+
+void Audio::voice_push(int speaker, const int16_t* pcm, int n, float vol, float pan, float muffle, bool radio) {
+    if (!dev_ || speaker < 0 || speaker >= 4) return;
+    SDL_LockAudioDevice(dev_);
+    VoiceOut& v = vout_[speaker];
+    if (v.ring.empty()) v.ring.assign(16000, 0.0f);
+    size_t cap = v.ring.size();
+    if ((double)v.w - v.r > 8000) v.r = (double)v.w - 1600; // more than half a second behind: catch up
+    for (int i = 0; i < n; i++) v.ring[(size_t)(v.w++ % cap)] = pcm[i] / 32768.0f;
+    v.target = std::max(0.0f, std::min(vol, 2.5f));
+    v.pan = std::max(-1.0f, std::min(1.0f, pan));
+    v.muffle = muffle;
+    v.radio = radio;
+    SDL_UnlockAudioDevice(dev_);
+}
+
+void Audio::voice_clear() {
+    if (!dev_) return;
+    SDL_LockAudioDevice(dev_);
+    for (VoiceOut& v : vout_) { v.r = (double)v.w; v.playing = false; }
+    SDL_UnlockAudioDevice(dev_);
+}
+
 void Audio::callback(void* user, uint8_t* stream, int len) { ((Audio*)user)->mix((int16_t*)stream, len / 4); }
 
 void Audio::mix(int16_t* out, int frames) {
@@ -688,6 +824,32 @@ void Audio::mix(int16_t* out, int frames) {
         }
     };
     for (Voice& v : voices_) run(v);
+    // voices: each speaker's stream, 60 ms buffered before it starts (so packets arriving unevenly don't stutter)
+    for (VoiceOut& v : vout_) {
+        if (v.ring.empty()) continue;
+        double have = (double)v.w - v.r;
+        if (!v.playing) { if (have >= 960) v.playing = true; else continue; }
+        const size_t cap = v.ring.size();
+        const double step = 16000.0 / rate_;
+        float lpa = 1.0f - std::exp(-TAU * (v.radio ? 2600.0f : 300.0f + (1.0f - v.muffle) * 7000.0f) / rate_);
+        float hpa = 1.0f - std::exp(-TAU * (v.radio ? 500.0f : 90.0f) / rate_);
+        float gl = std::sqrt(0.5f * (1.0f - v.pan)), gr = std::sqrt(0.5f * (1.0f + v.pan));
+        for (int i = 0; i < frames; i++) {
+            if ((double)v.w - v.r < 2) { v.playing = false; break; } // ran dry: wait for more
+            v.vol += (v.target - v.vol) * 0.002f;
+            uint64_t i0 = (uint64_t)v.r;
+            float fr = (float)(v.r - (double)i0);
+            float x = v.ring[(size_t)(i0 % cap)] * (1 - fr) + v.ring[(size_t)((i0 + 1) % cap)] * fr;
+            v.lp += lpa * (x - v.lp);
+            v.hp += hpa * (v.lp - v.hp);
+            float y = v.lp - v.hp;                              // band-limited
+            if (v.radio) y = std::max(-0.3f, std::min(0.3f, y * 2.2f)) + ((float)((hiss_ = hiss_ * 1664525u + 1013904223u) >> 24) / 255.0f - 0.5f) * 0.01f; // handset crunch + hiss
+            float s = y * v.vol;
+            acc[(size_t)i * 2] += s * gl;
+            acc[(size_t)i * 2 + 1] += s * gr;
+            v.r += step;
+        }
+    }
     for (int l = 0; l < LOOP_COUNT; l++) {
         Voice& v = loops_[l];
         if (!(v.target > 0.0005f || v.vol > 0.0005f)) continue;

@@ -142,6 +142,10 @@ void platform_poll(InputState& in) {
                     case SDLK_F11: in.toggle_fullscreen = true; break;
                     case SDLK_F12: in.screenshot = true; break;
                     case SDLK_F3: in.toggle_debug = true; break;
+                    case SDLK_g: in.emote = 1; break;
+                    case SDLK_h: in.emote = 2; break;
+                    case SDLK_j: in.emote = 3; break;
+                    case SDLK_k: in.emote = 4; break;
                     default:
                         if (k >= SDLK_1 && k <= SDLK_9) in.slot_num = (int)(k - SDLK_1);
                         break;
@@ -159,6 +163,7 @@ void platform_poll(InputState& in) {
         in.sprint = k[SDL_SCANCODE_LSHIFT] || k[SDL_SCANCODE_RSHIFT];
         in.crouch = k[SDL_SCANCODE_LCTRL] || k[SDL_SCANCODE_C];
         in.fire_held = (SDL_GetMouseState(nullptr, nullptr) & SDL_BUTTON_LMASK) != 0;
+        in.talk = k[SDL_SCANCODE_V] != 0;
     }
     gamepad_poll(in, platform_time());
 

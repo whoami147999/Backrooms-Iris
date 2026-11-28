@@ -98,6 +98,17 @@ void NetClient::send_sandbox(uint8_t action, uint8_t arg, float yaw) {
     sock_.send(server_, w.buf, w.n);
 }
 
+void NetClient::send_voice(uint16_t seq, AdpcmState state, const uint8_t* payload) {
+    if (this->state != State::Connected) return;
+    Writer w;
+    w.header(PKT_VOICE);
+    w.u16(seq);
+    w.u16((uint16_t)state.pred);
+    w.u8(state.index);
+    w.bytes(payload, VOICE_BYTES);
+    sock_.send(server_, w.buf, w.n);
+}
+
 void NetClient::send_hostcmd(uint32_t token, LevelId level, Difficulty d, bool sandbox) {
     if (state != State::Connected) return;
     Writer w;
@@ -147,6 +158,17 @@ void NetClient::handle(const uint8_t* data, int len, double now) {
     } else if (type == PKT_BYE) {
         error = "THE HOST LEFT THE GAME";
         state = State::Failed;
+    } else if (type == PKT_VOICE && state == State::Connected) {
+        VoiceFrame f;
+        f.speaker = r.u8();
+        f.radio = r.u8() != 0;
+        f.seq = r.u16();
+        AdpcmState st;
+        st.pred = (int16_t)r.u16();
+        st.index = r.u8();
+        if (r.bad || f.speaker >= IRIS_MAX_PLAYERS || f.speaker == my_id || st.index > 88 || !r.need(VOICE_BYTES)) return;
+        adpcm_decode(r.p + r.i, VOICE_FRAME, st, f.pcm);
+        if (voice_in.size() < 64) voice_in.push_back(f);
     } else if (type == PKT_SNAPSHOT && state == State::Connected) {
         Snapshot s;
         s.tick = r.u32();
@@ -211,6 +233,12 @@ void NetClient::handle(const uint8_t* data, int len, double now) {
         for (int j = 0; j < k && !r.bad; j++) {
             uint32_t id = r.u32();
             if (picked.size() < 200000) picked.insert(id); // (a sane level never gets near this)
+        }
+        {
+            int nd = r.u8();
+            for (int j = 0; j < nd && !r.bad; j++) s.doors.push_back(r.u32());
+            int ns = r.u8();
+            for (int j = 0; j < ns && !r.bad; j++) s.searched.push_back(r.u32());
         }
         s.toast_seq = r.u32();
         s.toast = r.str();

@@ -904,52 +904,7 @@ Image regolith(int N, float base, uint32_t seed) {
     return im;
 }
 
-// Level 33: mall floor tiles, shop fronts
-Image mall_tiles(int N) {
-    return paint(N, N, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
-        int T = N / 4;
-        bool dark = ((x / T) + (y / T)) & 1;
-        float seam = (x % T < 2 || y % T < 2) ? -0.12f : 0.0f;
-        float shine = std::pow(fbm(u, v, 2, 2, 3, 3301), 3.0f) * 0.25f;
-        float l = (dark ? 0.32f : 0.82f) + seam + shine + grain(x, y, 3302) * 0.02f;
-        r = l * (dark ? 0.9f : 1.0f); g = l * (dark ? 0.75f : 0.97f); b = l * (dark ? 1.0f : 0.95f);
-    });
-}
-Image storefront(int N) {
-    const int W = N / 2, H = N;
-    Image im = paint(W, H, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
-        if (v < 0.22f) { // the sign band
-            float l = 0.25f + grain(x, y, 3311) * 0.03f;
-            r = l; g = l * 0.9f; b = l * 1.1f;
-            return;
-        }
-        if (v > 0.93f || u < 0.05f || u > 0.95f) { r = 0.75f; g = 0.75f; b = 0.78f; return; } // frame
-        // glass: a dark shop behind it, a reflection streak, a pulled-down shutter on some
-        float refl = (u + v * 0.5f > 0.55f && u + v * 0.5f < 0.62f) ? 0.15f : 0.0f;
-        float shutter = (v < 0.55f && ((int)(v * H) % 6 < 2)) ? 0.1f : 0.0f;
-        float l = 0.08f + refl + shutter + (fbm(u, v, 3, 6, 3, 3312) - 0.5f) * 0.05f;
-        r = l * 0.9f; g = l; b = l * 1.15f;
-    });
-    // neon: a pink glowing stripe and a word
-    im.rect(W * 10 / 100, H * 7 / 100, W * 90 / 100, H * 15 / 100, 1.0f, 0.4f, 0.75f, 0.9f);
-    int sc = std::max(1, W / 110);
-    im.text(W / 2 - 15 * sc, H * 8 / 100, sc, "OPEN", 0.15f, 0.05f, 0.1f);
-    return im;
-}
-// 1.2: Level 33 as an abandoned 1990 downtown mall: cream tiles with teal bands, teal-framed
-// shop fronts behind grey roll-down gates, faded sign bands.
-Image hcc_tiles(int N) {
-    return paint(N, N, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
-        int T = N / 4;
-        float seam = (x % T < 2 || y % T < 2) ? -0.10f : 0.0f;
-        bool band = (y / T) == 3 && (y % T) > T / 3 && (y % T) < T * 2 / 3;
-        float dirt = (fbm(u, v, 3, 3, 3, 3341) - 0.5f) * 0.10f;
-        float shine = std::pow(fbm(u, v, 2, 2, 3, 3342), 3.0f) * 0.18f;
-        if (band) { r = 0.20f + dirt; g = 0.52f + dirt; b = 0.52f + dirt; return; }
-        float l = 0.80f + seam + dirt + shine + grain(x, y, 3343) * 0.02f;
-        r = l; g = l * 0.97f; b = l * 0.88f;
-    });
-}
+// 1.2: Level 33 shop fronts: teal frames behind grey roll-down gates, faded sign bands
 Image hcc_storefront(int N) {
     const int W = N / 2, H = N;
     Image im = paint(W, H, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
@@ -971,6 +926,89 @@ Image hcc_storefront(int N) {
     int sc = std::max(1, W / 110);
     im.text(W / 2 - 24 * sc, H * 7 / 100, sc, "FOR LEASE", 0.35f, 0.35f, 0.35f, 0.6f);
     return im;
+}
+// ================================================================== 1.3
+// THE END: pale yellow walls with a sign band near the top carrying the words, one per 10 m
+Image end_wall(int N) {
+    const int W = N * 2, H = N / 2;
+    Image im = paint(W, H, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
+        float dirt = (fbm(u * 4, v, 4, 1, 3, 9301) - 0.5f) * 0.08f + grain(x, y, 9302) * 0.02f;
+        bool band = v > 0.08f && v < 0.3f;
+        bool edge = (v > 0.07f && v < 0.085f) || (v > 0.295f && v < 0.31f);
+        float l = band ? 0.86f : 0.8f;
+        r = (l + dirt) * (band ? 0.98f : 0.95f); g = (l + dirt) * (band ? 0.9f : 0.86f); b = (l + dirt) * (band ? 0.55f : 0.5f);
+        if (edge) { r *= 0.75f; g *= 0.72f; b *= 0.6f; }
+        if (v > 0.93f) { r *= 0.7f; g *= 0.68f; b *= 0.62f; } // the skirting
+    });
+    int sc = std::max(1, H / 40);
+    im.text(W / 2 - 21 * sc, H * 12 / 100, sc, "THE END", 0.32f, 0.31f, 0.3f, 0.95f);
+    return im;
+}
+// grey commercial carpet, and the blue patterned kind
+Image grey_carpet(int N) {
+    return paint(N, N, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
+        float l = 0.44f + (fbm(u, v, 4, 4, 4, 9311) - 0.5f) * 0.08f + grain(x, y, 9312) * 0.05f;
+        r = l * 0.98f; g = l; b = l * 1.02f;
+    });
+}
+Image blue_carpet(int N, uint32_t seed) {
+    return paint(N, N, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
+        float l = 0.2f + (fbm(u, v, 4, 4, 3, seed) - 0.5f) * 0.05f + grain(x, y, seed + 1) * 0.04f;
+        r = l * 0.55f; g = l * 0.7f; b = l * 1.6f;
+        int T = N / 8;
+        int lx = x % T, ly = y % T;
+        bool dot = std::abs(lx - T / 2) + std::abs(ly - T / 2) < T / 8;              // little diamonds
+        bool ring = std::abs(std::abs(lx - T / 2) + std::abs(ly - T / 2) - T / 3) < 1; // and a fine lattice
+        if (dot) { r = 0.75f; g = 0.62f; b = 0.3f; }
+        else if (ring) { r += 0.05f; g += 0.06f; b += 0.1f; }
+    });
+}
+// an emptied shelf run from the front: uprights, shelves, the odd book
+Image shelf_front(int N) {
+    const int W = N / 2, H = N / 2;
+    Image im = paint(W, H, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
+        float wood = 0.36f + (fbm(u * 6, v * 0.5f, 6, 1, 3, 9321) - 0.5f) * 0.1f;
+        r = wood * 1.05f; g = wood * 0.72f; b = wood * 0.45f;
+        bool upright = x < W / 16 || x > W - W / 16;
+        bool shelf = (y % (H / 4)) > H / 4 - H / 28;
+        if (!upright && !shelf) { r *= 0.35f; g *= 0.33f; b *= 0.32f; } // the dark back of the shelf
+    });
+    Rng rng(9322);
+    for (int s = 0; s < 4; s++)
+        for (int k = 0; k < 3; k++) {
+            if (rng.f01() < 0.55f) continue;
+            int x0 = (int)(rng.f01() * (W - W / 6)) + W / 16, w = W / 24 + (int)(rng.f01() * W / 18);
+            int yb = (s + 1) * (H / 4) - H / 28, hb = H / 7 + (int)(rng.f01() * H / 14);
+            float cr = 0.3f + rng.f01() * 0.5f, cg = 0.15f + rng.f01() * 0.3f, cb = 0.1f + rng.f01() * 0.3f;
+            im.rect(x0, yb - hb, x0 + w, yb, cr, cg, cb);
+        }
+    return im;
+}
+// Level 188: cream walls, a wooden dado rail, a darker wainscot below
+Image hotel_cream(int N) {
+    return paint(N / 2, N, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
+        float tex = (fbm(u * 2, v * 4, 4, 8, 3, 9331) - 0.5f) * 0.04f + grain(x, y, 9332) * 0.015f;
+        float l = 0.84f + tex;
+        r = l; g = l * 0.95f; b = l * 0.86f;
+        if (v > 0.62f && v < 0.645f) { r = 0.45f; g = 0.32f; b = 0.2f; }               // dado rail
+        else if (v >= 0.645f) { r = 0.78f + tex; g = 0.74f + tex; b = 0.66f + tex; }     // wainscot
+        if (v > 0.95f) { r = 0.42f; g = 0.3f; b = 0.2f; }                                 // skirting
+    });
+}
+// the mall's floor: beige tiles with brown and cream diamond motifs
+Image hcc_pattern(int N) {
+    return paint(N, N, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
+        int T = N / 8;
+        float seam = (x % T < 2 || y % T < 2) ? -0.08f : 0.0f;
+        float du = std::fabs(u - 0.5f), dv = std::fabs(v - 0.5f);
+        float dia = du + dv;
+        float dirt = (fbm(u, v, 3, 3, 3, 9341) - 0.5f) * 0.08f + std::pow(fbm(u, v, 2, 2, 3, 9342), 3.0f) * 0.12f;
+        float l = 0.8f + seam + dirt;
+        r = l; g = l * 0.92f; b = l * 0.82f;                    // beige
+        if (dia < 0.32f && dia > 0.22f) { r = 0.52f + dirt; g = 0.36f + dirt; b = 0.28f + dirt; } // a brown diamond band
+        else if (dia < 0.14f) { r = 0.62f + dirt; g = 0.5f + dirt; b = 0.42f + dirt; }            // the centre
+        if (dia < 0.05f) { r = 0.25f; g = 0.55f; b = 0.48f; }                                       // a green point
+    });
 }
 Image planter_top(int N) {
     Image im = paint(N, N, [&](int x, int y, float u, float v, float& r, float& g, float& b) {
@@ -1426,17 +1464,28 @@ void make_level_textures(LevelId level, int N, Image out[MAT_COUNT]) {
             out[MAT_PROP] = metal(N / 4, 0.45f);
             break;
         case LevelId::L188:
-            out[MAT_FLOOR] = concrete(N, N, 0.72f, 18801, false);
-            out[MAT_FLOOR2] = planks(N, 0.5f, 0.85f, 0.65f, 0.45f, 18802);
-            out[MAT_FLOOR3] = guest_carpet(N);
+            out[MAT_FLOOR] = paving(N);
+            out[MAT_FLOOR2] = grass(N);
+            out[MAT_FLOOR3] = blue_carpet(N, 18806);
             out[MAT_BLOCK] = court_wall(N);
             out[MAT_ROOF] = concrete(N / 2, N / 2, 0.8f, 18803, false);
             out[MAT_CEIL] = plaster(N / 2);
             out[MAT_LIGHT] = light_panel(N / 8, N / 8, 1.0f);
             out[MAT_PROP] = parquet(N / 4);
-            out[MAT_WALL] = hotel_wall(N, false);
-            desaturate(out[MAT_WALL], 0.55f, 1.1f);
+            out[MAT_WALL] = hotel_cream(N);
             out[MAT_FURN] = furniture_atlas(N);
+            break;
+        case LevelId::TheEnd:
+            out[MAT_WALL] = end_wall(N);
+            out[MAT_FLOOR] = grey_carpet(N);
+            out[MAT_FLOOR2] = blue_carpet(N, 9351);
+            out[MAT_CEIL] = ceiling_tiles(N);
+            desaturate(out[MAT_CEIL], 0.8f, 1.12f);
+            out[MAT_LIGHT] = light_panel(N / 4, N / 4, 0.1f);
+            out[MAT_BLOCK] = shelf_front(N);
+            out[MAT_ROOF] = planks(N / 2, 0.4f, 0.8f, 0.55f, 0.35f, 9352);
+            out[MAT_PROP] = paint(N / 4, N / 4, [&](int x, int y, float u, float v, float& r, float& g, float& b) { // the yellow pillars
+                float l = 0.82f + (fbm(u, v, 3, 3, 3, 9353) - 0.5f) * 0.06f + grain(x, y, 9354) * 0.02f; r = l; g = l * 0.84f; b = l * 0.42f; });
             break;
         case LevelId::TSG0: case LevelId::TSG2:
             out[MAT_FLOOR] = level == LevelId::TSG0 ? leaf_litter(N) : snow(N);
@@ -1510,8 +1559,8 @@ void make_level_textures(LevelId level, int N, Image out[MAT_COUNT]) {
             break;
         }
         case LevelId::L37:
-            out[MAT_WALL] = pool_tiles(N, 0.97f, 0.99f, 1.0f, 0);
-            out[MAT_FLOOR] = pool_tiles(N, 0.92f, 0.97f, 1.0f, 0.5f);
+            out[MAT_WALL] = pool_tiles(N, 0.95f, 0.97f, 0.95f, 0);
+            out[MAT_FLOOR] = pool_tiles(N, 0.86f, 0.95f, 0.93f, 0.35f);
             out[MAT_FLOOR2] = pool_tiles(N, 0.55f, 0.80f, 0.95f, 1.0f);
             out[MAT_CEIL] = pool_tiles(N / 2, 0.98f, 0.98f, 0.98f, 0);
             out[MAT_LIGHT] = light_panel(N / 4, N / 8, 0);
@@ -1602,18 +1651,13 @@ void make_level_textures(LevelId level, int N, Image out[MAT_COUNT]) {
             out[MAT_WALL] = out[MAT_BLOCK];
             break;
         case LevelId::L33:
-            out[MAT_FLOOR] = hcc_tiles(N);
+            out[MAT_FLOOR] = hcc_pattern(N);
             out[MAT_FLOOR2] = carpet(N);
             out[MAT_BLOCK] = hcc_storefront(N);
             out[MAT_ROOF] = planter_top(N / 2);
             out[MAT_CEIL] = ceiling_tiles(N);
             out[MAT_LIGHT] = light_panel(N / 4, N / 4, 0.0f);
-            out[MAT_PROP] = metal(N / 4, 0.62f);
-            for (size_t i = 0; i + 3 < out[MAT_PROP].rgba.size(); i += 4) { // teal steel
-                out[MAT_PROP].rgba[i] = (uint8_t)(out[MAT_PROP].rgba[i] * 0.38f);
-                out[MAT_PROP].rgba[i + 1] = (uint8_t)std::min(255.0f, out[MAT_PROP].rgba[i + 1] * 0.95f);
-                out[MAT_PROP].rgba[i + 2] = (uint8_t)std::min(255.0f, out[MAT_PROP].rgba[i + 2] * 0.92f);
-            }
+            out[MAT_PROP] = plaster(N / 4); // the white columns and trim
             out[MAT_WALL] = plaster(N / 2);
             break;
         case LevelId::Hub:
@@ -2093,6 +2137,18 @@ Image make_sprite(Sprite s) {
             im.line(16, 46, 48, 18, 7, 0.95f, 0.95f, 0.92f);
             im.line(16, 46, 22, 41, 7, 0.75f, 0.75f, 0.72f);
             im.line(6, 56, 20, 56, 2, 0.9f, 0.9f, 0.9f, 0.7f);
+            return im;
+        }
+        case SPR_NOTE: { // a sheet of lined paper, scribbled on
+            Image im(64, 96, 0);
+            im.rect(4, 4, 60, 92, 0.93f, 0.91f, 0.84f, 1);
+            Rng rng(77);
+            for (int l = 0; l < 9; l++) {
+                int y = 14 + l * 8;
+                im.rect(8, y, 56, y + 1, 0.6f, 0.7f, 0.85f, 0.6f);
+                int x = 10;
+                while (x < 52) { int wlen = 4 + (int)(rng.f01() * 9); im.rect(x, y - 3, std::min(54, x + wlen), y - 1, 0.15f, 0.15f, 0.2f, 0.85f); x += wlen + 3; }
+            }
             return im;
         }
         case SPR_SHELLS: { // two red shotgun shells with brass heads

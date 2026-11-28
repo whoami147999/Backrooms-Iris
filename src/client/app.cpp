@@ -88,6 +88,7 @@ bool App::init(const DevOptions& dev) {
     dev_ = dev;
     data_dir_ = platform_data_dir();
     cfg_.load(data_dir_ + "settings.cfg");
+    stats_.load(data_dir_ + "stats.cfg");
     single_level_ = std::clamp(cfg_.start_level, 0, (int)LevelId::COUNT - 1);
     join_ip_ = cfg_.last_ip;
     if (dev.camcorder >= 0) cfg_.camcorder = dev.camcorder != 0;
@@ -187,6 +188,7 @@ void App::apply_display_settings() {
     platform_set_fullscreen(cfg_.fullscreen);
     platform_set_vsync(cfg_.vsync);
     ren_.set_style(cfg_.film, cfg_.camcorder, cfg_.atmosphere, cfg_.retro);
+    ren_.set_calm(cfg_.reduce_flashing);
 }
 
 // Command-line shortcuts for testing: jump straight into a level / screen / state.
@@ -200,7 +202,7 @@ void App::dev_setup() {
     else if (!dev_.join.empty()) start_join(dev_.join);
     else
 #endif
-    if (!dev_.screen.empty() && dev_.screen != "pause" && dev_.screen != "pause-settings") {
+    if (!dev_.screen.empty() && dev_.screen != "pause" && dev_.screen != "pause-settings" && dev_.screen.rfind("note", 0) != 0) {
         const std::string& s = dev_.screen;
         if (s == "single") go(Screen::Single);
         else if (s == "sandbox") go(Screen::Sandbox);
@@ -211,6 +213,7 @@ void App::dev_setup() {
 #endif
         else if (s == "settings") go(Screen::Settings);
         else if (s == "controls") go(Screen::Controls);
+        else if (s == "journal") go(Screen::Journal);
         return;
     } else if (dev_.level >= 0 || dev_.screen == "pause" || dev_.screen == "pause-settings") {
         start_session(make_single_player((LevelId)std::max(dev_.level, 0), dev_.seed ? dev_.seed : 1215, cfg_.name, dev_.sandbox,
@@ -290,6 +293,11 @@ void App::dev_setup() {
         session_->resync();
     }
     if (dev_.screen == "pause") { paused_ = true; build_menu(); }
+    if (dev_.screen.rfind("note", 0) == 0 && session_) { // dev: --screen note7 holds up note 7
+        note_open_ = std::clamp(std::atoi(dev_.screen.c_str() + 4), 1, note_count());
+        note_at_ = {session_->view().me.pos.x, session_->view().me.pos.z};
+        note_t_ = -10;
+    }
     if (dev_.screen == "pause-settings") { paused_ = true; go(Screen::Settings); }
     if (dev_.sandbox_menu) sb_open_ = true;
 }
@@ -347,6 +355,7 @@ void App::build_menu() {
 #if IRIS_MULTIPLAYER
             button("MULTIPLAYER", [this] { go(Screen::Multi); }, "UP TO 4 PLAYERS. ONE OF YOU HOSTS, NO SERVERS");
 #endif
+            button("JOURNAL", [this] { go(Screen::Journal); }, "YOUR RUNS AND THE NOTES YOU'VE FOUND");
             button("SETTINGS", [this] { go(Screen::Settings); });
             button("CONTROLS", [this] { go(Screen::Controls); });
             button("QUIT", [this] { in_.quit = true; });
@@ -499,6 +508,15 @@ void App::build_menu() {
             toggle("LIGHT HALOS + DUST", &cfg_.atmosphere, [this] { apply_display_settings(); });
             m.items.back().hint = "GLOWING LAMPS, LIGHT SHAFTS, FLICKERING TUBES, DUST";
             toggle("SHOW FPS", &cfg_.show_fps);
+            toggle("REDUCE FLASHING", &cfg_.reduce_flashing, [this] { apply_display_settings(); });
+            m.items.back().hint = "NO STROBING OR STUTTERING LIGHTS, SOFTER RED HURT FLASH";
+#if IRIS_VOICE
+            toggle("PROXIMITY CHAT", &cfg_.voice);
+            m.items.back().hint = "TALK TO PLAYERS NEAR YOU. THE FURTHER AWAY, THE QUIETER. RADIOS CARRY IT";
+            toggle("OPEN MIC", &cfg_.open_mic);
+            m.items.back().hint = "OFF: HOLD V TO TALK. ON: YOUR MIC IS ALWAYS LIVE WHEN YOU MAKE NOISE";
+            slider("VOICE VOLUME", &cfg_.voice_volume, 0.0f, 2.0f, 0.1f);
+#endif
             if (platform_is_vita()) {
                 toggle("SAFE MODE", &cfg_.safe_mode, [this] { cfg_.safe_mode_ver = IRIS_VERSION; save_settings(); });
                 m.items.back().hint = "NO SOUND, MSAA OR MIPMAPS. FOR CRASHES. RESTART THE GAME TO APPLY";
@@ -511,6 +529,30 @@ void App::build_menu() {
             m.title = "CONTROLS";
             button("BACK", [this] { back(); });
             break;
+        case Screen::Journal: { // 1.3
+            m.title = "JOURNAL";
+            int hrs = (int)(stats_.play_seconds / 3600), mins = (int)(stats_.play_seconds / 60) % 60;
+            char buf[160];
+            std::snprintf(buf, sizeof buf, "%d RUNS  -  %d DEATHS  -  %d ESCAPES  -  %dH %02dM", stats_.runs, stats_.deaths, stats_.escapes, hrs, mins);
+            m.subtitle = buf;
+            std::snprintf(buf, sizeof buf, "LEVELS SEEN: %d / %d    NOTES FOUND: %d / %d", stats_.levels_seen, (int)LevelId::Hub, stats_.notes_found(), note_count());
+            label(buf);
+            int shown = 0;
+            for (int n = 1; n <= note_count(); n++) {
+                if (!stats_.note(n)) continue;
+                std::string first = note_text(n);
+                first = first.substr(0, first.find('|'));
+                if (first.size() > 34) first = first.substr(0, 32) + "..";
+                char nb[16];
+                std::snprintf(nb, sizeof nb, "%02d  ", n);
+                button(nb + first, [this, n] { note_open_ = n; note_t_ = now_; audio_.play(SFX_PAPER, 0.6f); });
+                shown++;
+            }
+            if (!shown) label("NOTHING YET. PEOPLE LEFT NOTES DOWN HERE. READ THEM");
+            spacer();
+            button("BACK", [this] { back(); });
+            break;
+        }
         case Screen::Connecting:
             m.title = "CONNECTING";
             button("CANCEL", [this] { leave_game(); });
@@ -539,6 +581,7 @@ void App::build_menu() {
                            "EVERYONE RETURNS TO THE M.E.G. BASE");
                 spacer();
             }
+            button("JOURNAL", [this] { go(Screen::Journal); });
             button("SETTINGS", [this] { go(Screen::Settings); });
             button("CONTROLS", [this] { go(Screen::Controls); });
             button("QUIT TO MENU", [this] { leave_game(); });
@@ -579,6 +622,10 @@ void App::menu_input() {
     } } ui_sound{this, sel_before, ui_activate};
     if (!error_.empty()) {
         if (in_.accept || in_.back || in_.click) error_.clear();
+        return;
+    }
+    if (note_open_ && screen() == Screen::Journal) { // reading a note from the journal
+        if ((in_.accept || in_.back || in_.click) && now_ - note_t_ > 0.15) note_open_ = 0;
         return;
     }
     auto& items = menu_.items;
@@ -722,9 +769,13 @@ void App::draw_menu() {
         struct Row { const char* action; const char* kb; const char* pad; };
         static const Row rows[] = {
             {"MOVE", "W A S D", "LEFT STICK"}, {"LOOK", "MOUSE", "RIGHT STICK"}, {"SPRINT", "SHIFT", "R / R2"},
-            {"CROUCH", "CTRL / C", "CIRCLE"}, {"PICK UP", "E", "CROSS"},
+            {"CROUCH", "CTRL / C", "CIRCLE"}, {"PICK UP / OPEN / SEARCH / READ", "E", "CROSS"},
             {"USE ITEM / SWING", "LEFT CLICK / Q", "SQUARE / L / D-PAD UP"}, {"PICK ITEM", "WHEEL / 1-9", "D-PAD LEFT RIGHT"},
             {"FLASHLIGHT", "F", "TRIANGLE"}, {"SANDBOX MENU", "TAB", "SELECT"},
+            {"EMOTES (WAVE POINT SIT DANCE)", "G H J K", "D-PAD DOWN: WAVE"},
+#if IRIS_VOICE
+            {"PUSH TO TALK", "V", "-"},
+#endif
             {"PAUSE", "ESC", "START"}, {"SCREENSHOT", "F12", "-"},
         };
         float cx[3] = {W * 0.10f, W * 0.40f, W * 0.66f};
@@ -812,6 +863,90 @@ void App::draw_menu() {
         ren_.text(W / 2, H * 0.45f, s * 1.5f, error_, rgba(1, 0.4f, 0.3f), 1);
         ren_.text(W / 2, H * 0.53f, s, key_hint("PRESS ENTER", "PRESS CROSS"), rgba(0.8f, 0.75f, 0.6f), 1);
     }
+    if (note_open_ && screen() == Screen::Journal) draw_note(note_open_);
+}
+
+// 1.3: a note held up in front of you: a sheet of paper, the writing, how to put it down
+void App::draw_note(int n) {
+    float s = ui();
+    float W = (float)ren_.width, H = (float)ren_.height;
+    std::vector<std::string> lines;
+    std::string t = note_text(n);
+    size_t a = 0;
+    while (a <= t.size()) {
+        size_t b = t.find('|', a);
+        if (b == std::string::npos) b = t.size();
+        lines.push_back(t.substr(a, b - a));
+        a = b + 1;
+    }
+    float lh = 11 * s;
+    float pw = std::min(W * 0.86f, 300 * s), ph = (lines.size() + 4) * lh;
+    float x0 = (W - pw) / 2, y0 = (H - ph) / 2;
+    float k = clampf((float)(now_ - note_t_) / 0.18f, 0, 1);
+    y0 += (1 - k) * 30 * s;
+    ren_.rect(0, 0, W, H, rgba(0, 0, 0, 0.55f * k));
+    ren_.rect(x0 + 3 * s, y0 + 4 * s, pw, ph, rgba(0, 0, 0, 0.5f * k));        // shadow
+    ren_.rect(x0, y0, pw, ph, rgba(0.86f, 0.82f, 0.68f, k));                    // old paper
+    ren_.rect(x0, y0, pw, 2 * s, rgba(0.7f, 0.64f, 0.48f, k));
+    for (size_t i = 0; i < lines.size() + 2; i++)                               // ruled lines
+        ren_.rect(x0 + 8 * s, y0 + (i + 1.85f) * lh, pw - 16 * s, std::max(1.0f, s * 0.5f), rgba(0.55f, 0.62f, 0.75f, 0.35f * k));
+    char nb[24];
+    std::snprintf(nb, sizeof nb, "NOTE %02d / %02d", n, note_count());
+    ren_.text(x0 + pw - 8 * s, y0 + 0.5f * lh, s, nb, rgba(0.45f, 0.38f, 0.28f, k), 2);
+    for (size_t i = 0; i < lines.size(); i++)
+        ren_.text(x0 + 10 * s, y0 + (i + 1.4f) * lh, s, lines[i], rgba(0.16f, 0.14f, 0.18f, k));
+    ren_.text(W / 2, y0 + ph + 8 * s, s, key_hint("E / ESC: PUT IT DOWN", platform_is_vita() ? "CROSS / CIRCLE: PUT IT DOWN" : "A / B: PUT IT DOWN"), rgba(0.85f, 0.8f, 0.65f, k), 1);
+}
+
+int App::note_in_front(const GameView& v, Vec2* at) const {
+    const PlayerState& me = v.me;
+    Vec2 p{me.pos.x, me.pos.z}, f = yaw_forward(me.yaw);
+    int pcx = floor_to_int(p.x / CELL), pcz = floor_to_int(p.z / CELL);
+    int best_n = 0;
+    float best = 1.5f;
+    for (int cz = pcz - 1; cz <= pcz + 1; cz++)
+        for (int cx = pcx - 1; cx <= pcx + 1; cx++) {
+            int n = v.world.note(cx, cz);
+            if (!n) continue;
+            Vec2 q = v.world.note_pos(cx, cz), to = q - p;
+            float d = to.len();
+            if (d > best || (d > 0.5f && (to.x * f.x + to.z * f.z) / d < 0.3f)) continue;
+            best = d; best_n = n; if (at) *at = q;
+        }
+    return best_n;
+}
+
+void App::found_note(int n) {
+    if (n < 1) return;
+    if ((int)stats_.notes.size() < note_count()) stats_.notes.resize((size_t)note_count(), '0');
+    if (stats_.notes[(size_t)n - 1] == '1') return;
+    stats_.notes[(size_t)n - 1] = '1';
+    save_stats();
+    char buf[64];
+    std::snprintf(buf, sizeof buf, "NOTE ADDED TO YOUR JOURNAL  (%d/%d)", stats_.notes_found(), note_count());
+    feed_.push_back({buf, now_});
+    if (feed_.size() > 6) feed_.erase(feed_.begin());
+}
+
+void App::track_stats(const GameView& v) {
+    if (v.sandbox || !dev_.shot_path.empty()) return; // sandbox and screenshots don't count
+    stats_.play_seconds += frame_dt_;
+    LevelId id = v.world.id();
+    if (v.epoch != stats_epoch_) {
+        stats_epoch_ = v.epoch;
+        if (id == LevelId::Hub) stats_new_run_ = true;
+        else {
+            if (stats_new_run_) { stats_.runs++; stats_new_run_ = false; }
+            size_t li = (size_t)id;
+            if (stats_.levels.size() <= li) stats_.levels.resize(li + 1, '0');
+            if (stats_.levels[li] != '1') { stats_.levels[li] = '1'; stats_.levels_seen++; }
+            save_stats();
+        }
+    }
+    if (stats_alive_ && !v.me.alive) { stats_.deaths++; save_stats(); }
+    stats_alive_ = v.me.alive;
+    if (v.escaped && !stats_escaped_) { stats_.escapes++; save_stats(); }
+    stats_escaped_ = v.escaped;
 }
 
 // =================================================================== starting / leaving
@@ -830,6 +965,12 @@ void App::start_session(std::unique_ptr<Session> s) {
     toast_seq_ = 0;
     toast_t_ = -100;
     feed_.clear();
+    note_open_ = 0;
+    stats_epoch_ = 0xFFFFFFFF;
+    stats_alive_ = true;
+    stats_escaped_ = false;
+    stats_new_run_ = true;
+    ambient_t_ = now_ + 40;
 }
 
 void App::start_single(bool sandbox) {
@@ -885,6 +1026,8 @@ void App::start_join(const std::string& addr_in) {
 #endif
 
 void App::leave_game() {
+    save_stats();
+    note_open_ = 0;
     audio_.stop_loops();
     session_.reset();
     paused_ = false;
@@ -907,6 +1050,15 @@ std::vector<ItemType> App::owned() const {
 void App::game_input() {
     const GameView& v = session_->view();
     bool alive = v.me.alive;
+    track_stats(v);
+    if (note_open_) { // reading: put it down with E / ESC, or by walking off
+        if (((in_.interact || in_.accept || in_.pause || in_.back || in_.use_item) && now_ - note_t_ > 0.15) || !alive ||
+            (Vec2{v.me.pos.x, v.me.pos.z} - note_at_).len() > 2.6f) {
+            note_open_ = 0;
+            audio_.play(SFX_PAPER, 0.35f);
+            in_.pause = in_.interact = in_.use_item = false;
+        }
+    }
     if (in_.pause && !paused_) { paused_ = true; sb_open_ = false; build_menu(); return; }
     if (in_.sandbox_menu && v.sandbox) { sb_open_ = !sb_open_; sb_sel_ = 0; }
     if (v.escaped && !v.multiplayer && v.won_t > 3.0f && (in_.accept || in_.interact || v.won_t > 30.0f)) { leave_game(); return; } // the end: back to the menu
@@ -929,6 +1081,8 @@ void App::game_input() {
     cmd_.buttons = (uint8_t)((in_.sprint ? BTN_SPRINT : 0) | ((in_.crouch || crouch_toggle_) ? BTN_CROUCH : 0) |
                              (in_.fire_held && selected_ == ItemType::Rifle ? BTN_FIRE : 0));
     cmd_.attack_item = is_weapon(selected_) ? (uint8_t)selected_ : 0;
+    cmd_.held = (uint8_t)selected_;  // 1.3: what the others see in your hand
+    if (in_.emote > 0 && in_.emote <= 4) { cmd_.emote = (uint8_t)in_.emote; cmd_.emote_ctr++; }
 
     // hotbar: the items you own, in a fixed order
     std::vector<ItemType> have = owned();
@@ -942,7 +1096,16 @@ void App::game_input() {
         selected_ = have[(size_t)i];
     }
     if (alive) {
-        if (in_.interact) cmd_.pickup_ctr++;
+        if (in_.interact && !note_open_) {
+            Vec2 at;
+            int n = note_in_front(v, &at);
+            if (n) { // 1.3: pick a note up and read it (it stays where it was for everyone else)
+                note_open_ = n; note_at_ = at; note_t_ = now_;
+                audio_.play(SFX_PAPER, 0.6f);
+                found_note(n);
+            } else cmd_.pickup_ctr++;
+            reach_t_ = now_;
+        }
         if (in_.light) cmd_.light_ctr++;
         if (in_.use_item && selected_ != ItemType::None) {
             if (is_weapon(selected_)) cmd_.attack_ctr++;
@@ -1049,7 +1212,7 @@ void App::draw_fx_overlays(const ScreenFx& fx) {
         ren_.sprite(SPR_VIGNETTE, 0, 0, W, H, rgba(1, 1, 1, std::min(1.0f, fx.vignette)));
         if (fx.vignette > 0.6f) ren_.sprite(SPR_VIGNETTE, -W * 0.1f, -H * 0.1f, W * 1.2f, H * 1.2f, rgba(1, 1, 1, (fx.vignette - 0.6f) * 2.0f));
     }
-    if (fx.red_flash > 0) ren_.sprite(SPR_VIGNETTE, 0, 0, W, H, rgba(0.8f, 0.05f, 0.02f, fx.red_flash));
+    if (fx.red_flash > 0) ren_.sprite(SPR_VIGNETTE, 0, 0, W, H, rgba(0.8f, 0.05f, 0.02f, fx.red_flash * (cfg_.reduce_flashing ? 0.35f : 1.0f)));
     for (const auto& sp : fx.spiders) {
         float sz = sp.size * H;
         ren_.sprite(SPR_SPIDER, sp.x * W - sz / 2, sp.y * H - sz / 2, sz, sz, rgba(1, 1, 1, 0.95f), sp.rot);
@@ -1216,10 +1379,45 @@ void App::draw_hud(const GameView& v, const ScreenFx& fx) {
         for (const DrawEntity& e : v.ents) // a M.E.G. official close by
             if ((e.type == EntityType::MegMedic || e.type == EntityType::MegScout) && (e.pos - Vec2{me.pos.x, me.pos.z}).len() < 2.2f)
                 obj_prompt = e.type == EntityType::MegMedic ? "TALK TO THE M.E.G. MEDIC" : "TALK TO THE M.E.G. SCOUT";
+        // 1.3: notes, doors and drawers (when there's nothing to pick up closer)
+        std::string use_prompt, use_sub;
+        if (obj_prompt.empty() && !note_open_) {
+            if (note_in_front(v, nullptr)) use_prompt = "READ NOTE";
+            else if (best > 1.0f) {
+                Furn f;
+                if (furniture_in_front(v.world, me, true, f, 1.7f)) {
+                    uint32_t id = World::door_id(f);
+                    bool open = v.world.door_open(id);
+                    if (!open && v.world.door_jammed(id)) {
+                        use_prompt = me.has(ItemType::Crowbar) ? "PRY THE DOOR OPEN" : "TRY THE DOOR";
+                        use_sub = me.has(ItemType::Crowbar) ? "IT'S STUCK. THE CROWBAR SHOULD DO IT" : "IT LOOKS STUCK";
+                    } else use_prompt = open ? "CLOSE THE DOOR" : "OPEN THE DOOR";
+                } else if (furniture_in_front(v.world, me, false, f, 1.3f)) {
+                    const char* what = "SEARCH";
+                    switch (f.kind) {
+                        case FurnKind::Fridge: what = "LOOK IN THE FRIDGE"; break;
+                        case FurnKind::Locker: what = "OPEN THE LOCKER"; break;
+                        case FurnKind::Crate: what = "OPEN THE CRATE"; break;
+                        case FurnKind::Boxes: what = "LOOK THROUGH THE BOXES"; break;
+                        case FurnKind::Wardrobe: what = "OPEN THE WARDROBE"; break;
+                        case FurnKind::Desk: case FurnKind::Reception: what = "CHECK THE DRAWERS"; break;
+                        default: what = "SEARCH THE DRAWERS"; break;
+                    }
+                    if (v.searched && v.searched->count(World::furn_id(f))) { use_prompt = what; use_sub = "ALREADY SEARCHED"; }
+                    else use_prompt = what;
+                }
+            }
+        }
         if (!obj_prompt.empty()) {
             std::string key = pad ? (platform_is_vita() ? "CROSS" : "A") : "E";
             ren_.rect(W / 2 - s, H / 2 - s, 2 * s, 2 * s, rgba(1, 1, 1, 0.8f));
             ren_.text(W / 2, H * 0.60f, s, key + "  " + obj_prompt, rgba(0.7f, 0.9f, 1.0f), 1);
+        } else if (!use_prompt.empty()) {
+            std::string key = pad ? (platform_is_vita() ? "CROSS" : "A") : "E";
+            bool done = use_sub == "ALREADY SEARCHED";
+            ren_.rect(W / 2 - s, H / 2 - s, 2 * s, 2 * s, rgba(1, 1, 1, done ? 0.4f : 0.8f));
+            ren_.text(W / 2, H * 0.60f, s, key + "  " + use_prompt, done ? rgba(0.7f, 0.68f, 0.6f, 0.7f) : rgba(1, 0.97f, 0.88f), 1);
+            if (!use_sub.empty()) ren_.text(W / 2, H * 0.60f + 9 * s, s, use_sub, rgba(0.75f, 0.72f, 0.62f, 0.8f), 1);
         } else if (t != ItemType::None) {
             std::string key = pad ? (platform_is_vita() ? "CROSS" : "A") : "E";
             ren_.rect(W / 2 - s, H / 2 - s, 2 * s, 2 * s, rgba(1, 1, 1, 0.8f));
@@ -1230,7 +1428,34 @@ void App::draw_hud(const GameView& v, const ScreenFx& fx) {
         if (v.toast_seq != toast_seq_) { toast_seq_ = v.toast_seq; toast_ = v.toast; toast_t_ = now_; }
         double ta = now_ - toast_t_;
         if (ta < 2.5 && !toast_.empty()) ren_.text(W / 2, H * 0.70f, s, toast_, rgba(0.9f, 1, 0.8f, (float)std::min(1.0, 2.5 - ta)), 1);
+
+        // ----- 1.3: the nearest thing the objective needs: a marker on the screen edge with how far it is
+        // (only once you're within earshot of it, so you still have to look around)
+        if (!v.objective.done && v.objective.type != ObjType::None && v.objective.type != ObjType::Survive) {
+            const DrawProp* goal = nullptr;
+            float gd = 34.0f;
+            for (const DrawProp& p : v.props) {
+                bool want = p.kind == PropKind::Tape || p.kind == PropKind::Key || (p.kind == PropKind::Breaker && p.life < 0.5f);
+                if (!want) continue;
+                float d = (p.pos - Vec2{me.pos.x, me.pos.z}).len();
+                if (d < gd) { gd = d; goal = &p; }
+            }
+            if (goal && gd > 2.2f) {
+                Vec2 d = goal->pos - Vec2{me.pos.x, me.pos.z};
+                float ang = std::remainder(std::atan2(-d.x, -d.z) - cmd_.yaw, 2 * PI); // 0 = ahead, + = left
+                float r = 14 * s;
+                float cx = W / 2 - std::sin(ang) * W * 0.30f, cy = H * 0.15f + (std::fabs(ang) > 1.6f ? r : 0);
+                float pulse = 0.65f + 0.35f * std::sin((float)now_ * 4.0f);
+                const char* what = goal->kind == PropKind::Tape ? "TAPE" : goal->kind == PropKind::Key ? "KEYCARD" : "BREAKER";
+                ren_.sprite(SPR_GLOW, cx - r, cy - r, 2 * r, 2 * r, rgba(0.5f, 0.85f, 1.0f, 0.25f * pulse));
+                ren_.rect(cx - 1.5f * s, cy - 1.5f * s, 3 * s, 3 * s, rgba(0.7f, 0.95f, 1.0f, 0.9f));
+                char buf[32];
+                std::snprintf(buf, sizeof buf, "%s %dM%s", what, (int)gd, std::fabs(ang) > 1.6f ? " (BEHIND)" : "");
+                ren_.text(cx, cy + 5 * s, s, buf, rgba(0.7f, 0.92f, 1.0f, 0.85f), 1);
+            }
+        }
     }
+    if (note_open_ && !paused_) draw_note(note_open_);
 
     // ----- level title when you arrive
     double lt = now_ - level_title_t_;
@@ -1249,7 +1474,18 @@ void App::draw_hud(const GameView& v, const ScreenFx& fx) {
         ren_.text(W - 8 * s, (cfg_.camcorder ? 28 * s : 8 * s) + i * 9 * s, s, feed_[i].text, rgba(0.9f, 0.85f, 0.7f, a * 0.9f), 2);
     }
     if (v.multiplayer)
-        for (size_t i = 0; i < v.roster.size(); i++) ren_.text(8 * s, 8 * s + i * 9 * s, s, v.roster[i], rgba(0.8f, 0.78f, 0.7f, 0.7f));
+        for (size_t i = 0; i < v.roster.size(); i++) {
+            bool talk = v.roster[i].find("(TALKING)") != std::string::npos;
+            ren_.text(8 * s, 8 * s + i * 9 * s, s, v.roster[i], talk ? rgba(0.6f, 1.0f, 0.6f, 0.95f) : rgba(0.8f, 0.78f, 0.7f, 0.7f));
+        }
+#if IRIS_VOICE
+    if (v.multiplayer && cfg_.voice && audio_.mic_ok()) { // 1.3: your mic, bottom left
+        bool live = now_ - talking_t_ < 0.25;
+        std::string m = live ? "MIC LIVE" : (cfg_.open_mic ? "OPEN MIC" : key_hint("HOLD V TO TALK", "HOLD V TO TALK"));
+        ren_.text(8 * s, H - 30 * s, s, m, live ? rgba(0.55f, 1.0f, 0.55f, 0.95f) : rgba(0.7f, 0.68f, 0.6f, 0.45f));
+        if (live) ren_.sprite(SPR_GLOW, 2 * s, H - 34 * s, 8 * s, 8 * s, rgba(0.3f, 1.0f, 0.3f, 0.6f));
+    }
+#endif
     float oy = 8 * s + (v.multiplayer ? v.roster.size() * 9 * s + 4 * s : 0);
     if (session_->sim() && session_->sim()->sandbox) {
         GameSim* sim = session_->sim();
@@ -1385,6 +1621,7 @@ void App::draw_game(bool overlay_menu) {
 
     ScreenFx fx = compute_fx(v.me, cam.eye, cam.yaw, (float)now_, (int)v.epoch * 7919 + v.my_id);
     if (!overlay_menu || session_->view().multiplayer) update_audio(v, cam.eye, cam.yaw);
+    if (v.multiplayer) update_voice(v, cam.eye, cam.yaw);
     else audio_.stop_loops();
     cam.roll = fx.roll;
     cam.fov_deg = cfg_.fov + fx.fov_add;
@@ -1405,7 +1642,11 @@ void App::draw_game(bool overlay_menu) {
         night_shown_ = nightk > 0.5f;
         if (v.level_time > 2) feed_.push_back({night_shown_ ? (v.world.id() == LevelId::TSG0 ? "IT'S NIGHT. HIDE." : "NIGHT FALLS") : "THE SUN IS UP", now_});
     }
+    ren_.set_searched(v.searched);
     ren_.draw_world(v.world, cam, (float)now_, fog, v.picked ? *v.picked : none, v.ents, v.others, v.props, fx.phantoms);
+    if (!overlay_menu || v.multiplayer) // 1.3: doors creak open and thud shut where they are
+        for (const Renderer::DoorEvent& e : ren_.door_events())
+            play_at(e.opening ? SFX_DOOR_OPEN : SFX_DOOR_CLOSE, e.pos, 0.75f, cam.eye, cam.yaw, v.world, 0.92f + hash01((uint32_t)(e.pos.x * 10), (int)(e.pos.z * 10), 0, 3) * 0.16f);
     ren_.night_dim(nightk * (v.world.id() == LevelId::TSG0 ? 0.8f : 0.55f));
     ren_.post_warp(fx.wobble, fx.ghost, (float)now_);
     // what's in your hands, in 3D
@@ -1425,6 +1666,7 @@ void App::draw_game(bool overlay_menu) {
         vm.light = v.world.light_level(cam.eye) * 0.8f + 0.3f + (v.me.light_on ? 0.35f : 0.0f);
         vm.use = (float)((now_ - use_anim_t_) / 0.75);
         vm.use_item = use_anim_item_;
+        vm.reach = (float)((now_ - reach_t_) / 0.5);
         ren_.draw_viewmodel(vm);
     }
     float beam = li.dark ? (li.ambient[0] < 0.4f ? 1.3f : 1.1f) : (dark ? 0.9f : 0.5f);
@@ -1584,7 +1826,7 @@ void App::run() {
                 LevelId lid = gv.world.id();
                 if (gv.escaped) { track = SFX_MUSIC_MENU; mv = 0.9f; }
                 else if (lid == LevelId::LRun) { track = SFX_MUSIC_RUN; mv = 0.65f; }
-                else if (lid == LevelId::Hub || lid == LevelId::L37 || lid == LevelId::L11) { track = SFX_MUSIC_CALM; mv = 0.55f; }
+                else if (lid == LevelId::Hub || lid == LevelId::L37 || lid == LevelId::L11 || lid == LevelId::TheEnd) { track = SFX_MUSIC_CALM; mv = 0.55f; }
             }
             bgm_track_ = track;
             audio_.loop(LOOP_BGM, track, mv);
@@ -1646,6 +1888,67 @@ void App::item_sound(ItemType t) {
     }
 }
 
+// 1.3 proximity chat: send what the microphone hears (while you hold V, or whenever you're making
+// noise with open mic), and play what the others say from where they're standing.
+void App::update_voice(const GameView& v, Vec3 eye, float yaw) {
+#if IRIS_VOICE
+    bool want = cfg_.voice && v.multiplayer && audio_.ok() && session_ && session_->ready();
+    if (want && !audio_.mic_ok() && !mic_failed_) {
+        if (!audio_.mic_open()) {
+            mic_failed_ = true;
+            feed_.push_back({"NO MICROPHONE: YOU CAN STILL HEAR THE OTHERS", now_});
+        }
+        mic_pcm_.clear();
+        mic_codec_ = AdpcmState{};
+    }
+    if (!want && audio_.mic_ok()) audio_.mic_close();
+    if (audio_.mic_ok()) {
+        int16_t buf[2048];
+        int n;
+        while ((n = audio_.mic_read(buf, 2048)) > 0) mic_pcm_.insert(mic_pcm_.end(), buf, buf + n);
+        if (mic_pcm_.size() > (size_t)VOICE_FRAME * 25) mic_pcm_.erase(mic_pcm_.begin(), mic_pcm_.end() - VOICE_FRAME * 5); // (stalled: keep it short)
+        size_t at = 0;
+        while (mic_pcm_.size() - at >= (size_t)VOICE_FRAME) {
+            const int16_t* fr = mic_pcm_.data() + at;
+            at += VOICE_FRAME;
+            double e = 0;
+            for (int i = 0; i < VOICE_FRAME; i++) e += (double)fr[i] * fr[i];
+            float rms = (float)std::sqrt(e / VOICE_FRAME) / 32768.0f;
+            if (rms > 0.012f) vad_t_ = now_;
+            bool live = cfg_.open_mic ? now_ - vad_t_ < 0.45 : (in_.talk && !paused_);
+            if (!live) { mic_codec_ = AdpcmState{}; continue; }
+            uint8_t bytes[VOICE_BYTES];
+            AdpcmState start = mic_codec_;
+            adpcm_encode(fr, VOICE_FRAME, mic_codec_, bytes);
+            session_->send_voice(voice_seq_++, start, bytes);
+            talking_t_ = now_;
+        }
+        mic_pcm_.erase(mic_pcm_.begin(), mic_pcm_.begin() + (long)at);
+    }
+#endif
+    // what the others said, from where they are (the dead hear each other; radios carry it further)
+    session_->take_voice(voice_frames_);
+    if (!cfg_.voice) return;
+    Vec2 e{eye.x, eye.z};
+    Vec2 r = yaw_right(yaw);
+    for (const VoiceFrame& f : voice_frames_) {
+        const DrawPlayer* who = nullptr;
+        for (const DrawPlayer& p : v.others) if (p.id == f.speaker) who = &p;
+        float vol = cfg_.voice_volume, pan = 0, muffle = 0;
+        if (who && who->alive && v.me.alive) {
+            Vec2 d = Vec2{who->pos.x, who->pos.z} - e;
+            float dist = d.len();
+            pan = dist > 0.3f ? (d.x * r.x + d.z * r.z) / dist * 0.8f : 0.0f;
+            bool blocked = dist > 1.0f && v.world.segment_blocked(e, Vec2{who->pos.x, who->pos.z});
+            float fall = clampf(1.0f - dist / VOICE_RANGE, 0, 1);
+            vol *= fall * fall * (2.2f / (1.0f + dist * 0.12f)) * (blocked ? 0.55f : 1.0f);
+            muffle = blocked ? 0.75f : 0.0f;
+            if (f.radio) { vol = std::max(vol, cfg_.voice_volume * 0.9f); pan = 0; muffle = 0; }
+        }
+        audio_.voice_push(f.speaker, f.pcm, VOICE_FRAME, vol, pan, muffle, f.radio);
+    }
+}
+
 void App::play_at(Sfx s, Vec2 at, float vol, Vec3 eye, float yaw, const World& w, float pitch) {
     Vec2 e{eye.x, eye.z};
     Vec2 d = at - e;
@@ -1684,6 +1987,20 @@ void App::update_audio(const GameView& v, Vec3 eye, float yaw) {
     audio_.loop(LOOP_AMB1, amb, id == LevelId::L3 ? av * 1.8f : av, 0, id == LevelId::L3 ? 0.5f : 1.0f); // Level 3: transformers drone
     bool safe = id == LevelId::L11 || id == LevelId::L37;
     audio_.loop(LOOP_AMB2, id == LevelId::L7 ? SFX_WIND : SFX_DRONE, safe ? 0.0f : (amb == SFX_DRONE ? 0.0f : 0.12f), 0, 0.98f);
+    // ----- 1.3: you're not alone down here. Now and then a door slams somewhere, something creaks, a drawer rattles
+    if (now_ > ambient_t_) {
+        uint32_t r = (uint32_t)(now_ * 1000.0);
+        ambient_t_ = now_ + 35.0 + hash01(r, 1, 2, 9) * 55.0;
+        bool quiet = safe || id == LevelId::Hub || id == LevelId::TheEnd || !me.alive;
+        if (!quiet) {
+            float ang = hash01(r, 3, 4, 9) * 2 * PI, dist = 14.0f + hash01(r, 5, 6, 9) * 12.0f;
+            Vec2 at = here + Vec2{std::cos(ang), std::sin(ang)} * dist;
+            float pick = hash01(r, 7, 8, 9);
+            if (pick < 0.45f) play_at(SFX_DOOR_CLOSE, at, 1.0f, eye, yaw, w, 0.8f);        // a slam
+            else if (pick < 0.75f) play_at(SFX_DOOR_OPEN, at, 0.8f, eye, yaw, w, 0.7f);    // a long creak
+            else play_at(SFX_DRAWER, at, 0.8f, eye, yaw, w, 0.85f);                         // someone going through drawers
+        }
+    }
     // ----- fire nearby (flares, fire barrels, lanterns) and the music box
     if (now_ - as_.scan_t > 0.5) {
         as_.scan_t = now_;
@@ -1822,6 +2139,9 @@ void App::update_audio(const GameView& v, Vec3 eye, float yaw) {
         else if (t.rfind("BREAKER", 0) == 0) audio_.play(SFX_BREAKER, 0.8f);
         else if (t.rfind("OBJECTIVE DONE", 0) == 0) audio_.play(SFX_OBJECTIVE, 0.8f);
         else if (t.find("RABBIT") != std::string::npos) audio_.play(SFX_STING, 0.7f);
+        else if (t.find("JAMMED") != std::string::npos) audio_.play(SFX_DOOR_JAM, 0.8f);
+        else if (t.rfind("YOU PRY", 0) == 0) { audio_.play(SFX_DOOR_JAM, 0.9f); audio_.play(SFX_SWING, 0.6f); }
+        else if (t.rfind("FOUND", 0) == 0 || t.rfind("NOTHING INSIDE", 0) == 0) audio_.play(SFX_DRAWER, 0.7f);
         as_.toast_seq = v.toast_seq;
     }
 }

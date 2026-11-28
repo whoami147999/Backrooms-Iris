@@ -28,7 +28,7 @@ cmake --build build-vita -j
 
 Output: `build-vita/BackroomsIris.vpk` (title ID BKIR00001).
 
-Version 1.2. Sound uses SDL audio (`SceAudio_stub`, already linked). The renderer builds chunk meshes on a
+Version 1.3. Sound uses SDL audio (`SceAudio_stub`, already linked). The renderer builds chunk meshes on a
 worker thread (std::thread, so the target links `pthread`) and generates its textures at level load (power-of-two,
 256 px on the Vita: about a second per level). The GLSL post effects are PC only (`#if !defined(IRIS_GL_VITA)`), so
 vitaGL only ever sees fixed-function GL.

@@ -65,7 +65,7 @@ public:
     void shutdown();
 
 private:
-    enum class Screen { Title, Single, Sandbox, Multi, Host, Join, Settings, Controls, Connecting, Playing };
+    enum class Screen { Title, Single, Sandbox, Multi, Host, Join, Settings, Controls, Connecting, Playing, Journal };
 
     struct Item {
         enum Kind { Button, Choice, Slider, Toggle, Text, Label, Spacer } kind = Button;
@@ -207,6 +207,29 @@ private:
     std::vector<ItemType> owned() const;
     float ui() const;  // UI scale (pixels per font pixel)
     std::string key_hint(const char* kb, const char* pad) const;
+    // 1.3: stats + the notes you've read, kept between games
+    Stats stats_;
+    uint32_t stats_epoch_ = 0xFFFFFFFF;
+    bool stats_alive_ = true, stats_escaped_ = false, stats_new_run_ = true;
+    void track_stats(const struct GameView& v);
+    void save_stats() { if (dev_.shot_path.empty()) stats_.save(data_dir_ + "stats.cfg"); }
+    void found_note(int n);
+    // 1.3: reading a note
+    int note_open_ = 0;
+    Vec2 note_at_;
+    double note_t_ = -100;
+    int note_in_front(const struct GameView& v, Vec2* at) const;
+    void draw_note(int n);
+    double reach_t_ = -100;      // you reached out (view model hand)
+    // 1.3 proximity chat
+    void update_voice(const struct GameView& v, Vec3 eye, float yaw);
+    std::vector<int16_t> mic_pcm_;
+    AdpcmState mic_codec_;
+    uint16_t voice_seq_ = 0;
+    double vad_t_ = -100, talking_t_ = -100;
+    bool mic_failed_ = false;
+    std::vector<VoiceFrame> voice_frames_;
+    double ambient_t_ = 30;      // 1.3: next distant sound (a door, steps, a knock)
     void save_settings() { if (dev_.shot_path.empty()) cfg_.save(data_dir_ + "settings.cfg"); } // screenshots never overwrite your settings
 };
 

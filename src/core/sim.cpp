@@ -52,6 +52,7 @@ std::vector<Population> population(LevelId id, bool night) {
         case LevelId::TSG3: return {{EntityType::SkinStealer, 2}};                      // the islanders
         case LevelId::TSG4: return {{EntityType::Faceling, 4}, {EntityType::Mangled, 1}, {EntityType::Smiler, 1}};
         case LevelId::TSGEnd: return {};
+        case LevelId::TheEnd: return {};
         case LevelId::L70: if (night) return {{EntityType::Hound, 3}, {EntityType::SkinStealer, 1}}; return {{EntityType::Hound, 1}, {EntityType::SkinStealer, 1}};
         case LevelId::L94: if (night) return {{EntityType::Animation, 4}, {EntityType::Smiler, 1}, {EntityType::Hound, 1}}; return {}; // the town is safe by day
         case LevelId::L188: return {{EntityType::Bacteria, 1}, {EntityType::SkinStealer, 1}, {EntityType::Smiler, 1}};
@@ -123,6 +124,10 @@ std::string objective_text(const Objective& o) {
 // =================================================================== lifecycle
 void GameSim::start_level(LevelId id, uint32_t seed) {
     world = World(id, seed, difficulty);
+    door_flip.clear();
+    pried.clear();
+    searched.clear();
+    world.door_flip = &door_flip;
     epoch++;
     level_time = 0;
     ents.clear();
@@ -132,7 +137,7 @@ void GameSim::start_level(LevelId id, uint32_t seed) {
     spawn_t_ = 0;
     pending_level_ = LevelId::COUNT;
     outposts_up.clear();
-    if (id != LevelId::TSGEnd) { escaped = false; won_t = 0; }
+    if (id != LevelId::TheEnd) { escaped = false; won_t = 0; }
     int n = 0;
     for (int i = 0; i < IRIS_MAX_PLAYERS; i++) {
         SimPlayer& p = players[i];
@@ -180,7 +185,7 @@ void GameSim::setup_objective() {
     objective = Objective{};
     LevelId id = world.id();
     uint32_t h = hash3(world.seed(), (int)id, 0, 9001);
-    if (id == LevelId::LRun || id == LevelId::TSGEnd || id == LevelId::Hub) return; // the only objective here is the door
+    if (id == LevelId::LRun || id == LevelId::TSGEnd || id == LevelId::Hub || id == LevelId::TheEnd) return; // the only objective here is the door
     if (sandbox) return;
     bool safe = id == LevelId::L11 || id == LevelId::L37;
     int pick = safe ? 0 : (int)(h % 3u);
@@ -207,7 +212,7 @@ void GameSim::setup_objective() {
     objective.type = pick == 3 ? ObjType::Keys : ((pick == 0 || few_walls) ? ObjType::Tapes : ObjType::Breakers);
     objective.need = (uint8_t)(hard ? 4 : 3);
     std::vector<std::pair<int, int>> cells;
-    reachable_cells(cells, 7, 34);
+    reachable_cells(cells, 4, 20); // 1.3: closer to where you start
     Rng r(h | 1u);
     std::vector<Vec2> placed;
     for (int tries = 0; tries < 600 && (int)placed.size() < objective.need && !cells.empty(); tries++) {
@@ -398,6 +403,19 @@ void GameSim::try_pickup(int i) {
         if ((e.type != EntityType::MegMedic && e.type != EntityType::MegScout) || (e.pos - me).len() > 2.2f) continue;
         meg_talk(i, e);
         return;
+    }
+    // 1.3: a door or a drawer right in front of you (nothing to pick up closer than it)
+    {
+        float item_d = 9;
+        for (int cz = pcz - 1; cz <= pcz + 1; cz++)
+            for (int cx = pcx - 1; cx <= pcx + 1; cx++)
+                if (world.item(cx, cz) != ItemType::None && !picked.count(World::item_id(cx, cz))) item_d = std::min(item_d, (world.item_pos(cx, cz) - me).len());
+        for (const Prop& pr : props)
+            if (pr.kind == PropKind::Item || pr.kind == PropKind::Tape || pr.kind == PropKind::Key || pr.kind == PropKind::Breaker) item_d = std::min(item_d, (pr.pos - me).len());
+        if (item_d > 1.0f) {
+            if (use_door(i, false)) return;
+            if (search_furniture(i)) return;
+        }
     }
     // objective things first: a tape at your feet or a breaker box within reach
     for (size_t k = 0; k < props.size(); k++) {
@@ -646,9 +664,14 @@ void GameSim::apply_input(int i, const InputCmd& cmd) {
     SimPlayer& sp = players[i];
     if (!sp.active) return;
     if (!sp.have_cmd) { sp.last_cmd = cmd; sp.have_cmd = true; } // baseline for the counters
+    sp.st.held = cmd.held < ITEM_COUNT && sp.st.inv[cmd.held] ? cmd.held : 0;
+    sp.st.emote_t += 1.0f / TICK_RATE;
+    sp.st.use_t += 1.0f / TICK_RATE;
+    if (cmd.emote_ctr != sp.last_cmd.emote_ctr && sp.st.alive) { sp.st.emote = std::min<uint8_t>(cmd.emote, 4); sp.st.emote_t = 0; }
+    if (sp.st.emote && (sp.st.speed > 0.6f || sp.st.emote_t > 8.0f)) sp.st.emote = 0; // moving (or a while) ends it
     if (sp.st.alive) {
         if (cmd.pickup_ctr != sp.last_cmd.pickup_ctr) try_pickup(i);
-        if (cmd.use_ctr != sp.last_cmd.use_ctr) use_item(i, (ItemType)cmd.use_item);
+        if (cmd.use_ctr != sp.last_cmd.use_ctr) { use_item(i, (ItemType)cmd.use_item); sp.st.use_t = 0; }
         ItemType weapon = (ItemType)cmd.attack_item;
         if ((int)weapon >= ITEM_COUNT) weapon = ItemType::None;
         if (cmd.attack_ctr != sp.last_cmd.attack_ctr) attack(i, weapon);
@@ -803,8 +826,8 @@ void GameSim::update_player_stats(int i, float dt) {
                     if (level_time - exit_msg_t_[i] > 3.0f) { toast(i, "IT'S LOCKED. " + objective_text(objective)); exit_msg_t_[i] = level_time; }
                     continue;
                 }
-                if (world.id() == LevelId::TSGEnd) { // the end. for real this time.
-                    if (!escaped) { escaped = true; won_t = 0; event(sp.name + " FADED INTO TH3 SH4DY GR3Y. YOU MADE IT OUT."); }
+                if (world.id() == LevelId::TheEnd) { // the last door. for real this time.
+                    if (!escaped) { escaped = true; won_t = 0; event(sp.name + " OPENED THE LAST DOOR. YOU MADE IT OUT."); }
                     continue;
                 }
                 pending_level_ = world.info().next;
@@ -894,6 +917,7 @@ void GameSim::move_entity(Entity& e, Vec2 goal, float speed, float dt) {
     if (step > len) step = len;
     if (len > 1e-4f) e.pos += d * (step / len);
     if (e.type != EntityType::Smiler) collide_circle(world, e.pos, ent_radius(e.type));
+    if (len > 0.05f && (e.pos - before).len() < step * 0.3f) entity_doors(e); // stuck against something: a door?
     keep_out(e);
     e.speed = (e.pos - before).len() / std::max(dt, 1e-4f);
     e.anim += e.speed * dt * 2.2f;
@@ -1229,6 +1253,109 @@ bool GameSim::keep_out(Entity& e) {
     }
     if (moved && e.state == EntState::Chase && e.type != EntityType::Partygoer) { e.state = EntState::Search; e.state_t = 0; e.path.clear(); }
     return moved;
+}
+
+
+// ------------------------------------------------------------------ 1.3 doors and drawers
+// the nearest piece of furniture of some sort in front of a player, within reach (the client uses it for prompts)
+bool furniture_in_front(const World& w, const PlayerState& p, bool doors, Furn& out, float reach) {
+    Vec2 me{p.pos.x, p.pos.z}, f = yaw_forward(p.yaw);
+    int pcx = floor_to_int(me.x / CELL), pcz = floor_to_int(me.z / CELL);
+    float best = 1e9f;
+    for (int cz = pcz - 1; cz <= pcz + 1; cz++)
+        for (int cx = pcx - 1; cx <= pcx + 1; cx++) {
+            Furn fs[MAX_FURN];
+            int n = w.furniture(cx, cz, fs);
+            for (int k = 0; k < n; k++) {
+                const Furn& d = fs[k];
+                bool is_door = d.kind == FurnKind::DoorLeaf && d.width > 0;
+                if (doors ? !is_door : !World::searchable(d.kind)) continue;
+                Vec2 c = is_door ? d.hinge + (d.shut_dir + (w.door_open(World::door_id(d)) ? d.open_dir : d.shut_dir)) * (d.width * 0.25f)
+                                 : Vec2{(d.x0 + d.x1) * 0.5f, (d.z0 + d.z1) * 0.5f};
+                // distance to the box, so big furniture can be reached from its edge
+                float qx = clampf(me.x, d.x0, d.x1), qz = clampf(me.z, d.z0, d.z1);
+                float dist = is_door ? (c - me).len() : (Vec2{qx, qz} - me).len();
+                Vec2 to = c - me;
+                float tl = to.len();
+                if (dist > reach || (tl > 0.3f && (to.x * f.x + to.z * f.z) / tl < 0.35f)) continue; // not in front of you
+                if (dist < best) { best = dist; out = d; }
+            }
+        }
+    return best < 1e8f;
+}
+
+bool GameSim::use_door(int i, bool quiet) {
+    PlayerState& p = players[i].st;
+    Furn d;
+    if (!furniture_in_front(world, p, true, d, 1.7f)) return false;
+    uint32_t id = World::door_id(d);
+    bool open = world.door_open(id);
+    if (!open && world.door_jammed(id) && !pried.count(id)) {
+        if (p.has(ItemType::Crowbar)) {
+            pried.insert(id);
+            if (door_flip.count(id)) door_flip.erase(id); else door_flip.insert(id);
+            if (!quiet) toast(i, "YOU PRY THE DOOR OPEN");
+            p.swing = 0; // (it takes a swing)
+        } else if (!quiet) {
+            toast(i, "IT'S JAMMED. SOMETHING COULD PRY IT OPEN");
+        }
+        return true;
+    }
+    if (door_flip.count(id)) door_flip.erase(id); else door_flip.insert(id);
+    // a door must not shut on anyone: if it would, it stays open
+    if (open) {
+        for (int j = 0; j < IRIS_MAX_PLAYERS; j++) {
+            if (!players[j].active || !players[j].st.alive) continue;
+            Vec2 q{players[j].st.pos.x, players[j].st.pos.z};
+            Vec2 a = d.hinge, b = d.hinge + d.shut_dir * d.width;
+            Vec2 ab = b - a;
+            float t = clampf(((q - a).x * ab.x + (q - a).z * ab.z) / (ab.x * ab.x + ab.z * ab.z), 0, 1);
+            if ((a + ab * t - q).len() < PLAYER_RADIUS + 0.06f) {
+                if (door_flip.count(id)) door_flip.erase(id); else door_flip.insert(id);
+                return true;
+            }
+        }
+    }
+    return true;
+}
+
+bool GameSim::search_furniture(int i) {
+    PlayerState& p = players[i].st;
+    Furn f;
+    if (!furniture_in_front(world, p, false, f, 1.3f)) return false;
+    uint32_t id = World::furn_id(f);
+    if (searched.count(id)) { toast(i, "YOU ALREADY WENT THROUGH THIS"); return true; }
+    searched.insert(id);
+    ItemType t = world.container_item(f);
+    if (t == ItemType::None) { toast(i, "NOTHING INSIDE"); return true; }
+    const ItemInfo& info = item_info(t);
+    uint8_t& have = p.inv[(int)t];
+    const int cap = t == ItemType::Shells ? 12 : (info.tool ? 1 : MAX_ITEM_STACK);
+    if (have >= cap) { spawn_item(t, {p.pos.x, p.pos.z}); toast(i, std::string("FOUND ") + info.name + " (NO ROOM: LEFT AT YOUR FEET)"); return true; }
+    have = (uint8_t)std::min(cap, have + (t == ItemType::Shells ? 2 : 1));
+    toast(i, std::string("FOUND ") + info.name);
+    return true;
+}
+
+// An entity that walks into a shut door opens it (you'll hear it). Jammed doors stop it.
+void GameSim::entity_doors(Entity& e) {
+    if (e.type == EntityType::Smiler) return;
+    int cx = floor_to_int(e.pos.x / CELL), cz = floor_to_int(e.pos.z / CELL);
+    for (int b = -1; b <= 1; b++)
+        for (int a = -1; a <= 1; a++) {
+            Furn fs[MAX_FURN];
+            int n = world.furniture(cx + a, cz + b, fs);
+            for (int k = 0; k < n; k++) {
+                const Furn& d = fs[k];
+                if (d.kind != FurnKind::DoorLeaf || d.width <= 0) continue;
+                uint32_t id = World::door_id(d);
+                if (world.door_open(id) || (world.door_jammed(id) && !pried.count(id))) continue;
+                Vec2 mid = d.hinge + d.shut_dir * (d.width * 0.5f);
+                if ((mid - e.pos).len() > 0.95f) continue;
+                if (door_flip.count(id)) door_flip.erase(id); else door_flip.insert(id);
+                return;
+            }
+        }
 }
 
 // Talking to a M.E.G. official. The medic patches you up and hands out supplies; the scout
