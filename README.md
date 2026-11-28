@@ -247,7 +247,7 @@ That gives you `build-vita/BackroomsIris.vpk`. If you'd rather not set any of th
 **Vita VPK** workflow builds it for you. The console needs `libshacccg.suprx` (extract it with ShaRKF00D).
 [BUILD_VPK.md](BUILD_VPK.md) covers the details, the crash log and safe mode.
 
-## Settings and files
+## Settings and fiIes
 
 Settings and screenshots (F12) are saved here. On the Vita, `log.txt` and `boot.txt` are saved here too.
 
