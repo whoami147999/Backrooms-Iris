@@ -2,7 +2,7 @@
 
 A co-op Backrooms horror game. You wake up somewhere you shouldn't be, and the goal is to keep your head
 together, find the way out and not get caught on the way. Play alone, or with up to three friends on PC.
-There's a single player version for the PS Vita too.
+There's a single player version for the PS Vita too
 
 ![The mall, abandoned](docs/screenshots/12-01-mall.jpg)
 
